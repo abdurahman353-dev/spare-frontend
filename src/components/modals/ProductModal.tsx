@@ -30,6 +30,7 @@ const emptyForm = {
   category_id: "",
   brand_id: "",
   price: "",
+  weight: "1.00",
   description: "",
   status: "Active",
   images: [] as string[],
@@ -53,6 +54,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
           category_id: product.category_id?.toString() || "",
           brand_id: product.brand_id?.toString() || "",
           price: product.price?.toString() || "",
+          weight: product.weight?.toString() || "1.00",
           description: product.description || "",
           status: product.status || "Active",
           images: product.images || [],
@@ -155,6 +157,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
         category_id: Number(formData.category_id),
         brand_id: Number(formData.brand_id),
         price: Number(formData.price),
+        weight: Number(formData.weight || 1.00),
         description: formData.description,
         status: formData.status,
         images: formData.images,
@@ -300,7 +303,20 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
                   value={formData.price}
                   onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                   placeholder="0.00"
-                  className="h-10 border-zinc-200 rounded-lg"
+                  className="h-10 border-zinc-200 rounded-lg font-bold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-500">Weight (KG) *</Label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={formData.weight}
+                  onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                  placeholder="1.00"
+                  className="h-10 border-zinc-200 rounded-lg font-bold text-indigo-600"
                 />
               </div>
 

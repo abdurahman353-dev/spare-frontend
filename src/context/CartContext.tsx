@@ -7,6 +7,7 @@ interface Product {
   name: string;
   sku: string;
   price: number;
+  weight: number;
   brand: { name: string };
 }
 
@@ -18,11 +19,12 @@ interface CartItem extends Product {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product, warehouseId: number, warehouseName: string) => void;
+  addToCart: (product: Product, warehouseId: number, warehouseName: string, quantity?: number) => void;
   removeFromCart: (productId: number, warehouseId: number) => void;
   updateQuantity: (productId: number, warehouseId: number, quantity: number) => void;
   clearCart: () => void;
   cartTotal: number;
+  cartWeight: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -43,16 +45,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("spare_cart", JSON.stringify(cart));
   }, [cart]);
 
-  const addToCart = (product: Product, warehouseId: number, warehouseName: string) => {
+  const addToCart = (product: Product, warehouseId: number, warehouseName: string, quantity: number = 1) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id && item.warehouse_id === warehouseId);
       if (existing) {
         return prev.map(item => 
           (item.id === product.id && item.warehouse_id === warehouseId) 
-            ? { ...item, quantity: item.quantity + 1 } : item
+            ? { ...item, quantity: item.quantity + quantity } : item
         );
       }
-      return [...prev, { ...product, quantity: 1, warehouse_id: warehouseId, warehouse_name: warehouseName }];
+      return [...prev, { ...product, quantity, warehouse_id: warehouseId, warehouse_name: warehouseName }];
     });
   };
 
@@ -70,9 +72,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const clearCart = () => setCart([]);
 
   const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+  const cartWeight = cart.reduce((total, item) => total + (Number(item.weight || 0) * item.quantity), 0);
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal }}>
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal, cartWeight }}>
       {children}
     </CartContext.Provider>
   );

@@ -18,6 +18,12 @@ api.interceptors.response.use(
         window.location.href = "/login";
       }
     }
+    // If a non-admin hits an admin route (403), redirect them to their customer portal
+    if (error.response?.status === 403) {
+      if (typeof window !== "undefined" && !window.location.pathname.includes('/account')) {
+        window.location.href = "/account";
+      }
+    }
     return Promise.reject(error);
   }
 );

@@ -43,13 +43,15 @@ export function Header() {
         <div className="h-8 w-px bg-zinc-200 mx-1" />
 
         <DropdownMenu>
-          <DropdownMenuTrigger className="relative h-10 flex items-center gap-3 px-2 hover:bg-zinc-50 rounded-lg group transition-all outline-none">
-            <div className="h-8 w-8 bg-[#0052cc] rounded-lg flex items-center justify-center text-white font-black text-xs shadow-lg shadow-blue-200">
-              {user?.name.substring(0, 2).toUpperCase()}
+          <DropdownMenuTrigger className="relative h-10 flex items-center gap-2 px-2 group outline-none cursor-pointer">
+            <div className="h-8 w-8 bg-[#0052cc] rounded-full flex items-center justify-center text-white shadow-sm">
+              <User className="h-4 w-4" />
             </div>
-            <div className="hidden lg:flex flex-col items-start">
-              <span className="text-[11px] font-black text-zinc-900 leading-none uppercase tracking-tighter">Admin Portal</span>
-              <span className="text-[10px] font-bold text-[#0052cc] mt-0.5">{user?.name}</span>
+            <div className="hidden lg:flex flex-col items-start leading-none">
+              <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Admin Portal</span>
+              <span className="text-sm font-bold text-[#0052cc] uppercase tracking-tighter flex items-center gap-1 transition-colors mt-1">
+                {user?.name || "Admin"}
+              </span>
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-64 mt-2 rounded-xl shadow-2xl border-zinc-200" align="end">

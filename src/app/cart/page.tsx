@@ -56,7 +56,7 @@ export default function CartPage() {
               {cart.map((item) => (
                 <motion.div 
                   layout
-                  key={item.id} 
+                  key={`${item.id}-${item.warehouse_id}`} 
                   className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col sm:flex-row items-center gap-6"
                 >
                   <div className="h-24 w-24 bg-secondary rounded-xl flex items-center justify-center shrink-0">
@@ -65,7 +65,12 @@ export default function CartPage() {
                   <div className="flex-1 space-y-1">
                     <div className="text-xs font-bold text-primary uppercase tracking-tighter">{item.brand.name}</div>
                     <h3 className="text-xl font-bold">{item.name}</h3>
-                    <p className="text-sm text-muted-foreground font-mono">SKU: {item.sku}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-sm text-muted-foreground font-mono">SKU: {item.sku}</p>
+                      <span className="text-[10px] bg-blue-50 text-blue-700 font-black px-2 py-0.5 rounded border border-blue-100 uppercase tracking-tighter">
+                        {item.warehouse_name}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center border rounded-lg overflow-hidden bg-zinc-50">

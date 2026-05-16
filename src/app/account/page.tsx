@@ -37,6 +37,54 @@ function AccountPortalInner() {
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDeleteAddressModalOpen, setIsDeleteAddressModalOpen] = useState(false);
   const [hiddenAddresses, setHiddenAddresses] = useState<string[]>([]);
+  
+  const [destinations, setDestinations] = useState<any[]>([]);
+  const [availableCities, setAvailableCities] = useState<any[]>([]);
+  const [addressFormData, setAddressFormData] = useState({
+    country: user?.country || "",
+    city: user?.city || "",
+    address: user?.address || ""
+  });
+
+  useEffect(() => {
+    if (user) {
+      setAddressFormData({
+        country: (user as any).country || "",
+        city: (user as any).city || "",
+        address: (user as any).address || ""
+      });
+    }
+  }, [user]);
+
+  useEffect(() => {
+    api.get("/shipping-destinations/active")
+      .then(res => setDestinations(res.data))
+      .catch(err => console.error(err));
+  }, []);
+
+  const uniqueCountries = Array.from(new Set(destinations.map(d => d.country)));
+
+  const handleCountryChange = (country: string) => {
+    setAddressFormData({ ...addressFormData, country, city: "" });
+    setAvailableCities(destinations.filter(d => d.country === country));
+  };
+
+  const handleSaveAddress = async () => {
+    try {
+      await api.put('/user/profile', addressFormData);
+      toast.success("Delivery address updated successfully!");
+      setIsAddressModalOpen(false);
+      // Optional: Store in localStorage for immediate checkout prefill
+      localStorage.setItem("spare_prefill_shipping", JSON.stringify({
+        city: addressFormData.city,
+        address: addressFormData.address
+      }));
+      // We could also refresh the user context here if needed
+      window.location.reload(); // Simple way to refresh user data from AuthContext check
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update address");
+    }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem("spare_hidden_addresses");
@@ -170,7 +218,14 @@ function AccountPortalInner() {
                 </button>
               ))}
               
-              <div className="pt-6 mt-6 border-t border-[#f1f5f9]">
+              <div className="pt-6 mt-6 border-t border-[#f1f5f9] space-y-2">
+                 <Link 
+                  href="/products"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-[#0052cc] hover:bg-[#eff6ff] text-[14px] font-medium transition-all border border-[#0052cc]/20"
+                >
+                  <ShoppingBag className="h-4 w-4" />
+                  Continue Shopping
+                </Link>
                  <button 
                   onClick={logout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-[#ef4444] hover:bg-red-50 text-[14px] font-medium transition-all"
@@ -214,40 +269,64 @@ function AccountPortalInner() {
                         <table className="w-full text-left">
                           <thead className="bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
                             <tr>
-                              <th className="px-6 py-4">Order ID</th>
+                              <th className="px-6 py-4">Order Ref</th>
                               <th className="px-6 py-4">Date</th>
-                              <th className="px-6 py-4">Items</th>
-                              <th className="px-6 py-4">Status</th>
-                              <th className="px-6 py-4">Total Amount</th>
+                              <th className="px-6 py-4">Main Products</th>
+                              <th className="px-6 py-4 text-center">Items</th>
+                              <th className="px-6 py-4">Products Costs</th>
+                              <th className="px-6 py-4">Shipment Fee</th>
+                              <th className="px-6 py-4 text-right pr-10">Total Amount</th>
+                              <th className="px-6 py-4 text-center">Status</th>
                               <th className="px-6 py-4 text-right">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#f1f5f9]">
                             {loading ? (
-                              <tr><td colSpan={6} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#64748b]" /></td></tr>
+                              <tr><td colSpan={9} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#64748b]" /></td></tr>
                             ) : orders.length === 0 ? (
-                              <tr><td colSpan={6} className="p-10 text-center text-[#64748b]">No order history found.</td></tr>
+                              <tr><td colSpan={9} className="p-10 text-center text-[#64748b]">No order history found.</td></tr>
                             ) : (
                               orders.slice(0, 5).map((order: any) => (
                                 <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
-                                  <td className="px-6 py-4 text-[14px] font-medium text-[#1e293b]">#ORD-{order.id}</td>
+                                  <td className="px-6 py-4">
+                                    <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
+                                  </td>
                                   <td className="px-6 py-4 text-[13px] text-[#64748b]">
                                     {new Date(order.created_at).toLocaleDateString()}
                                   </td>
-                                  <td className="px-6 py-4 text-[13px] text-[#64748b]">
-                                    {order.items?.length || 0} PCS
+                                  <td className="px-6 py-4">
+                                    <div className="space-y-0.5 max-w-[200px]">
+                                      <p className="text-[13px] font-bold text-[#1e293b] truncate">
+                                        {order.items?.[0]?.product?.name || "Genuine Spare Part"}
+                                      </p>
+                                      {order.items && order.items.length > 1 && (
+                                        <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-6 py-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <Package className="h-3 w-3 text-[#94a3b8]" />
+                                      <span className="text-xs font-bold text-[#1e293b]">{order.items?.length || 0}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
+                                    Ksh {Math.max(0, (Number(order.total_amount) - Number(order.shipping_fee || 0))).toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
+                                    Ksh {Number(order.shipping_fee || 0).toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-4 text-[14px] font-black text-[#1e293b] text-right pr-10">Ksh {Number(order.total_amount).toLocaleString()}</td>
+                                  <td className="px-6 py-4 text-center">
                                     <span className={cn(
                                       "text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider",
                                       order.status === "Pending" ? "bg-[#fffbeb] text-[#92400e]" : 
-                                      (order.status === "Processing" || order.status === "Shipped") ? "bg-[#eff6ff] text-[#1e40af]" : 
+                                      (order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") ? "bg-[#eff6ff] text-[#1e40af]" : 
                                       "bg-[#f0fdf4] text-[#166534]"
                                     )}>
-                                      {order.status}
+                                      {order.status === "In Transit" ? "Shipped" : order.status}
                                     </span>
                                   </td>
-                                  <td className="px-6 py-4 text-[14px] font-semibold text-[#1e293b]">Ksh {Number(order.total_amount).toLocaleString()}</td>
                                   <td className="px-6 py-4 text-right">
                                     <button 
                                       onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }}
@@ -361,37 +440,61 @@ function AccountPortalInner() {
                         <table className="w-full text-left">
                           <thead className="bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
                             <tr>
-                              <th className="px-6 py-4">Order ID</th>
+                              <th className="px-6 py-4">Order Ref</th>
                               <th className="px-6 py-4">Date</th>
-                              <th className="px-6 py-4">Items</th>
-                              <th className="px-6 py-4">Status</th>
-                              <th className="px-6 py-4">Total Amount</th>
+                              <th className="px-6 py-4">Main Products</th>
+                              <th className="px-6 py-4 text-center">Items</th>
+                              <th className="px-6 py-4">Products Costs</th>
+                              <th className="px-6 py-4">Shipment Fee</th>
+                              <th className="px-6 py-4 text-right pr-10">Total Amount</th>
+                              <th className="px-6 py-4 text-center">Status</th>
                               <th className="px-6 py-4 text-right">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#f1f5f9]">
                             {loading ? (
-                              <tr><td colSpan={6} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#64748b]" /></td></tr>
+                              <tr><td colSpan={9} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#64748b]" /></td></tr>
                             ) : orders.map((order: any) => (
                                 <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
-                                  <td className="px-6 py-4 text-[14px] font-medium text-[#1e293b]">#ORD-{order.id}</td>
+                                  <td className="px-6 py-4">
+                                    <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
+                                  </td>
                                   <td className="px-6 py-4 text-[13px] text-[#64748b]">
                                     {new Date(order.created_at).toLocaleDateString()}
                                   </td>
-                                  <td className="px-6 py-4 text-[13px] text-[#64748b]">
-                                    {order.items?.length || 0} PCS
+                                  <td className="px-6 py-4">
+                                    <div className="space-y-0.5 max-w-[200px]">
+                                      <p className="text-[13px] font-bold text-[#1e293b] truncate">
+                                        {order.items?.[0]?.product?.name || "Genuine Spare Part"}
+                                      </p>
+                                      {order.items && order.items.length > 1 && (
+                                        <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-6 py-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <Package className="h-3 w-3 text-[#94a3b8]" />
+                                      <span className="text-xs font-bold text-[#1e293b]">{order.items?.length || 0}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
+                                    Ksh {Math.max(0, (Number(order.total_amount) - Number(order.shipping_fee || 0))).toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
+                                    Ksh {Number(order.shipping_fee || 0).toLocaleString()}
+                                  </td>
+                                  <td className="px-6 py-4 text-[14px] font-black text-[#1e293b] text-right pr-10">Ksh {Number(order.total_amount).toLocaleString()}</td>
+                                  <td className="px-6 py-4 text-center">
                                     <span className={cn(
                                       "text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider",
                                       order.status === "Pending" ? "bg-[#fffbeb] text-[#92400e]" : 
-                                      (order.status === "Processing" || order.status === "Shipped") ? "bg-[#eff6ff] text-[#1e40af]" : 
+                                      (order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") ? "bg-[#eff6ff] text-[#1e40af]" : 
                                       "bg-[#f0fdf4] text-[#166534]"
                                     )}>
-                                      {order.status}
+                                      {order.status === "In Transit" ? "Shipped" : order.status}
                                     </span>
                                   </td>
-                                  <td className="px-6 py-4 text-[14px] font-semibold text-[#1e293b]">Ksh {Number(order.total_amount).toLocaleString()}</td>
                                   <td className="px-6 py-4 text-right">
                                     <Button 
                                       variant="ghost" 
@@ -504,7 +607,7 @@ function AccountPortalInner() {
       <Dialog open={isOrderModalOpen} onOpenChange={setIsOrderModalOpen}>
         <DialogContent className="sm:max-w-[550px] p-0 rounded-lg overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-6 bg-white border-b border-[#e2e8f0]">
-             <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Details #{selectedOrder?.id}</DialogTitle>
+             <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
              <DialogDescription className="text-[#64748b] font-medium text-sm">
                Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
              </DialogDescription>
@@ -531,7 +634,7 @@ function AccountPortalInner() {
                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Final Destination</p>
                     <p className="text-[13px] font-bold text-[#1e293b]">
                       {selectedOrder?.shipping_city 
-                        ? `${selectedOrder.shipping_city}, ${selectedOrder.shipping_address}` 
+                        ? `${selectedOrder.shipping_country || 'Tanzania'}, ${selectedOrder.shipping_city}, ${selectedOrder.shipping_address}` 
                         : (selectedOrder?.customer?.address || "Shipping Details")}
                     </p>
                   </div>
@@ -541,6 +644,32 @@ function AccountPortalInner() {
                  <span>Automated Logistics Tracking Active</span>
                </div>
              </div>
+
+             {selectedOrder?.shipment && (
+               <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
+                 <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Live Container Tracking</h4>
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Waybill / Container</p>
+                     <p className="text-[13px] font-black text-[#0052cc] tracking-wider">{selectedOrder.shipment.waybill}</p>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Carrier</p>
+                     <p className="text-[13px] font-bold text-[#1e293b]">{selectedOrder.shipment.carrier}</p>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Status</p>
+                     <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase", 
+                       selectedOrder.shipment.status === "Delivered" ? "bg-[#f0fdf4] text-[#166534]" : "bg-[#eff6ff] text-[#1e40af]"
+                     )}>{selectedOrder.shipment.status}</span>
+                   </div>
+                   <div className="space-y-1">
+                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">ETA</p>
+                     <p className="text-[13px] font-bold text-[#1e293b]">{selectedOrder.shipment.eta || "Pending"}</p>
+                   </div>
+                 </div>
+               </div>
+             )}
 
              <div>
                <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Manifest Summary</h4>
@@ -557,10 +686,16 @@ function AccountPortalInner() {
                   </div>
                ))}
              </div>
-             <div className="pt-4 flex justify-between items-center">
-               <span className="font-semibold text-[#64748b] text-[13px] uppercase tracking-wider">Total Settlement</span>
-               <span className="text-xl font-bold text-[#1e293b]">Ksh {selectedOrder ? Number(selectedOrder.total_amount).toLocaleString() : 0}</span>
-             </div>
+              <div className="pt-6 border-t border-[#f1f5f9] space-y-2">
+                <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
+                  <span>Logistics Fee ({selectedOrder?.shipping_method || 'Standard'})</span>
+                  <span>Ksh {selectedOrder ? Number(selectedOrder.shipping_fee || 0).toLocaleString() : 0}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-[#1e293b] text-[13px] uppercase tracking-wider">Total Settlement</span>
+                  <span className="text-xl font-bold text-[#1e293b]">Ksh {selectedOrder ? Number(selectedOrder.total_amount).toLocaleString() : 0}</span>
+                </div>
+              </div>
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0]">
             <Button variant="outline" className="text-[12px] font-bold border-[#e2e8f0] h-9" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
@@ -569,8 +704,51 @@ function AccountPortalInner() {
         </DialogContent>
       </Dialog>
 
-      {/* Address & Payment Modals - Simplified for the Clean UI */}
-      <Dialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}><DialogContent className="rounded-lg border-[#e2e8f0] shadow-xl"><DialogHeader><DialogTitle className="font-bold text-[#1e293b]">Update Delivery Address</DialogTitle></DialogHeader><div className="space-y-4 py-4"><div className="space-y-1"><label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Location Name</label><Input className="border-[#e2e8f0]" placeholder="e.g. Home" /></div><div className="space-y-1"><label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Street Address</label><Input className="border-[#e2e8f0]" /></div></div><DialogFooter><Button className="bg-[#0052cc] hover:bg-[#0747a6] w-full font-bold" onClick={() => setIsAddressModalOpen(false)}>Save Changes</Button></DialogFooter></DialogContent></Dialog>    </div>
+      {/* Address Modal */}
+      <Dialog open={isAddressModalOpen} onOpenChange={setIsAddressModalOpen}>
+        <DialogContent className="rounded-lg border-[#e2e8f0] shadow-xl sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="font-bold text-[#1e293b]">Update Delivery Address</DialogTitle>
+            <DialogDescription className="text-xs text-[#64748b]">Select a verified shipping destination for your profile.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Country</label>
+              <select 
+                className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc]"
+                value={addressFormData.country}
+                onChange={(e) => handleCountryChange(e.target.value)}
+              >
+                <option value="" disabled>Select Country</option>
+                {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Destination City</label>
+              <select 
+                disabled={!addressFormData.country}
+                className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc] disabled:opacity-50"
+                value={addressFormData.city}
+                onChange={(e) => setAddressFormData({...addressFormData, city: e.target.value})}
+              >
+                <option value="" disabled>Select City</option>
+                {availableCities.map(c => <option key={c.id} value={c.city}>{c.city}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Street Address</label>
+              <Input 
+                className="border-[#e2e8f0]" 
+                value={addressFormData.address}
+                onChange={(e) => setAddressFormData({...addressFormData, address: e.target.value})}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button className="bg-[#0052cc] hover:bg-[#0747a6] w-full font-bold" onClick={handleSaveAddress}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>    </div>
   );
 }
 

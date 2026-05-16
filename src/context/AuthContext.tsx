@@ -10,6 +10,9 @@ interface User {
   email: string;
   role: string;
   must_change_password: boolean;
+  country?: string;
+  city?: string;
+  address?: string;
 }
 
 interface AuthContextType {
@@ -60,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (user.must_change_password) {
       router.push("/change-password");
     } else {
-      router.push("/account");
+      router.push("/products");
     }
   };
 

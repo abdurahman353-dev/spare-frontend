@@ -442,11 +442,14 @@ export default function AdminCustomersPage() {
                            <TableCell className="font-black text-zinc-900 text-sm">KSh {parseFloat(order.total_amount).toLocaleString()}</TableCell>
                            <TableCell className="text-right px-6 py-4">
                              <Badge className={cn(
-                               "text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-sm",
-                               order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                               order.status === "In Transit" ? "bg-[#0052cc] text-white" : 
-                               order.status === "Processing" ? "bg-zinc-800 text-white" : "bg-zinc-400 text-white"
-                             )}>
+                                "text-[10px] font-black uppercase px-3 py-1 rounded-full",
+                                order.status === "Delivered" ? "bg-emerald-100 text-emerald-700" : 
+                                order.status === "Shipped" ? "bg-blue-100 text-blue-700" : 
+                                order.status === "Processing" ? "bg-purple-100 text-purple-700" :
+                                order.status === "Pending" ? "bg-amber-100 text-amber-700" :
+                                order.status === "Cancelled" ? "bg-red-100 text-red-700" :
+                                "bg-zinc-100 text-zinc-600"
+                              )}>
                                {order.status}
                              </Badge>
                            </TableCell>
@@ -463,8 +466,8 @@ export default function AdminCustomersPage() {
              </div>
           </div>
           <DialogFooter className="p-4 border-t bg-white">
-            <Button className="w-full h-12 bg-zinc-900 text-white hover:bg-[#0052cc] font-black text-xs tracking-[0.2em] uppercase transition-all rounded-xl" onClick={() => setIsHistoryModalOpen(false)}>
-              CLOSE INSIGHTS
+            <Button variant="outline" className="w-full h-10 border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-bold text-sm rounded-lg" onClick={() => setIsHistoryModalOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -28,6 +28,49 @@ import { buttonVariants } from "@/components/ui/button";
 import { toast } from "react-hot-toast";
 import api from "@/lib/axios";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+
+const EAST_AFRICAN_COUNTRIES = [
+  { id: "Burundi", name: "Burundi", flagCode: "bi" },
+  { id: "Comoros", name: "Comoros", flagCode: "km" },
+  { id: "Djibouti", name: "Djibouti", flagCode: "dj" },
+  { id: "Eritrea", name: "Eritrea", flagCode: "er" },
+  { id: "Ethiopia", name: "Ethiopia", flagCode: "et" },
+  { id: "Kenya", name: "Kenya", flagCode: "ke" },
+  { id: "Madagascar", name: "Madagascar", flagCode: "mg" },
+  { id: "Malawi", name: "Malawi", flagCode: "mw" },
+  { id: "Mauritius", name: "Mauritius", flagCode: "mu" },
+  { id: "Mozambique", name: "Mozambique", flagCode: "mz" },
+  { id: "Rwanda", name: "Rwanda", flagCode: "rw" },
+  { id: "Seychelles", name: "Seychelles", flagCode: "sc" },
+  { id: "Somalia", name: "Somalia", flagCode: "so" },
+  { id: "South Sudan", name: "South Sudan", flagCode: "ss" },
+  { id: "Tanzania", name: "Tanzania", flagCode: "tz" },
+  { id: "Uganda", name: "Uganda", flagCode: "ug" },
+  { id: "Zambia", name: "Zambia", flagCode: "zm" },
+  { id: "Zimbabwe", name: "Zimbabwe", flagCode: "zw" },
+];
+
+const PREDEFINED_CITIES: Record<string, string[]> = {
+  "Burundi": ["Bujumbura", "Gitega", "Ngozi", "Rumonge", "Kayanza", "Muyinga", "Makamba", "Kirundo"],
+  "Comoros": ["Moroni", "Mutsamudu", "Fomboni"],
+  "Djibouti": ["Djibouti city", "Ali Sabieh", "Tadjoura", "Obock"],
+  "Eritrea": ["Asmara", "Massawa", "Keren", "Assab", "Mendefera"],
+  "Ethiopia": ["Addis Ababa", "Dire Dawa", "Bahir Dar", "Gondar", "Mek'ele", "Hawassa", "Jimma", "Adama"],
+  "Kenya": ["Nairobi", "Mombasa", "Kisumu", "Nakuru", "Eldoret", "Malindi", "Thika", "Naivasha", "Nyeri", "Machakos", "Kakamega", "Kisii", "Kitale", "Garissa", "Lodwar", "Lamu", "Kericho", "Embu"],
+  "Madagascar": ["Antananarivo", "Toamasina", "Antsirabe", "Mahajanga", "Fianarantsoa", "Toliara"],
+  "Malawi": ["Lilongwe", "Blantyre", "Mzuzu", "Zomba"],
+  "Mauritius": ["Port Louis", "Beau Bassin-rose hill", "Vacoas-phoenix", "Curepipe", "Quatre Bornes"],
+  "Mozambique": ["Maputo", "Beira", "Nampula", "Chimoio"],
+  "Rwanda": ["Kigali", "Gisenyi", "Butare", "Musanze", "Gitarama", "Kibuye", "Cyangugu", "Rwamagana", "Byumba", "Kibungo"],
+  "Seychelles": ["Victoria", "Anse Boileau", "Bel Ombre", "Beau Vallon"],
+  "Somalia": ["Mogadishu", "Hargeisa", "Garowe", "Kismayo", "Bosaso", "Merca", "Baidoa", "Burao"],
+  "South Sudan": ["Juba", "Malakal", "Wau", "Yei", "Yambio", "Bor", "Bentiu", "Torit", "Rumbek"],
+  "Tanzania": ["Dar es Salaam", "Dodoma", "Arusha", "Mwanza", "Zanzibar City", "Mbeya", "Morogoro", "Tanga", "Tabora", "Moshi", "Kigoma", "Iringa", "Songea", "Musoma"],
+  "Uganda": ["Kampala", "Entebbe", "Jinja", "Gulu", "Mbarara", "Mbale", "Masaka", "Lira", "Arua", "Mukono", "Fort Portal", "Soroti", "Kabale", "Hoima", "Tororo"],
+  "Zambia": ["Lusaka", "Ndola", "Kitwe", "Kabwe", "Livingstone"],
+  "Zimbabwe": ["Harare", "Bulawayo", "Mutare", "Gweru", "Masvingo"]
+};
 
 export default function AdminLogisticsPage() {
   const [activeTab, setActiveTab] = useState("Active Shipments");
@@ -41,6 +84,13 @@ export default function AdminLogisticsPage() {
   const [cities, setCities] = useState<string[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
   
+  // Locations Data (Actual Shipping Zones)
+  const [countriesData, setCountriesData] = useState<any[]>([]);
+  const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
+  const [countryFormData, setCountryFormData] = useState({ id: null as number | null, name: "", is_active: true });
+  const [isCityModalOpen, setIsCityModalOpen] = useState(false);
+  const [cityFormData, setCityFormData] = useState({ countryId: null as number | null, cities: "" });
+  
   // Filtering States (Matches Orders Page)
   const [searchQuery, setSearchQuery] = useState("");
   const [warehouseFilter, setWarehouseFilter] = useState("All Origins");
@@ -52,7 +102,25 @@ export default function AdminLogisticsPage() {
   const [isZoneModalOpen, setIsZoneModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [zoneToDelete, setZoneToDelete] = useState<number | null>(null);
+  
+  const [isDeleteCountryModalOpen, setIsDeleteCountryModalOpen] = useState(false);
+  const [countryToDelete, setCountryToDelete] = useState<number | null>(null);
+  
+  const [isDeleteCityModalOpen, setIsDeleteCityModalOpen] = useState(false);
+  const [cityToDelete, setCityToDelete] = useState<number | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
+
+  // Shipping Fee Filters
+  const [feeSearchQuery, setFeeSearchQuery] = useState("");
+  const [feeCountryFilter, setFeeCountryFilter] = useState("All");
+  const [feeCityFilter, setFeeCityFilter] = useState("All");
+  const [feeProductFilter, setFeeProductFilter] = useState("All");
+  const [feeStatusFilter, setFeeStatusFilter] = useState("All");
+
+  // Bulk Import
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkCsvText, setBulkCsvText] = useState("");
 
   // Derive unique options for filters
   const warehouses = Array.from(new Set(unassignedOrders.map(o => o.items?.[0]?.warehouse).filter(Boolean).map(w => JSON.stringify(w))))
@@ -92,6 +160,51 @@ export default function AdminLogisticsPage() {
     setDateTo("");
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, warehouseFilter, cityFilter, dateFrom, dateTo]);
+
+  const paginatedShipments = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return shipments.slice(startIndex, startIndex + pageSize);
+  }, [shipments, currentPage, pageSize]);
+
+  const paginatedUnassignedOrders = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredUnassignedOrders.slice(startIndex, startIndex + pageSize);
+  }, [filteredUnassignedOrders, currentPage, pageSize]);
+
+  const paginatedDestinations = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return destinations.slice(startIndex, startIndex + pageSize);
+  }, [destinations, currentPage, pageSize]);
+
+  const filteredDestinations = useMemo(() => {
+    return destinations.filter(dest => {
+      const q = feeSearchQuery.toLowerCase();
+      const matchesSearch = !q ||
+        dest.country?.toLowerCase().includes(q) ||
+        dest.city?.toLowerCase().includes(q) ||
+        dest.product?.name?.toLowerCase().includes(q) ||
+        dest.warehouse?.name?.toLowerCase().includes(q);
+      const matchesCountry = feeCountryFilter === "All" || dest.country === feeCountryFilter;
+      const matchesCity = feeCityFilter === "All" || dest.city === feeCityFilter;
+      const matchesProduct = feeProductFilter === "All" ||
+        (feeProductFilter === "global" ? !dest.product_id : dest.product_id?.toString() === feeProductFilter);
+      const matchesStatus = feeStatusFilter === "All" ||
+        (feeStatusFilter === "active" ? dest.is_active : !dest.is_active);
+      return matchesSearch && matchesCountry && matchesCity && matchesProduct && matchesStatus;
+    });
+  }, [destinations, feeSearchQuery, feeCountryFilter, feeCityFilter, feeProductFilter, feeStatusFilter]);
+
+  const paginatedFilteredDestinations = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredDestinations.slice(startIndex, startIndex + pageSize);
+  }, [filteredDestinations, currentPage, pageSize]);
+
   const [formData, setFormData] = useState({
     waybill: "",
     carrier: "DHL Global",
@@ -107,12 +220,18 @@ export default function AdminLogisticsPage() {
     warehouse_id: "" as string | number,
     country: "",
     city: "",
+    address_line: "",
+    postal_code: "",
     weight: 0,
+    distance: 0,
     standard_fee: 0,
     express_fee: 0,
     weight_rate: 0,
+    distance_rate: 0,
     is_active: true
   });
+
+
 
   const fetchShipments = async () => {
     setLoading(true);
@@ -177,16 +296,31 @@ export default function AdminLogisticsPage() {
     }
   };
 
+  const fetchCountriesData = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/locations/countries");
+      setCountriesData(res.data);
+    } catch (err) {
+      toast.error("Failed to fetch shipping zones");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === "Active Shipments") {
       fetchShipments();
     } else if (activeTab === "Unassigned Orders") {
       fetchUnassignedOrders();
-     } else if (activeTab === "Shipping Zones") {
+    } else if (activeTab === "Shipping Fee") {
       fetchDestinations();
       fetchProducts();
       fetchWarehouses();
       fetchLocations();
+      fetchCountriesData();
+    } else if (activeTab === "Shipping Zones") {
+      fetchCountriesData();
     }
   }, [activeTab]);
 
@@ -294,21 +428,23 @@ export default function AdminLogisticsPage() {
     }
   };
 
-  const handleSaveZone = async () => {
+  const handleSaveZone = async (shouldClose = true) => {
     if (!zoneFormData.city || !zoneFormData.country) {
       return toast.error("Please fill in Country and City.");
     }
     setIsSaving(true);
-        // Sanitize data payload
+    // Sanitize data payload
     const payload = {
       product_id: zoneFormData.product_id || null,
       warehouse_id: zoneFormData.warehouse_id || null,
-      weight: zoneFormData.weight || 0,
+      weight: currentWeight,
+      distance: zoneFormData.distance || 0,
       country: zoneFormData.country,
       city: zoneFormData.city,
-      standard_fee: zoneFormData.standard_fee,
-      express_fee: zoneFormData.express_fee,
+      standard_fee: calculatedStandardFee,
+      express_fee: calculatedExpressFee,
       weight_rate: zoneFormData.weight_rate || 0,
+      distance_rate: zoneFormData.distance_rate || 0,
       is_active: zoneFormData.is_active
     };
 
@@ -320,7 +456,20 @@ export default function AdminLogisticsPage() {
         await api.post("/shipping-destinations", payload);
         toast.success("Zone created successfully!");
       }
-      setIsZoneModalOpen(false);
+      
+      if (shouldClose) {
+        setIsZoneModalOpen(false);
+      } else {
+        setZoneFormData(prev => ({
+          ...prev,
+          id: null,
+          country: "",
+          city: "",
+          distance: 0,
+          standard_fee: 0,
+          express_fee: 0
+        }));
+      }
       fetchDestinations();
     } catch (err: any) {
       console.error(err);
@@ -344,6 +493,125 @@ export default function AdminLogisticsPage() {
     }
   };
 
+  const handleSaveCountry = async () => {
+    if (!countryFormData.name) return toast.error("Country name is required");
+    setIsSaving(true);
+    try {
+      if (countryFormData.id) {
+        await api.put(`/locations/countries/${countryFormData.id}`, countryFormData);
+        toast.success("Country updated");
+      } else {
+        await api.post("/locations/countries", countryFormData);
+        toast.success("Country added");
+      }
+      setIsCountryModalOpen(false);
+      fetchCountriesData();
+    } catch (err) {
+      toast.error("Failed to save country");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSaveCities = async () => {
+    if (!cityFormData.cities) return toast.error("Cities are required");
+    setIsSaving(true);
+    try {
+      await api.post(`/locations/countries/${cityFormData.countryId}/cities/bulk`, { cities: cityFormData.cities });
+      toast.success("Cities added successfully");
+      setIsCityModalOpen(false);
+      fetchCountriesData();
+    } catch (err) {
+      toast.error("Failed to save cities");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteCountry = async () => {
+    if (!countryToDelete) return;
+    try {
+      await api.delete(`/locations/countries/${countryToDelete}`);
+      toast.success("Country deleted");
+      setIsDeleteCountryModalOpen(false);
+      setCountryToDelete(null);
+      fetchCountriesData();
+    } catch (err) {
+      toast.error("Failed to delete country");
+    }
+  };
+
+  const handleDeleteCity = async () => {
+    if (!cityToDelete) return;
+    try {
+      await api.delete(`/locations/cities/${cityToDelete}`);
+      toast.success("City deleted");
+      setIsDeleteCityModalOpen(false);
+      setCityToDelete(null);
+      fetchCountriesData();
+    } catch (err) {
+      toast.error("Failed to delete city");
+    }
+  };
+
+  
+  // Dynamic weight and calculated fees for the currently selected product/route
+  const currentWeight = useMemo(() => {
+    if (!zoneFormData.product_id) return 0;
+    const prod = products.find(p => p.id.toString() === zoneFormData.product_id.toString());
+    return prod ? parseFloat(prod.weight || 0) : 0;
+  }, [zoneFormData.product_id, products]);
+
+
+
+  const calculatedStandardFee = useMemo(() => {
+    // Standard Fee = Weight Rate * Weight * Distance Rate
+    return (zoneFormData.weight_rate || 0) * currentWeight * (zoneFormData.distance_rate || 0);
+  }, [zoneFormData.weight_rate, currentWeight, zoneFormData.distance_rate]);
+
+  const calculatedExpressFee = useMemo(() => {
+    return calculatedStandardFee * 1.5;
+  }, [calculatedStandardFee]);
+
+  // Dynamic searchable and scrollable options for country and city
+  const modalCountryOptions = useMemo(() => {
+    return countriesData.map(c => ({ id: c.name, name: c.name }));
+  }, [countriesData]);
+
+  const modalCityOptions = useMemo(() => {
+    if (!zoneFormData.country) return [];
+    const selectedCountry = countriesData.find(c => c.name === zoneFormData.country);
+    if (!selectedCountry) return [];
+    return (selectedCountry.cities || [])
+      .map((ct: any) => ({ id: ct.name, name: ct.name }))
+      .filter((ct: any) => {
+        // If editing, allow the current city
+        if (zoneFormData.id) {
+          const currentDest = destinations.find(d => d.id === zoneFormData.id);
+          if (currentDest && currentDest.city === ct.id && currentDest.country === zoneFormData.country) {
+            return true;
+          }
+        }
+        const exists = destinations.some(d => 
+          (d.product_id?.toString() || "") === (zoneFormData.product_id?.toString() || "") &&
+          (d.warehouse_id?.toString() || "") === (zoneFormData.warehouse_id?.toString() || "") &&
+          d.country === zoneFormData.country &&
+          d.city === ct.id
+        );
+        return !exists;
+      });
+  }, [zoneFormData.country, zoneFormData.product_id, zoneFormData.warehouse_id, zoneFormData.id, countriesData, destinations]);
+
+  const selectedCountryName = useMemo(() => {
+    if (!cityFormData.countryId) return "";
+    const country = countriesData.find(c => c.id === cityFormData.countryId);
+    return country ? country.name : "";
+  }, [cityFormData.countryId, countriesData]);
+
+  const predefinedCitiesForSelectedCountry = useMemo(() => {
+    return PREDEFINED_CITIES[selectedCountryName] || [];
+  }, [selectedCountryName]);
+
   return (
     <div className="space-y-6 p-8 bg-white min-h-screen font-sans">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -359,26 +627,41 @@ export default function AdminLogisticsPage() {
             <Package className="mr-2 h-4 w-4" /> Group Selected Orders ({selectedOrders.length})
           </Button>
         )}
-        {activeTab === "Shipping Zones" && (
+        {activeTab === "Shipping Fee" && (
           <Button 
             className="bg-[#0052cc] text-white hover:bg-[#0052cc]/90 rounded-lg shadow-sm font-bold"
             onClick={() => {
                setZoneFormData({ 
                 id: null, 
-                product_id: "", 
-                warehouse_id: "",
+                product_id: products[0]?.id || "", 
+                warehouse_id: warehousesData[0]?.id || "",
                 country: "", 
                 city: "", 
+                address_line: "",
+                postal_code: "",
                 weight: 0,
+                distance: 0,
                 standard_fee: 0, 
                 express_fee: 0, 
                 weight_rate: 0, 
+                distance_rate: 0,
                 is_active: true 
-              });
-              setIsZoneModalOpen(true);
+               });
+               setIsZoneModalOpen(true);
             }}
           >
-            <Plus className="mr-2 h-4 w-4" /> Add New Zone
+            <Plus className="mr-2 h-4 w-4" /> Add New Fee
+          </Button>
+        )}
+        {activeTab === "Shipping Zones" && (
+          <Button 
+            className="bg-[#0052cc] text-white hover:bg-[#0052cc]/90 rounded-lg shadow-sm font-bold"
+            onClick={() => {
+              setCountryFormData({ id: null, name: "", is_active: true });
+              setIsCountryModalOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Add Country
           </Button>
         )}
       </div>
@@ -395,6 +678,12 @@ export default function AdminLogisticsPage() {
           className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors", activeTab === "Unassigned Orders" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
         >
           Unassigned Orders
+        </button>
+        <button 
+          onClick={() => setActiveTab("Shipping Fee")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors", activeTab === "Shipping Fee" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
+        >
+          Shipping Fee
         </button>
         <button 
           onClick={() => setActiveTab("Shipping Zones")}
@@ -426,7 +715,7 @@ export default function AdminLogisticsPage() {
                   <TableCell colSpan={7} className="h-48 text-center text-zinc-500 font-medium">No active shipments.</TableCell>
                 </TableRow>
               ) : (
-                shipments.map((shipment) => (
+                paginatedShipments.map((shipment) => (
                   <TableRow key={shipment.id} className="hover:bg-zinc-50/50 transition-colors">
                     <TableCell className="px-6 font-black text-zinc-900 text-sm">{shipment.waybill}</TableCell>
                     <TableCell>
@@ -484,6 +773,15 @@ export default function AdminLogisticsPage() {
               )}
             </TableBody>
           </Table>
+          <PaginationControls
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            totalItems={shipments.length}
+            itemName="shipments"
+            pageSizeOptions={[15, 30, 50, 100]}
+          />
         </div>
       ) : activeTab === "Unassigned Orders" ? (
         <div className="space-y-4">
@@ -577,7 +875,7 @@ export default function AdminLogisticsPage() {
                     <TableCell colSpan={10} className="h-48 text-center text-zinc-500 font-medium">No unassigned orders found matching filters.</TableCell>
                   </TableRow>
                 ) : (
-                  filteredUnassignedOrders.map((order) => (
+                  paginatedUnassignedOrders.map((order) => (
                     <TableRow key={order.id} className={cn(
                       "hover:bg-zinc-50/50 transition-colors group",
                       selectedOrders.includes(order.id) && "bg-zinc-50/50"
@@ -654,6 +952,188 @@ export default function AdminLogisticsPage() {
                 )}
               </TableBody>
             </Table>
+            <PaginationControls
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              pageSize={pageSize}
+              setPageSize={setPageSize}
+              totalItems={filteredUnassignedOrders.length}
+              itemName="orders"
+              pageSizeOptions={[15, 30, 50, 100]}
+            />
+          </div>
+        </div>
+      ) : activeTab === "Shipping Fee" ? (
+        <div className="space-y-4">
+          {/* Expose Premium Filters & Search controls */}
+          <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
+            <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Input 
+                placeholder="Search Product, Country, City or Origin..." 
+                className="pl-10 h-10 border-zinc-200 rounded-lg bg-white w-full"
+                value={feeSearchQuery}
+                onChange={(e) => setFeeSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div className="w-full sm:w-[160px]">
+              <select 
+                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+                value={feeCountryFilter}
+                onChange={(e) => setFeeCountryFilter(e.target.value)}
+              >
+                <option value="All">All Countries</option>
+                {Array.from(new Set(destinations.map(d => d.country).filter(Boolean))).sort().map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w-full sm:w-[160px]">
+              <select 
+                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+                value={feeCityFilter}
+                onChange={(e) => setFeeCityFilter(e.target.value)}
+              >
+                <option value="All">All Cities</option>
+                {Array.from(new Set(destinations.map(d => d.city).filter(Boolean))).sort().map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w-full sm:w-[180px]">
+              <select 
+                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+                value={feeProductFilter}
+                onChange={(e) => setFeeProductFilter(e.target.value)}
+              >
+                <option value="All">All Products Scope</option>
+                <option value="global">Global Rules Only</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id.toString()}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="w-full sm:w-[140px]">
+              <select 
+                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+                value={feeStatusFilter}
+                onChange={(e) => setFeeStatusFilter(e.target.value)}
+              >
+                <option value="All">All Statuses</option>
+                <option value="active">Active Zones</option>
+                <option value="inactive">Inactive Zones</option>
+              </select>
+            </div>
+
+            <Button 
+              variant="outline" 
+              className="w-full sm:w-auto rounded-lg h-10 px-3 border-zinc-200" 
+              onClick={() => {
+                setFeeSearchQuery("");
+                setFeeCountryFilter("All");
+                setFeeCityFilter("All");
+                setFeeProductFilter("All");
+                setFeeStatusFilter("All");
+              }}
+            >
+              <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+            </Button>
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
+                <TableRow>
+                  <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Product Application</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Route (Origin → Destination)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Weight (KG)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Weight Rate (Ksh/KG)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Distance (KM)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Distance Rate (Ksh/KM)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Standard (3-5d)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Express (1-2d)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Country</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">City</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Status</TableHead>
+                  <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px] text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDestinations.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={12} className="h-48 text-center text-zinc-500 font-medium">No shipping zones defined matching the filter parameters.</TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedFilteredDestinations.map((dest) => (
+                    <TableRow key={dest.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <TableCell className="px-6">
+                        {dest.product ? (
+                          <div className="flex flex-col">
+                            <span className="font-bold text-zinc-900 text-xs">{dest.product.name}</span>
+                            <span className="text-[10px] text-zinc-500 font-medium uppercase">SKU: {dest.product.sku}</span>
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="bg-zinc-50 text-zinc-500 border-zinc-200 text-[10px] font-bold uppercase tracking-wider">All Products</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
+                            {dest.warehouse?.name?.split(' ').shift() || "Any"}
+                          </div>
+                          <ArrowRightLeft className="h-3 w-3 text-zinc-300" />
+                          <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
+                            {dest.city}, {dest.country}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-bold text-zinc-700 text-sm">
+                        {parseFloat(dest.weight || 0).toFixed(2)} KG
+                      </TableCell>
+                      <TableCell className="font-bold text-indigo-600 text-sm">
+                        Ksh {parseFloat(dest.weight_rate || 0).toLocaleString()}/KG
+                      </TableCell>
+                      <TableCell className="font-bold text-zinc-700 text-sm">
+                        {parseFloat(dest.distance || 0).toLocaleString()} KM
+                      </TableCell>
+                      <TableCell className="font-bold text-emerald-600 text-sm">
+                        Ksh {parseFloat(dest.distance_rate || 0).toLocaleString()}/KM
+                      </TableCell>
+                      <TableCell className="font-black text-[#0052cc]">Ksh {parseFloat(dest.standard_fee).toLocaleString()}</TableCell>
+                      <TableCell className="font-black text-amber-600">Ksh {parseFloat(dest.express_fee).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs font-semibold text-zinc-700">{dest.country}</TableCell>
+                      <TableCell className="text-xs font-semibold text-zinc-700">{dest.city}</TableCell>
+                      <TableCell>
+                        <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                          dest.is_active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                        )}>{dest.is_active ? "Active" : "Inactive"}</Badge>
+                      </TableCell>
+                      <TableCell className="px-6 text-right space-x-2">
+                        <Button variant="ghost" size="icon" onClick={() => { setZoneFormData(dest); setIsZoneModalOpen(true); }} className="h-8 w-8 text-zinc-400 hover:text-[#0052cc] rounded-full">
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => { setZoneToDelete(dest.id); setIsDeleteModalOpen(true); }} className="h-8 w-8 text-zinc-400 hover:text-red-600 rounded-full">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            <PaginationControls
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              pageSize={pageSize}
+              setPageSize={setPageSize}
+              totalItems={filteredDestinations.length}
+              itemName="fees"
+              pageSizeOptions={[15, 30, 50, 100]}
+            />
           </div>
         </div>
       ) : (
@@ -661,57 +1141,44 @@ export default function AdminLogisticsPage() {
           <Table>
             <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
               <TableRow>
-                <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Product Application</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Route (Origin → Destination)</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Standard (3-5d)</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Express (1-2d)</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Weight Rate (Ksh/KG)</TableHead>
+                <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Country</TableHead>
+                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Cities</TableHead>
                 <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Status</TableHead>
                 <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px] text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {destinations.length === 0 ? (
+              {countriesData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center text-zinc-500 font-medium">No shipping zones defined.</TableCell>
+                  <TableCell colSpan={4} className="h-48 text-center text-zinc-500 font-medium">No countries defined.</TableCell>
                 </TableRow>
               ) : (
-                destinations.map((dest) => (
-                  <TableRow key={dest.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <TableCell className="px-6">
-                      {dest.product ? (
-                        <div className="flex flex-col">
-                          <span className="font-bold text-zinc-900 text-xs">{dest.product.name}</span>
-                          <span className="text-[10px] text-zinc-500 font-medium uppercase">SKU: {dest.product.sku}</span>
-                        </div>
-                      ) : (
-                        <Badge variant="outline" className="bg-zinc-50 text-zinc-500 border-zinc-200 text-[10px] font-bold uppercase tracking-wider">All Products</Badge>
-                      )}
-                    </TableCell>
+                countriesData.map((country) => (
+                  <TableRow key={country.id} className="hover:bg-zinc-50/50 transition-colors">
+                    <TableCell className="px-6 font-bold text-zinc-900">{country.name}</TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
-                          {dest.warehouse?.name?.split(' ').shift() || "Origin"}
-                        </div>
-                        <ArrowRightLeft className="h-3 w-3 text-zinc-300" />
-                        <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
-                          {dest.city}, {dest.country}
-                        </div>
+                      <div className="flex flex-wrap gap-2">
+                        {country.cities?.map((city: any) => (
+                          <Badge key={city.id} variant="secondary" className="bg-blue-50 text-blue-700 border-none px-2 py-0.5 text-xs font-semibold flex items-center gap-1">
+                            {city.name}
+                            <button onClick={() => { setCityToDelete(city.id); setIsDeleteCityModalOpen(true); }} className="ml-1 text-blue-400 hover:text-red-500"><X className="h-3 w-3" /></button>
+                          </Badge>
+                        ))}
                       </div>
                     </TableCell>
-                    <TableCell className="font-black text-[#0052cc]">Ksh {parseFloat(dest.standard_fee).toLocaleString()}</TableCell>
-                    <TableCell className="font-black text-amber-600">Ksh {parseFloat(dest.express_fee).toLocaleString()}</TableCell>
-                    <TableCell className="font-bold text-zinc-600">Ksh {parseFloat(dest.weight_rate || 0).toLocaleString()}/KG</TableCell>
                     <TableCell>
                       <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                        dest.is_active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                      )}>{dest.is_active ? "Active" : "Inactive"}</Badge>
+                        country.is_active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                      )}>{country.is_active ? "Active" : "Inactive"}</Badge>
                     </TableCell>
                     <TableCell className="px-6 text-right space-x-2">
-                      <Button variant="ghost" size="icon" onClick={() => { setZoneFormData(dest); setIsZoneModalOpen(true); }} className="h-8 w-8 text-zinc-400 hover:text-[#0052cc] rounded-full">
+                      <Button variant="ghost" size="sm" onClick={() => { setCityFormData({ countryId: country.id, cities: "" }); setIsCityModalOpen(true); }} className="h-8 text-[#0052cc] hover:bg-blue-50 rounded-lg text-xs font-bold">
+                        <Plus className="mr-1 h-3 w-3" /> Add Cities
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => { setCountryFormData({ id: country.id, name: country.name, is_active: country.is_active }); setIsCountryModalOpen(true); }} className="h-8 w-8 text-zinc-400 hover:text-[#0052cc] rounded-full">
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => { setZoneToDelete(dest.id); setIsDeleteModalOpen(true); }} className="h-8 w-8 text-zinc-400 hover:text-red-600 rounded-full">
+                      <Button variant="ghost" size="icon" onClick={() => { setCountryToDelete(country.id); setIsDeleteCountryModalOpen(true); }} className="h-8 w-8 text-zinc-400 hover:text-red-600 rounded-full">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -722,6 +1189,101 @@ export default function AdminLogisticsPage() {
           </Table>
         </div>
       )}
+
+      {/* Country Modal */}
+      <Dialog open={isCountryModalOpen} onOpenChange={setIsCountryModalOpen}>
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+          <DialogHeader className="p-6 border-b bg-white">
+            <DialogTitle className="text-xl font-bold text-zinc-900">{countryFormData.id ? "Edit Country" : "Add Country"}</DialogTitle>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-500">Country Name *</label>
+              <SearchableDropdown 
+                items={EAST_AFRICAN_COUNTRIES}
+                value={countryFormData.name}
+                onChange={(val) => setCountryFormData({...countryFormData, name: val})}
+                placeholder="Search country..."
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="countryActive" checked={countryFormData.is_active} onChange={(e) => setCountryFormData({...countryFormData, is_active: e.target.checked})} className="rounded border-zinc-300" />
+              <label htmlFor="countryActive" className="text-sm font-medium text-zinc-700">Active</label>
+            </div>
+          </div>
+          <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
+            <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm" onClick={() => setIsCountryModalOpen(false)}>Cancel</Button>
+            <Button className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" onClick={handleSaveCountry} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} SAVE
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cities Modal */}
+      <Dialog open={isCityModalOpen} onOpenChange={setIsCityModalOpen}>
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+          <DialogHeader className="p-6 border-b bg-white">
+            <DialogTitle className="text-xl font-bold text-zinc-900">Add Cities (Bulk)</DialogTitle>
+            <p className="text-xs text-zinc-500">Enter multiple cities separated by commas.</p>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-500">Cities *</label>
+              <Input 
+                placeholder="e.g. Nairobi, Mombasa, Kisumu" 
+                className="h-10 border-zinc-200 rounded-lg" 
+                value={cityFormData.cities}
+                onChange={(e) => setCityFormData({...cityFormData, cities: e.target.value})}
+              />
+            </div>
+            {predefinedCitiesForSelectedCountry.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-500">Predefined Cities of {selectedCountryName} (Click to toggle)</label>
+                <div className="flex flex-wrap gap-1.5 max-h-[120px] overflow-y-auto p-2 border border-zinc-200 rounded-lg bg-zinc-50/50">
+                  {predefinedCitiesForSelectedCountry.map((city) => {
+                    const currentCities = cityFormData.cities.split(",").map(c => c.trim()).filter(Boolean);
+                    const active = currentCities.some(c => c.toLowerCase() === city.toLowerCase());
+                    return (
+                      <Badge
+                        key={city}
+                        variant={active ? "default" : "secondary"}
+                        className={cn(
+                          "cursor-pointer select-none px-2.5 py-1 text-xs font-semibold rounded-md transition-all",
+                          active 
+                            ? "bg-[#0052cc] text-white hover:bg-[#0052cc]/90" 
+                            : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-100"
+                        )}
+                        onClick={() => {
+                          const isPresent = currentCities.some(c => c.toLowerCase() === city.toLowerCase());
+                          let updated;
+                          if (isPresent) {
+                            updated = currentCities.filter(c => c.toLowerCase() !== city.toLowerCase());
+                          } else {
+                            updated = [...currentCities, city];
+                          }
+                          setCityFormData({
+                            ...cityFormData,
+                            cities: updated.join(", ")
+                          });
+                        }}
+                      >
+                        {city}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
+            <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm" onClick={() => setIsCityModalOpen(false)}>Cancel</Button>
+            <Button className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" onClick={handleSaveCities} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} ADD CITIES
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New Shipment Modal */}
       <Dialog open={isModalOpen} onOpenChange={(open) => { setIsModalOpen(open); if(!open) setEditingShipmentId(null); }}>
@@ -827,9 +1389,9 @@ export default function AdminLogisticsPage() {
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Applicable Product (Optional)</label>
+                  <label className="text-xs font-semibold text-zinc-500">Applicable Product *</label>
                   <SearchableDropdown 
-                    items={[{id: "", name: "All Products"}, ...products.map(p => ({id: p.id, name: `${p.name} (${p.sku})`}))]}
+                    items={zoneFormData.id ? [{id: "", name: "All Products"}, ...products.map(p => ({id: p.id, name: `${p.name} (${p.sku})`}))] : products.map(p => ({id: p.id, name: `${p.name} (${p.sku})`}))}
                     value={zoneFormData.product_id?.toString() || ""}
                     onChange={(val) => setZoneFormData({...zoneFormData, product_id: val})}
                     placeholder="Select product..."
@@ -838,7 +1400,7 @@ export default function AdminLogisticsPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Origin (Warehouse) *</label>
                   <SearchableDropdown 
-                    items={[{id: "", name: "Any Warehouse"}, ...warehousesData.map(w => ({id: w.id, name: w.name}))]}
+                    items={zoneFormData.id ? [{id: "", name: "Any Warehouse"}, ...warehousesData.map(w => ({id: w.id, name: w.name}))] : warehousesData.map(w => ({id: w.id, name: w.name}))}
                     value={zoneFormData.warehouse_id?.toString() || ""}
                     onChange={(val) => setZoneFormData({...zoneFormData, warehouse_id: val})}
                     placeholder="Select origin..."
@@ -849,87 +1411,127 @@ export default function AdminLogisticsPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Destination Country *</label>
                   <SearchableDropdown 
-                    items={Array.from(new Set([...countries, zoneFormData.country].filter(Boolean))).map(c => ({id: c, name: c}))}
+                    items={modalCountryOptions}
                     value={zoneFormData.country}
-                    onChange={(val) => setZoneFormData({...zoneFormData, country: val})}
+                    onChange={(val) => setZoneFormData({...zoneFormData, country: val, city: ""})}
                     placeholder="Search country..."
                   />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Destination City *</label>
                   <SearchableDropdown 
-                    items={Array.from(new Set([...cities, zoneFormData.city].filter(Boolean))).map(c => ({id: c, name: c}))}
+                    items={modalCityOptions}
                     value={zoneFormData.city}
                     onChange={(val) => setZoneFormData({...zoneFormData, city: val})}
                     placeholder="Search city..."
+                    disabled={!zoneFormData.country}
                   />
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                {zoneFormData.product_id && (
-                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-[10px] text-blue-700 font-bold uppercase tracking-wider flex items-center gap-2">
-                    <Package className="h-3.5 w-3.5" />
-                    <span>Product Mass: {products.find(p => p.id.toString() === zoneFormData.product_id.toString())?.weight || 0} KG</span>
-                  </div>
-                )}
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Standard Fee (Ksh) *</label>
+                  <label className="text-xs font-semibold text-zinc-500">Weight (KG) [Read-Only] *</label>
                   <Input 
-                    type="number"
-                    placeholder="0.00" 
-                    className="h-10 border-zinc-200 rounded-lg font-bold" 
-                    value={zoneFormData.standard_fee ?? 0}
-                    onChange={(e) => setZoneFormData({...zoneFormData, standard_fee: parseFloat(e.target.value) || 0})}
+                    type="text"
+                    readOnly
+                    className="h-10 border-zinc-200 rounded-lg font-bold bg-zinc-50" 
+                    value={`${currentWeight} KG`}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Express Fee (Ksh) *</label>
-                  <Input 
-                    type="number"
-                    placeholder="0.00" 
-                    className="h-10 border-zinc-200 rounded-lg font-bold text-amber-600" 
-                    value={zoneFormData.express_fee ?? 0}
-                    onChange={(e) => setZoneFormData({...zoneFormData, express_fee: parseFloat(e.target.value) || 0})}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-1.5">
                    <label className="text-xs font-semibold text-zinc-500">Weight Rate (Ksh/KG) *</label>
                    <Input 
                      type="number"
-                     placeholder="0.00" 
+                     placeholder="e.g. 50.00" 
                      className="h-10 border-zinc-200 rounded-lg font-bold text-indigo-600" 
-                     value={zoneFormData.weight_rate ?? 0}
+                     value={zoneFormData.weight_rate || ""}
                      onChange={(e) => setZoneFormData({...zoneFormData, weight_rate: parseFloat(e.target.value) || 0})}
                    />
                  </div>
-                 <div className="space-y-1.5">
-                   <label className="text-xs font-semibold text-zinc-500">Zone Status</label>
-                   <select 
-                     className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none"
-                     value={zoneFormData.is_active ? "true" : "false"}
-                     onChange={(e) => setZoneFormData({...zoneFormData, is_active: e.target.value === "true"})}
-                   >
-                     <option value="true">Active (Visible to customers)</option>
-                     <option value="false">Inactive (Hidden from checkout)</option>
-                   </select>
-                 </div>
-               </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Distance (KM) *</label>
+                  <Input 
+                    type="number"
+                    placeholder="e.g. 120" 
+                    className="h-10 border-zinc-200 rounded-lg font-bold text-zinc-800" 
+                    value={zoneFormData.distance || ""}
+                    onChange={(e) => setZoneFormData({...zoneFormData, distance: parseFloat(e.target.value) || 0})}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Distance Rate (Ksh/KM) *</label>
+                  <Input 
+                    type="number"
+                    placeholder="e.g. 2.50" 
+                    className="h-10 border-zinc-200 rounded-lg font-bold text-emerald-600" 
+                    value={zoneFormData.distance_rate || ""}
+                    onChange={(e) => setZoneFormData({...zoneFormData, distance_rate: parseFloat(e.target.value) || 0})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Zone Status</label>
+                  <select 
+                    className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none"
+                    value={zoneFormData.is_active ? "true" : "false"}
+                    onChange={(e) => setZoneFormData({...zoneFormData, is_active: e.target.value === "true"})}
+                  >
+                    <option value="true">Active (Visible to customers)</option>
+                    <option value="false">Inactive (Hidden from checkout)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Standard Fee (Ksh) [Read-Only]</label>
+                  <Input 
+                    type="text"
+                    readOnly
+                    className="h-10 border-zinc-200 rounded-lg font-bold bg-zinc-50 text-blue-700" 
+                    value={`Ksh ${calculatedStandardFee.toLocaleString()}`}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Express Fee (Ksh) [Read-Only]</label>
+                  <Input 
+                    type="text"
+                    readOnly
+                    className="h-10 border-zinc-200 rounded-lg font-bold text-amber-600 bg-zinc-50" 
+                    value={`Ksh ${calculatedExpressFee.toLocaleString()}`}
+                  />
+                </div>
+              </div>
             </div>
-            <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
-              <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsZoneModalOpen(false)}>Cancel</Button>
-              <Button 
-                className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" 
-                onClick={handleSaveZone}
-                disabled={isSaving}
-              >
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                SAVE ZONE
-              </Button>
+            <DialogFooter className="p-4 border-t bg-zinc-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <Button variant="outline" className="w-full sm:w-auto h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsZoneModalOpen(false)}>Cancel</Button>
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                {!zoneFormData.id && (
+                  <Button 
+                    variant="outline"
+                    className="w-full sm:w-auto h-10 border-[#0052cc] text-[#0052cc] hover:bg-blue-50/50 rounded-lg font-black px-6 text-[11px] tracking-widest uppercase shadow-sm" 
+                    onClick={() => handleSaveZone(false)}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Save & Add Another
+                  </Button>
+                )}
+                <Button 
+                  className="w-full sm:w-auto h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" 
+                  onClick={() => handleSaveZone(true)}
+                  disabled={isSaving}
+                >
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {zoneFormData.id ? "Save Changes" : "Save & Close"}
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -949,6 +1551,44 @@ export default function AdminLogisticsPage() {
             <DialogFooter className="p-4 bg-zinc-50/50 flex items-center justify-center gap-3 border-t">
               <Button variant="outline" className="flex-1 h-11 rounded-lg font-bold" onClick={() => setIsDeleteModalOpen(false)}>Keep Zone</Button>
               <Button className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold" onClick={handleDeleteZone}>Delete Permanently</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Country Delete Confirmation Modal */}
+        <Dialog open={isDeleteCountryModalOpen} onOpenChange={setIsDeleteCountryModalOpen}>
+          <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                <Trash2 className="h-8 w-8 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900">Delete Country</h3>
+                <p className="text-sm text-zinc-500 mt-1">Are you sure you want to delete this country and all its cities? This action cannot be undone.</p>
+              </div>
+            </div>
+            <DialogFooter className="p-4 bg-zinc-50/50 flex items-center justify-center gap-3 border-t">
+              <Button variant="outline" className="flex-1 h-11 rounded-lg font-bold" onClick={() => setIsDeleteCountryModalOpen(false)}>Cancel</Button>
+              <Button className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold" onClick={handleDeleteCountry}>Delete Permanently</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* City Delete Confirmation Modal */}
+        <Dialog open={isDeleteCityModalOpen} onOpenChange={setIsDeleteCityModalOpen}>
+          <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                <Trash2 className="h-8 w-8 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900">Delete City</h3>
+                <p className="text-sm text-zinc-500 mt-1">Are you sure you want to delete this city? This action cannot be undone.</p>
+              </div>
+            </div>
+            <DialogFooter className="p-4 bg-zinc-50/50 flex items-center justify-center gap-3 border-t">
+              <Button variant="outline" className="flex-1 h-11 rounded-lg font-bold" onClick={() => setIsDeleteCityModalOpen(false)}>Cancel</Button>
+              <Button className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold" onClick={handleDeleteCity}>Delete Permanently</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

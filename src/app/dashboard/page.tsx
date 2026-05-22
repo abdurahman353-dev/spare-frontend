@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import {
   AreaChart,
   Area,
@@ -45,6 +46,21 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [replenishing, setReplenishing] = useState(false);
+
+  const handleReplenish = async () => {
+    setReplenishing(true);
+    try {
+      await api.post("/inventory/replenish");
+      // Refetch the data to show optimized stock instantly in real time
+      const res = await api.get("/dashboard");
+      setData(res.data);
+    } catch (err) {
+      console.error("Failed to replenish stock:", err);
+    } finally {
+      setReplenishing(false);
+    }
+  };
 
   // Defer chart rendering until client DOM is ready — prevents Recharts -1 size error
   useEffect(() => { setMounted(true); }, []);
@@ -89,7 +105,7 @@ export default function Dashboard() {
       border: "border-l-emerald-500",
     },
     {
-      title: "Active Orders",
+      title: "Pending Orders",
       value: data.stats.orders.toString(),
       icon: ShoppingCart,
       trend: "+4.2%",
@@ -127,7 +143,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-6 p-6 bg-zinc-50 min-h-screen">
+    <div className="space-y-6">
 
       {/* ── Page Header ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -183,9 +199,9 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="p-6">
-            <div style={{ width: "100%", height: 280 }}>
+            <div style={{ width: "100%", height: 280, minWidth: 0 }}>
               {mounted ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="99%" height="100%" minWidth={1} minHeight={1}>
                   <AreaChart data={data.sales_chart} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -241,7 +257,7 @@ export default function Dashboard() {
               <Package className="h-4 w-4 text-zinc-400" />
             </div>
           </div>
-          <div className="p-4 space-y-2">
+          <div className="p-4 space-y-2 max-h-[280px] overflow-y-auto pr-1">
             {data.low_stock.length === 0 ? (
               <div className="py-12 text-center space-y-3">
                 <div className="h-14 w-14 bg-emerald-50 rounded-full flex items-center justify-center mx-auto">
@@ -250,7 +266,7 @@ export default function Dashboard() {
                 <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Stock Fully Optimized</p>
               </div>
             ) : (
-              data.low_stock.slice(0, 5).map((item, i) => (
+              data.low_stock.map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-zinc-50 transition-colors group">
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 bg-red-50 rounded-lg flex items-center justify-center group-hover:bg-red-100 transition-colors">
@@ -258,7 +274,13 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="font-semibold text-sm text-zinc-900 line-clamp-1">{item.product?.name}</p>
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">{item.product?.sku}</p>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">{item.product?.sku}</span>
+                        <span className="text-[10px] text-zinc-300">•</span>
+                        <span className="text-[10px] font-bold text-[#0052cc] bg-blue-50/50 border border-blue-100 rounded px-1.5 py-0.5 tracking-tight uppercase">
+                          {item.warehouse?.name || "Unassigned"}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -268,11 +290,6 @@ export default function Dashboard() {
                 </div>
               ))
             )}
-            <div className="pt-2">
-              <Button className="w-full bg-zinc-900 text-white hover:bg-zinc-700 font-bold h-9 rounded-xl text-xs">
-                Replenish Inventory
-              </Button>
-            </div>
           </div>
         </div>
       </div>

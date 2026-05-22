@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "react-hot-toast";
+import { SettingsProvider } from "@/components/providers/SettingsProvider";
 
 export default function RootLayout({
   children,
@@ -29,12 +30,14 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <AuthProvider>
-            <CartProvider>
-              {children}
-              <Toaster position="top-right" />
-            </CartProvider>
-          </AuthProvider>
+          <SettingsProvider>
+            <AuthProvider>
+              <CartProvider>
+                {children}
+                <Toaster position="top-right" />
+              </CartProvider>
+            </AuthProvider>
+          </SettingsProvider>
         </ThemeProvider>
       </body>
     </html>

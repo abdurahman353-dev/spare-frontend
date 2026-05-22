@@ -15,6 +15,7 @@ import Link from "next/link";
 import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 
 export default function CheckoutPage() {
   const { cart, cartTotal, cartWeight, clearCart } = useCart();
@@ -22,8 +23,9 @@ export default function CheckoutPage() {
   const [step, setStep] = useState(1);
   const [completed, setCompleted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [orderRef, setOrderRef] = useState("");
+  const [orderRefs, setOrderRefs] = useState<string[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
   const [availableCities, setAvailableCities] = useState<any[]>([]);
   const [selectedZone, setSelectedZone] = useState<any>(null);
   const [shippingMethod, setShippingMethod] = useState<"standard" | "express">("standard");
@@ -44,8 +46,11 @@ export default function CheckoutPage() {
       try {
         const res = await api.get("/shipping-destinations/active");
         setDestinations(res.data);
+        
+        const locRes = await api.get("/locations/countries");
+        setLocations(locRes.data);
       } catch (err) {
-        console.error("Failed to fetch shipping zones");
+        console.error("Failed to fetch shipping data");
       }
     };
     fetchZones();
@@ -77,6 +82,68 @@ export default function CheckoutPage() {
     }
   }, [isAuthenticated, authLoading, router, user]);
 
+  const calculateShippingFeeForCart = (method: "standard" | "express") => {
+    if (!shippingDetails.country || !shippingDetails.city || destinations.length === 0) return 0;
+    
+    let totalFee = 0;
+    
+    for (const item of cart) {
+      // Find matching destination rate:
+      // Priority 1: Exact product override for this route/warehouse
+      let rate = destinations.find(d => 
+        d.country === shippingDetails.country && 
+        d.city === shippingDetails.city && 
+        d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
+        d.product_id?.toString() === item.id?.toString()
+      );
+      
+      // Priority 2: Global route rate (product_id = null) for this warehouse
+      if (!rate) {
+        rate = destinations.find(d => 
+          d.country === shippingDetails.country && 
+          d.city === shippingDetails.city && 
+          d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
+          !d.product_id
+        );
+      }
+      
+      // Fallback: If no warehouse match, search by country/city and product/global
+      if (!rate) {
+        rate = destinations.find(d => 
+          d.country === shippingDetails.country && 
+          d.city === shippingDetails.city && 
+          d.product_id?.toString() === item.id?.toString()
+        );
+      }
+      if (!rate) {
+        rate = destinations.find(d => 
+          d.country === shippingDetails.country && 
+          d.city === shippingDetails.city && 
+          !d.product_id
+        );
+      }
+      
+      if (rate) {
+        const itemWeight = parseFloat((item.weight ?? 1.0).toString());
+        const weightRate = parseFloat(rate.weight_rate || 0);
+        const baseStandard = parseFloat(rate.standard_fee || 0);
+        const distance = parseFloat(rate.distance || 0);
+        const distanceRate = parseFloat(rate.distance_rate || 0);
+        
+        const itemQty = item.quantity || 1;
+        const standardFee = weightRate * (itemWeight * itemQty) * distanceRate;
+        
+        if (method === "express") {
+          totalFee += (standardFee * 1.5);
+        } else {
+          totalFee += standardFee;
+        }
+      }
+    }
+    
+    return totalFee;
+  };
+
   // Sync available cities and shipping fee when destinations or prefilled city changes
   useEffect(() => {
     if (destinations.length > 0 && shippingDetails.city && !shippingDetails.country) {
@@ -86,46 +153,41 @@ export default function CheckoutPage() {
         setShippingDetails(prev => ({ ...prev, country: zone.country }));
         setAvailableCities(destinations.filter(d => d.country === zone.country));
         setSelectedZone(zone);
-        const baseFee = parseFloat(zone.standard_fee);
-        const weightSurcharge = cartWeight * parseFloat(zone.weight_rate || 0);
-        setShippingFee(baseFee + weightSurcharge);
         localStorage.removeItem("spare_prefill_shipping");
       }
     }
-  }, [destinations, shippingDetails.city, cartWeight]);
+  }, [destinations, shippingDetails.city]);
 
   useEffect(() => {
-    if (selectedZone) {
-      const baseFee = shippingMethod === "express" ? parseFloat(selectedZone.express_fee) : parseFloat(selectedZone.standard_fee);
-      const weightSurcharge = cartWeight * parseFloat(selectedZone.weight_rate || 0);
-      setShippingFee(baseFee + weightSurcharge);
+    if (shippingDetails.country && shippingDetails.city) {
+      setShippingFee(calculateShippingFeeForCart(shippingMethod));
+    } else {
+      setShippingFee(0);
     }
-  }, [shippingMethod, selectedZone, cartWeight]);
+  }, [shippingMethod, shippingDetails.city, shippingDetails.country, cart, destinations]);
 
   const uniqueCountries = Array.from(new Set(destinations.map(d => d.country)));
 
   const handleCountryChange = (country: string) => {
     setShippingDetails({ ...shippingDetails, country, city: "" });
-    setAvailableCities(destinations.filter(d => d.country === country));
-    setShippingFee(0);
+    const loc = locations.find(l => l.name === country);
+    setAvailableCities(loc ? loc.cities : []);
+    setSelectedZone(null);
   };
 
   const handleCityChange = (city: string) => {
     const zone = destinations.find(d => d.country === shippingDetails.country && d.city === city);
     setShippingDetails({ ...shippingDetails, city });
-    setSelectedZone(zone);
-    if (zone) {
-      const baseFee = parseFloat(zone.standard_fee);
-      const weightSurcharge = cartWeight * parseFloat(zone.weight_rate || 0);
-      setShippingFee(baseFee + weightSurcharge);
-    } else {
-      setShippingFee(0);
-    }
+    setSelectedZone(zone || (destinations.some(d => d.country === shippingDetails.country && d.city === city) ? { country: shippingDetails.country, city } : null));
   };
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (step < 3) {
+      if (step === 1 && !selectedZone) {
+        alert("Shipping is currently unavailable for the selected location.");
+        return;
+      }
       setStep(step + 1);
     } else {
       setIsProcessing(true);
@@ -151,7 +213,11 @@ export default function CheckoutPage() {
             shipping_fee: shippingFee,
             shipping_method: shippingMethod === 'express' ? 'Express Logistics' : 'Standard Delivery'
           });
-          setOrderRef(response.data.order?.tracking_number || "");
+          if (response.data.orders && response.data.orders.length > 0) {
+            setOrderRefs(response.data.orders.map((o: any) => o.tracking_number));
+          } else {
+            setOrderRefs([response.data.order?.tracking_number || ""]);
+          }
           setCompleted(true);
           clearCart();
         } catch (error) {
@@ -177,9 +243,13 @@ export default function CheckoutPage() {
             <CheckCircle2 className="h-16 w-16" />
           </motion.div>
           <h1 className="text-4xl font-black tracking-tighter mb-4 uppercase">Order Confirmed!</h1>
-          <div className="bg-white border border-zinc-200 px-6 py-3 rounded-lg mb-8 shadow-sm">
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Reference Number</p>
-            <p className="text-xl font-black text-zinc-900 tracking-tight">{orderRef || "Processing..."}</p>
+          <div className="flex flex-col gap-3 mb-8">
+            {orderRefs.map((ref, idx) => (
+              <div key={idx} className="bg-white border border-zinc-200 px-6 py-3 rounded-lg shadow-sm">
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Reference Number</p>
+                <p className="text-xl font-black text-zinc-900 tracking-tight text-center">{ref || "Processing..."}</p>
+              </div>
+            ))}
           </div>
           <p className="text-muted-foreground mb-8 text-center max-w-md text-lg">
             Thank you for choosing AutoSpare East Africa. Your order has been received and is being processed for rapid dispatch.
@@ -236,30 +306,22 @@ export default function CheckoutPage() {
                     </div>
                     <Input placeholder="Address Line 1" required className="h-12 bg-white" value={shippingDetails.address} onChange={(e) => setShippingDetails({...shippingDetails, address: e.target.value})} />
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <select 
-                        required 
-                        className="h-12 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
-                        value={shippingDetails.country} 
-                        onChange={(e) => handleCountryChange(e.target.value)}
-                      >
-                        <option value="" disabled>Select Country</option>
-                        {uniqueCountries.map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
+                      <SearchableDropdown
+                        items={locations.map(loc => ({ id: loc.name, name: loc.name }))}
+                        value={shippingDetails.country}
+                        onChange={handleCountryChange}
+                        placeholder="Select Country"
+                        className="h-12 border-zinc-200"
+                      />
 
-                      <select 
-                        required 
+                      <SearchableDropdown
+                        items={availableCities.map((city: any) => ({ id: city.name, name: city.name }))}
+                        value={shippingDetails.city}
+                        onChange={handleCityChange}
+                        placeholder="Select City"
                         disabled={!shippingDetails.country}
-                        className="h-12 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50" 
-                        value={shippingDetails.city} 
-                        onChange={(e) => handleCityChange(e.target.value)}
-                      >
-                        <option value="" disabled>Select City</option>
-                        {availableCities.map(c => (
-                          <option key={c.id} value={c.city}>{c.city}</option>
-                        ))}
-                      </select>
+                        className="h-12 border-zinc-200"
+                      />
                       
                       <Input placeholder="Postal Code" required className="h-12 bg-white" value={shippingDetails.postalCode} onChange={(e) => setShippingDetails({...shippingDetails, postalCode: e.target.value})} />
                     </div>
@@ -280,13 +342,13 @@ export default function CheckoutPage() {
                           id: "standard", 
                           name: "Standard Delivery", 
                           time: "3-5 Business Days", 
-                          price: selectedZone ? (parseFloat(selectedZone.standard_fee) + (cartWeight * parseFloat(selectedZone.weight_rate || 0))) : 0 
+                          price: calculateShippingFeeForCart("standard")
                         },
                         { 
                           id: "express", 
                           name: "Express Logistics", 
                           time: "24-48 Hours", 
-                          price: selectedZone ? (parseFloat(selectedZone.express_fee) + (cartWeight * parseFloat(selectedZone.weight_rate || 0))) : 0 
+                          price: calculateShippingFeeForCart("express")
                         },
                       ].map((method) => (
                         <label 

@@ -1,9 +1,10 @@
 "use client";
 
-import { Bell, Search, Menu, User, LogOut, Settings, Key } from "lucide-react";
+import { Bell, Search, Menu, User, LogOut, Settings, Key, ChevronRight, Home } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
+import { usePathname } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,9 +15,71 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import api from "@/lib/axios";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 export function Header() {
   const { user, logout } = useAuth();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const pathname = usePathname();
+
+  const pathSegments = pathname ? pathname.split("/").filter(Boolean) : [];
+  
+  const getSegmentTitle = (segment: string) => {
+    const titleMap: Record<string, string> = {
+      dashboard: "Overview",
+      products: "Products",
+      inventory: "Inventory",
+      orders: "Orders",
+      customers: "Customers",
+      suppliers: "Suppliers",
+      logistics: "Logistics Hub",
+      reports: "Reports & Analytics",
+      settings: "System Settings",
+    };
+    return titleMap[segment.toLowerCase()] || segment.charAt(0).toUpperCase() + segment.slice(1);
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get("/notifications");
+      const dismissed = JSON.parse(localStorage.getItem("dismissed_notifications") || "[]");
+      const active = res.data.notifications.filter((n: any) => !dismissed.includes(n.id));
+      setNotifications(active);
+      setUnreadCount(active.length);
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkAllRead = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const dismissed = JSON.parse(localStorage.getItem("dismissed_notifications") || "[]");
+    const newDismissed = [...dismissed, ...notifications.map((n: any) => n.id)];
+    localStorage.setItem("dismissed_notifications", JSON.stringify(newDismissed));
+    setNotifications([]);
+    setUnreadCount(0);
+  };
+
+  const handleDismissNotification = (id: string) => {
+    const dismissed = JSON.parse(localStorage.getItem("dismissed_notifications") || "[]");
+    if (!dismissed.includes(id)) {
+      localStorage.setItem("dismissed_notifications", JSON.stringify([...dismissed, id]));
+    }
+    const active = notifications.filter((n: any) => n.id !== id);
+    setNotifications(active);
+    setUnreadCount(active.length);
+  };
 
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-4 lg:px-6 shadow-sm z-30">
@@ -24,21 +87,85 @@ export function Header() {
         <Button variant="ghost" size="icon" className="md:hidden text-zinc-500">
           <Menu className="h-5 w-5" />
         </Button>
-        <div className="hidden md:flex relative w-64 lg:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <Input 
-            type="search" 
-            placeholder="Search precision parts, orders..." 
-            className="w-full bg-zinc-50 pl-10 border-zinc-200 rounded-lg h-10 text-sm focus-visible:ring-[#0052cc]"
-          />
+        <div className="hidden md:flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-500 bg-zinc-50 border border-zinc-200 px-3.5 py-2 rounded-xl">
+          <Link href="/dashboard" className="flex items-center gap-1.5 text-zinc-500 hover:text-[#0052cc] transition-all">
+            <Home className="h-3.5 w-3.5 text-zinc-400" />
+            <span>Dashboard</span>
+          </Link>
+          {pathSegments.length > 1 && (
+            <>
+              <ChevronRight className="h-3 w-3 text-zinc-300 stroke-[3]" />
+              <Link href={pathname || "/dashboard"} className="text-[#0052cc] font-black transition-all hover:opacity-90">
+                {getSegmentTitle(pathSegments[pathSegments.length - 1])}
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="relative text-zinc-500 hover:text-[#0052cc] hover:bg-blue-50 transition-colors">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-red-500 border-2 border-white" />
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="relative text-zinc-500 hover:text-[#0052cc] hover:bg-blue-50 transition-colors cursor-pointer outline-none rounded-full h-10 w-10 flex items-center justify-center shrink-0">
+            <Bell className={cn(
+              "h-5 w-5 transition-all duration-300",
+              unreadCount > 0 ? "text-red-500 animate-pulse stroke-[2.5]" : "text-zinc-500"
+            )} />
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-2 h-4 min-w-4 px-1 rounded-full bg-red-500 border-2 border-white text-[8px] font-black text-white flex items-center justify-center animate-bounce">
+                {unreadCount}
+              </span>
+            )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-80 mt-2 rounded-xl shadow-2xl border-zinc-200 p-0 overflow-hidden" align="end">
+            <div className="p-4 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
+              <span className="text-xs font-black text-zinc-900 uppercase tracking-wider">Alert Center</span>
+              <div className="flex items-center gap-3">
+                {unreadCount > 0 && (
+                  <button 
+                    onClick={handleMarkAllRead}
+                    className="text-[10px] font-black text-[#0052cc] hover:text-[#0052cc]/85 transition-colors uppercase tracking-wider cursor-pointer outline-none border-none bg-transparent"
+                  >
+                    Mark all read
+                  </button>
+                )}
+                {unreadCount > 0 && (
+                  <Badge className="bg-blue-100 text-[#0052cc] hover:bg-blue-200 border-none font-bold text-[10px]">
+                    {unreadCount}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="max-h-[300px] overflow-y-auto divide-y divide-zinc-100">
+              {notifications.length === 0 ? (
+                <div className="p-8 text-center text-zinc-400 flex flex-col items-center gap-2">
+                  <Bell className="h-8 w-8 text-zinc-300 stroke-[1.5]" />
+                  <p className="text-xs font-bold uppercase tracking-wider">All quiet here</p>
+                  <p className="text-[10px] text-zinc-400">No active stock or order alerts.</p>
+                </div>
+              ) : (
+                notifications.map((notif: any) => (
+                  <Link href={notif.link} key={notif.id} className="block" onClick={() => handleDismissNotification(notif.id)}>
+                    <DropdownMenuItem className="p-4 cursor-pointer hover:bg-zinc-50 transition-colors flex flex-col items-start gap-1">
+                      <div className="flex items-center justify-between w-full">
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded",
+                          notif.type === 'low_stock' && "bg-red-50 text-red-700",
+                          notif.type === 'new_order' && "bg-emerald-50 text-emerald-700",
+                          notif.type === 'daily_report' && "bg-indigo-50 text-indigo-700",
+                          notif.type === 'inquiry' && "bg-blue-50 text-blue-700"
+                        )}>
+                          {notif.title}
+                        </span>
+                        <span className="text-[9px] font-medium text-zinc-400">{notif.time}</span>
+                      </div>
+                      <p className="text-xs font-medium text-zinc-600 leading-snug mt-1">{notif.message}</p>
+                    </DropdownMenuItem>
+                  </Link>
+                ))
+              )}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
         
         <div className="h-8 w-px bg-zinc-200 mx-1" />
 

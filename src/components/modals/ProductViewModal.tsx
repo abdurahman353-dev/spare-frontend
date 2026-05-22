@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { ImageIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { useSettings } from "@/components/providers/SettingsProvider";
 
 interface ProductViewModalProps {
   isOpen: boolean;
@@ -14,6 +15,8 @@ interface ProductViewModalProps {
 }
 
 export function ProductViewModal({ isOpen, onClose, product }: ProductViewModalProps) {
+  const { settings } = useSettings();
+  const currency = settings.currency || "Ksh";
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   if (!product) return null;
@@ -89,7 +92,11 @@ export function ProductViewModal({ isOpen, onClose, product }: ProductViewModalP
             </div>
             <div className="space-y-1">
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Price</span>
-              <p className="text-lg font-black text-primary">Ksh {Number(product.price).toLocaleString()}</p>
+              <p className="text-lg font-black text-primary">{currency} {Number(product.price).toLocaleString()}</p>
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Weight (KG)</span>
+              <p className="text-sm font-semibold text-zinc-900">{product.weight ? `${parseFloat(product.weight).toFixed(2)} KG` : "1.00 KG"}</p>
             </div>
             <div className="space-y-1">
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Status</span>

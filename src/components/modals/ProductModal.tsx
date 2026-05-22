@@ -30,7 +30,7 @@ const emptyForm = {
   category_id: "",
   brand_id: "",
   price: "",
-  weight: "1.00",
+  weight: "",
   description: "",
   status: "Active",
   images: [] as string[],
@@ -43,6 +43,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
   const [formData, setFormData] = useState({ ...emptyForm });
   const [previews, setPreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const skuInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -54,7 +55,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
           category_id: product.category_id?.toString() || "",
           brand_id: product.brand_id?.toString() || "",
           price: product.price?.toString() || "",
-          weight: product.weight?.toString() || "1.00",
+          weight: product.weight?.toString() || "",
           description: product.description || "",
           status: product.status || "Active",
           images: product.images || [],
@@ -109,39 +110,86 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
 
   /* ---------- Category / Brand CRUD ---------- */
   const handleAddCategory = async (name: string) => {
-    const res = await api.post("/categories", { name });
-    const newCat = res.data;
-    setCategories((prev) => [...prev, newCat]);
-    setFormData((prev) => ({ ...prev, category_id: newCat.id.toString() }));
+    try {
+      const res = await api.post("/categories", { name });
+      const newCat = res.data;
+      setCategories((prev) => [...prev, newCat]);
+      setFormData((prev) => ({ ...prev, category_id: newCat.id.toString() }));
+      toast.success("Category added successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to add category");
+    }
   };
 
   const handleDeleteCategory = async (id: string | number) => {
-    await api.delete(`/categories/${id}`);
-    setCategories((prev) => prev.filter((c) => c.id.toString() !== id.toString()));
-    if (formData.category_id === id.toString()) {
-      setFormData((prev) => ({ ...prev, category_id: "" }));
+    try {
+      await api.delete(`/categories/${id}`);
+      setCategories((prev) => prev.filter((c) => c.id.toString() !== id.toString()));
+      if (formData.category_id === id.toString()) {
+        setFormData((prev) => ({ ...prev, category_id: "" }));
+      }
+      toast.success("Category deleted successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete category");
+    }
+  };
+
+  const handleEditCategory = async (id: string | number, name: string) => {
+    try {
+      await api.put(`/categories/${id}`, { name });
+      setCategories((prev) => prev.map((c) => (c.id.toString() === id.toString() ? { ...c, name } : c)));
+      toast.success("Category renamed successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to rename category");
     }
   };
 
   const handleAddBrand = async (name: string) => {
-    const res = await api.post("/brands", { name });
-    const newBrand = res.data;
-    setBrands((prev) => [...prev, newBrand]);
-    setFormData((prev) => ({ ...prev, brand_id: newBrand.id.toString() }));
+    try {
+      const res = await api.post("/brands", { name });
+      const newBrand = res.data;
+      setBrands((prev) => [...prev, newBrand]);
+      setFormData((prev) => ({ ...prev, brand_id: newBrand.id.toString() }));
+      toast.success("Brand added successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to add brand");
+    }
   };
 
   const handleDeleteBrand = async (id: string | number) => {
-    await api.delete(`/brands/${id}`);
-    setBrands((prev) => prev.filter((b) => b.id.toString() !== id.toString()));
-    if (formData.brand_id === id.toString()) {
-      setFormData((prev) => ({ ...prev, brand_id: "" }));
+    try {
+      await api.delete(`/brands/${id}`);
+      setBrands((prev) => prev.filter((b) => b.id.toString() !== id.toString()));
+      if (formData.brand_id === id.toString()) {
+        setFormData((prev) => ({ ...prev, brand_id: "" }));
+      }
+      toast.success("Brand deleted successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete brand");
+    }
+  };
+
+  const handleEditBrand = async (id: string | number, name: string) => {
+    try {
+      await api.put(`/brands/${id}`, { name });
+      setBrands((prev) => prev.map((b) => (b.id.toString() === id.toString() ? { ...b, name } : b)));
+      toast.success("Brand renamed successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to rename brand");
     }
   };
 
   /* ---------- Submit ---------- */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    await saveProduct(false);
+  };
 
+  const handleSaveAndAddAnother = async () => {
+    await saveProduct(true);
+  };
+
+  const saveProduct = async (keepOpen: boolean) => {
     // Frontend validation
     if (!formData.sku.trim()) return toast.error("Part SKU is required.");
     if (!formData.name.trim()) return toast.error("Product Name is required.");
@@ -166,13 +214,27 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
       if (product) {
         await api.put(`/products/${product.id}`, payload);
         toast.success("Product updated successfully!");
+        onSuccess();
+        onClose();
       } else {
         await api.post("/products", payload);
         toast.success("Product added successfully!");
-      }
+        onSuccess();
 
-      onSuccess();
-      onClose();
+        if (keepOpen) {
+          setFormData({
+            ...emptyForm,
+            category_id: formData.category_id,
+            brand_id: formData.brand_id,
+          });
+          setPreviews([]);
+          setTimeout(() => {
+            skuInputRef.current?.focus();
+          }, 50);
+        } else {
+          onClose();
+        }
+      }
     } catch (err: any) {
       const msg =
         err?.response?.data?.message ||
@@ -253,6 +315,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-zinc-500">Part SKU *</Label>
                 <Input
+                  ref={skuInputRef}
                   value={formData.sku}
                   onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                   placeholder="MB-BP-001"
@@ -278,6 +341,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
                   onChange={(val) => setFormData({ ...formData, category_id: val })}
                   placeholder="Select Category"
                   onAdd={handleAddCategory}
+                  onEdit={handleEditCategory}
                   onDelete={handleDeleteCategory}
                 />
               </div>
@@ -290,6 +354,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
                   onChange={(val) => setFormData({ ...formData, brand_id: val })}
                   placeholder="Select Brand"
                   onAdd={handleAddBrand}
+                  onEdit={handleEditBrand}
                   onDelete={handleDeleteBrand}
                 />
               </div>
@@ -355,6 +420,24 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
             >
               Cancel
             </Button>
+            {!product && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSaveAndAddAnother}
+                disabled={loading}
+                className="border-primary text-primary hover:bg-blue-50/50 rounded-lg font-black px-6 text-[11px] tracking-widest uppercase shadow-sm min-w-[140px]"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    SAVING...
+                  </span>
+                ) : (
+                  "SAVE & ADD ANOTHER"
+                )}
+              </Button>
+            )}
             <Button
               type="submit"
               disabled={loading}

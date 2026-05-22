@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -167,11 +167,26 @@ export default function AdminCustomersPage() {
     }
   };
 
-  const filteredCustomers = customers.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = typeFilter === "All Types" || c.type === typeFilter;
-    return matchesSearch && matchesType;
-  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  const filteredCustomers = useMemo(() => {
+    return customers.filter(c => {
+      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesType = typeFilter === "All Types" || c.type === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [customers, searchQuery, typeFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, typeFilter]);
+
+  const totalPages = Math.ceil(filteredCustomers.length / pageSize);
+  const paginatedCustomers = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredCustomers.slice(startIndex, startIndex + pageSize);
+  }, [filteredCustomers, currentPage, pageSize]);
 
   if (loading) {
     return (
@@ -240,7 +255,7 @@ export default function AdminCustomersPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredCustomers.map((customer) => (
+              paginatedCustomers.map((customer) => (
                 <TableRow key={customer.id} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="px-6">
                     <div className="flex items-center gap-3">
@@ -329,6 +344,96 @@ export default function AdminCustomersPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white border-t border-zinc-200">
+          <div className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+            Showing <span className="text-zinc-900 font-black">{filteredCustomers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to <span className="text-zinc-900 font-black">{Math.min(filteredCustomers.length, currentPage * pageSize)}</span> of <span className="text-zinc-900 font-black">{filteredCustomers.length}</span> records
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="h-9 px-2 border border-zinc-200 rounded-lg text-xs font-semibold bg-white outline-none text-zinc-600 focus:ring-2 focus:ring-primary/20"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              <option value={15}>Show 15</option>
+              <option value={30}>Show 30</option>
+              <option value={50}>Show 50</option>
+              <option value={100}>Show 100</option>
+            </select>
+
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="h-9 w-9 p-0 rounded-lg font-bold border-zinc-200 text-zinc-600"
+              >
+                «
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="h-9 px-2.5 rounded-lg font-bold border-zinc-200 text-zinc-600 text-xs uppercase"
+              >
+                Prev
+              </Button>
+
+              <div className="flex items-center gap-1.5 px-2">
+                <span className="text-xs text-zinc-400 font-bold uppercase">Page</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={currentPage || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "") {
+                      setCurrentPage("" as any);
+                      return;
+                    }
+                    const num = Number(val);
+                    if (num >= 1 && num <= totalPages) {
+                      setCurrentPage(num);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!currentPage || currentPage < 1) {
+                      setCurrentPage(1);
+                    }
+                  }}
+                  className="w-12 h-9 px-1 text-center border border-zinc-200 rounded-lg text-xs font-black bg-white text-zinc-800 outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <span className="text-xs text-zinc-400 font-bold uppercase">of {totalPages || 1}</span>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-9 px-2.5 rounded-lg font-bold border-zinc-200 text-zinc-600 text-xs uppercase"
+              >
+                Next
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-9 w-9 p-0 rounded-lg font-bold border-zinc-200 text-zinc-600"
+              >
+                »
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Customer Insights & History Modal */}
@@ -512,6 +617,7 @@ export default function AdminCustomersPage() {
                     if (errors.email) setErrors({...errors, email: ""});
                   }}
                 />
+                {errors.email && <p className="text-[10px] text-red-500 font-bold italic">{errors.email}</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Customer Type</label>

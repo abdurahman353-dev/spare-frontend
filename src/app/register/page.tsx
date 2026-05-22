@@ -1,32 +1,92 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { UserPlus, Mail, Lock, User, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
+import { UserPlus, Mail, Lock, User, ArrowRight, Eye, EyeOff, Loader2, Phone } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import { useSettings } from "@/components/providers/SettingsProvider";
 import toast from "react-hot-toast";
 
 export default function RegisterPage() {
   const { register } = useAuth();
+  const { settings } = useSettings();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: "",
     password_confirmation: ""
   });
+  const [phoneVal, setPhoneVal] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Searchable dropdown states
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showWarning, setShowWarning] = useState(false);
+
+  const countries = [
+    { code: "KE", name: "Kenya", prefix: "+254", flag: "🇰🇪", pattern: /^(?:\+254|0)?([71])\d{8}$/, placeholder: "712345678", digits: "9 digits" },
+    { code: "UG", name: "Uganda", prefix: "+256", flag: "🇺🇬", pattern: /^(?:\+256|0)?(7)\d{8}$/, placeholder: "712345678", digits: "9 digits" },
+    { code: "TZ", name: "Tanzania", prefix: "+255", flag: "🇹🇿", pattern: /^(?:\+255|0)?([67])\d{8}$/, placeholder: "712345678", digits: "9 digits" },
+    { code: "RW", name: "Rwanda", prefix: "+250", flag: "🇷🇼", pattern: /^(?:\+250|0)?(7)\d{8}$/, placeholder: "712345678", digits: "9 digits" },
+    { code: "BI", name: "Burundi", prefix: "+257", flag: "🇧🇮", pattern: /^(?:\+257|0)?([67])\d{7}$/, placeholder: "71234567", digits: "8 digits" },
+    { code: "SS", name: "South Sudan", prefix: "+211", flag: "🇸🇸", pattern: /^(?:\+211|0)?(9)\d{8}$/, placeholder: "912345678", digits: "9 digits" },
+    { code: "SO", name: "Somalia", prefix: "+252", flag: "🇸🇴", pattern: /^(?:\+252|0)?([679])\d{8}$/, placeholder: "612345678", digits: "9 digits" },
+    { code: "CD", name: "DR Congo", prefix: "+243", flag: "🇨🇩", pattern: /^(?:\+243|0)?([89])\d{8}$/, placeholder: "812345678", digits: "9 digits" },
+    { code: "ET", name: "Ethiopia", prefix: "+251", flag: "🇪🇹", pattern: /^(?:\+251|0)?([97])\d{8}$/, placeholder: "912345678", digits: "9 digits" },
+    { code: "SD", name: "Sudan", prefix: "+249", flag: "🇸🇩", pattern: /^(?:\+249|0)?([91])\d{8}$/, placeholder: "912345678", digits: "9 digits" },
+    { code: "ER", name: "Eritrea", prefix: "+291", flag: "🇪🇷", pattern: /^(?:\+291|0)?([17])\d{6}$/, placeholder: "7123456", digits: "7 digits" },
+    { code: "DJ", name: "Djibouti", prefix: "+253", flag: "🇩🇯", pattern: /^(?:\+253|0)?(7)\d{5}$/, placeholder: "771234", digits: "6 digits" },
+    { code: "MG", name: "Madagascar", prefix: "+261", flag: "🇲🇬", pattern: /^(?:\+261|0)?(3)\d{8}$/, placeholder: "321234567", digits: "9 digits" },
+    { code: "MU", name: "Mauritius", prefix: "+230", flag: "🇲🇺", pattern: /^(?:\+230|0)?(5)\d{7}$/, placeholder: "51234567", digits: "8 digits" },
+    { code: "SC", name: "Seychelles", prefix: "+248", flag: "🇸🇨", pattern: /^(?:\+248|0)?(2)\d{6}$/, placeholder: "2123456", digits: "7 digits" },
+    { code: "KM", name: "Comoros", prefix: "+269", flag: "🇰🇲", pattern: /^(?:\+269|0)?([34])\d{6}$/, placeholder: "3123456", digits: "7 digits" }
+  ];
+
+  const [selectedCountry, setSelectedCountry] = useState(countries[0]);
+
+  // Sync selected phone country with global settings business country
+  useEffect(() => {
+    if (settings && settings.store_country) {
+      const match = countries.find(c => 
+        c.name.toLowerCase() === settings.store_country.toLowerCase() || 
+        c.code.toLowerCase() === settings.store_country.toLowerCase()
+      );
+      if (match) {
+        setSelectedCountry(match);
+      }
+    }
+  }, [settings]);
+
+  // Real-time phone format validation
+  const cleanedPhone = phoneVal.replace(/\s+/g, "");
+  const isValidPhone = selectedCountry.pattern.test(cleanedPhone);
+
+  const brandName = settings.store_name || "Portal";
+
+  const filteredCountries = countries.filter(c => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    c.prefix.includes(searchQuery) ||
+    c.code.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
     if (!emailRegex.test(formData.email)) {
-      toast.error("Please enter a valid email address (e.g. name@gmail.com)");
+      toast.error("Please enter a valid Gmail address ending in @gmail.com");
+      return;
+    }
+
+    if (!isValidPhone) {
+      setShowWarning(true);
+      toast.error(`Please enter a valid ${selectedCountry.name} phone number format.`);
       return;
     }
 
@@ -36,9 +96,23 @@ export default function RegisterPage() {
     }
     
     setLoading(true);
+
+    // Format phone to include prefix
+    let formattedPhone = cleanedPhone;
+    if (formattedPhone.startsWith(selectedCountry.prefix)) {
+      // already contains prefix
+    } else if (formattedPhone.startsWith("0")) {
+      formattedPhone = selectedCountry.prefix + formattedPhone.slice(1);
+    } else {
+      formattedPhone = selectedCountry.prefix + formattedPhone;
+    }
     
     try {
-      await register(formData);
+      await register({
+        ...formData,
+        phone: formattedPhone,
+        country: selectedCountry.name,
+      });
       toast.success("Account created successfully!");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Registration failed. Please check your details.");
@@ -65,7 +139,7 @@ export default function RegisterPage() {
           <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
             <UserPlus className="h-6 w-6" />
           </div>
-          <span className="text-xl font-black tracking-tight uppercase">AutoSpare<span className="text-primary text-2xl">.</span></span>
+          <span className="text-xl font-black tracking-tight uppercase">{brandName}<span className="text-primary text-2xl">.</span></span>
         </Link>
       </div>
 
@@ -111,6 +185,106 @@ export default function RegisterPage() {
                   />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center ml-1">
+                  <label className="text-sm font-bold text-zinc-700">Phone Number</label>
+                  <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest bg-zinc-50 px-2 py-0.5 rounded border border-zinc-200">
+                    {selectedCountry.digits} required
+                  </span>
+                </div>
+                <div className="flex gap-2 relative">
+                  {/* Searchable, scrollable country picker dropdown */}
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      className="h-14 px-4 bg-zinc-50 border border-zinc-200 rounded-xl font-black text-zinc-800 text-sm hover:bg-zinc-100 transition-all flex items-center gap-2 cursor-pointer outline-none min-w-[110px] justify-between shadow-sm"
+                    >
+                      <img 
+                        src={`https://flagcdn.com/w40/${selectedCountry.code.toLowerCase()}.png`} 
+                        className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0" 
+                        alt={selectedCountry.name} 
+                      />
+                      <span>{selectedCountry.prefix}</span>
+                      <svg className="fill-current h-4 w-4 text-zinc-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                      </svg>
+                    </button>
+
+                    {dropdownOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-20" 
+                          onClick={() => { setDropdownOpen(false); setSearchQuery(""); }} 
+                        />
+                        <div className="absolute left-0 mt-2 w-64 bg-white border border-zinc-200 rounded-xl shadow-xl z-30 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                          <div className="p-2 border-b border-zinc-100">
+                            <input
+                              type="text"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                              placeholder="Search country..."
+                              className="w-full h-10 px-3 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-800 placeholder-zinc-400 outline-none focus:border-primary transition-all font-semibold"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="max-h-48 overflow-y-auto py-1">
+                            {filteredCountries.length === 0 ? (
+                              <div className="p-3 text-center text-xs text-zinc-400 font-bold">
+                                No countries found
+                              </div>
+                            ) : (
+                              filteredCountries.map(c => (
+                                <button
+                                  key={c.code}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCountry(c);
+                                    setDropdownOpen(false);
+                                    setSearchQuery("");
+                                  }}
+                                  className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2.5 hover:bg-zinc-50 transition-colors font-semibold ${selectedCountry.code === c.code ? 'bg-primary/5 text-primary font-bold' : 'text-zinc-700'}`}
+                                >
+                                  <img 
+                                    src={`https://flagcdn.com/w40/${c.code.toLowerCase()}.png`} 
+                                    className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0" 
+                                    alt={c.name} 
+                                  />
+                                  <span className="truncate flex-1">{c.name}</span>
+                                  <span className="text-zinc-400 font-bold text-xs shrink-0">{c.prefix}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="relative flex-1">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
+                    <Input 
+                      type="tel"
+                      placeholder={selectedCountry.placeholder} 
+                      className="h-14 pl-12 bg-zinc-50 border-zinc-200 rounded-xl font-medium"
+                      value={phoneVal}
+                      onChange={(e) => {
+                        setPhoneVal(e.target.value);
+                        setShowWarning(false); // Clear warning while typing
+                      }}
+                      onBlur={() => setShowWarning(true)} // Show warning only when they finish/click away
+                      required
+                    />
+                  </div>
+                </div>
+                {phoneVal && showWarning && !isValidPhone && (
+                  <p className="text-xs text-red-500 font-bold ml-1 transition-all animate-pulse">
+                    ⚠️ Invalid {selectedCountry.name} phone number format. Expected {selectedCountry.digits} (e.g. {selectedCountry.placeholder})
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-zinc-700 ml-1">Password</label>
@@ -159,7 +333,7 @@ export default function RegisterPage() {
               <Button 
                 type="submit" 
                 disabled={loading}
-                className="w-full h-16 text-lg font-black rounded-xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all group mt-4"
+                className="w-full h-16 text-lg font-black rounded-xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all group mt-4 cursor-pointer"
               >
                 {loading ? (
                   <Loader2 className="h-6 w-6 animate-spin" />

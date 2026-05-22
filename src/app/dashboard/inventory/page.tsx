@@ -11,11 +11,11 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Search, Filter, RefreshCw, ArrowRightLeft, Loader2, MoreHorizontal, MapPin } from "lucide-react";
+import { Search, Filter, RefreshCw, ArrowRightLeft, Loader2, MoreHorizontal, MapPin, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import api from "@/lib/axios";
-import { cn } from "@/lib/utils";
+import { cn, getCategoryColor } from "@/lib/utils";
 import { StockModal } from "@/components/modals/StockModal";
 import {
   DropdownMenu,
@@ -26,14 +26,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { exportInventoryPDF } from "@/lib/pdf-export";
+import { toast } from "react-hot-toast";
+import { useSettings } from "@/components/providers/SettingsProvider";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export default function InventoryPage() {
+  const { settings } = useSettings();
   const [inventory, setInventory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [selectedName, setSelectedName] = useState("");
   const [selectedBrandId, setSelectedBrandId] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
 
   // Modal State
@@ -76,6 +82,15 @@ export default function InventoryPage() {
     setIsModalOpen(true);
   };
 
+  const pendingItems = useMemo(() => {
+    return inventory.filter(item => item.warehouse_id === null);
+  }, [inventory]);
+  
+  const pendingCount = pendingItems.length;
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
   // Advanced Filtering
   const filteredInventory = useMemo(() => {
     return inventory.filter(item => {
@@ -90,11 +105,24 @@ export default function InventoryPage() {
       const matchesWarehouse = !selectedWarehouseId || item.warehouse?.id.toString() === selectedWarehouseId;
       const matchesName = !selectedName || item.product?.name === selectedName;
       const matchesBrand = !selectedBrandId || item.product?.brand?.id.toString() === selectedBrandId;
+      const matchesCategory = !selectedCategoryId || 
+        item.product?.category_id?.toString() === selectedCategoryId || 
+        item.product?.category?.id?.toString() === selectedCategoryId;
       const matchesStatus = !selectedStatus || getStatus(item) === selectedStatus;
       
-      return matchesSearch && matchesWarehouse && matchesName && matchesBrand && matchesStatus;
+      return matchesSearch && matchesWarehouse && matchesName && matchesBrand && matchesCategory && matchesStatus;
     });
-  }, [inventory, searchQuery, selectedWarehouseId, selectedName, selectedBrandId, selectedStatus]);
+  }, [inventory, searchQuery, selectedWarehouseId, selectedName, selectedBrandId, selectedCategoryId, selectedStatus]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedWarehouseId, selectedName, selectedBrandId, selectedCategoryId, selectedStatus]);
+
+  const totalPages = Math.ceil(filteredInventory.length / pageSize);
+  const paginatedInventory = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredInventory.slice(startIndex, startIndex + pageSize);
+  }, [filteredInventory, currentPage, pageSize]);
 
   const uniqueWarehouses = Array.from(new Set(inventory.map(i => i.warehouse).filter(Boolean).map(w => JSON.stringify(w)))).map(w => JSON.parse(w as string));
   const filterWarehouseOptions = uniqueWarehouses.map(w => ({ id: w.id?.toString() || "unassigned", name: w.name }));
@@ -104,6 +132,9 @@ export default function InventoryPage() {
 
   const uniqueBrands = Array.from(new Set(inventory.map(i => i.product?.brand).filter(Boolean).map(b => JSON.stringify(b)))).map(b => JSON.parse(b as string));
   const filterBrandOptions = uniqueBrands.map(b => ({ id: b.id?.toString() || "", name: b.name }));
+
+  const uniqueCategories = Array.from(new Set(inventory.map(i => i.product?.category).filter(Boolean).map(c => JSON.stringify(c)))).map(c => JSON.parse(c as string));
+  const filterCategoryOptions = uniqueCategories.map(c => ({ id: c.id?.toString() || "", name: c.name }));
 
   const filterStatusOptions = [
     { id: "IN STOCK", name: "In Stock" },
@@ -116,8 +147,18 @@ export default function InventoryPage() {
     setSelectedWarehouseId("");
     setSelectedName("");
     setSelectedBrandId("");
+    setSelectedCategoryId("");
     setSelectedStatus("");
     setSearchQuery("");
+  };
+
+  const handleExportPDF = () => {
+    if (inventory.length === 0) {
+      toast.error("No inventory data available to export");
+      return;
+    }
+    exportInventoryPDF(inventory, settings.currency || "Ksh", settings.store_logo || undefined, settings.store_name || undefined);
+    toast.success("PDF generated successfully");
   };
 
   return (
@@ -129,15 +170,20 @@ export default function InventoryPage() {
         </div>
         <div className="flex gap-2">
           <Button 
-            variant="outline" 
+            onClick={handleExportPDF}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none"
+          >
+            <FileText className="mr-1.5 h-4 w-4" /> Export PDF
+          </Button>
+          <Button 
             onClick={openTransferModal}
-            className="rounded-lg shadow-sm"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm font-bold border-none"
           >
             <ArrowRightLeft className="mr-2 h-4 w-4" /> Stock Transfer
           </Button>
           <Button 
             onClick={() => openUpdateModal()} 
-            className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm"
+            className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
           >
             <RefreshCw className="mr-2 h-4 w-4" /> Update Stock
           </Button>
@@ -172,6 +218,14 @@ export default function InventoryPage() {
         </div>
         <div className="w-full sm:w-[180px]">
           <SearchableDropdown 
+            items={filterCategoryOptions}
+            value={selectedCategoryId}
+            onChange={setSelectedCategoryId}
+            placeholder="All Categories"
+          />
+        </div>
+        <div className="w-full sm:w-[180px]">
+          <SearchableDropdown 
             items={filterWarehouseOptions}
             value={selectedWarehouseId}
             onChange={setSelectedWarehouseId}
@@ -201,6 +255,7 @@ export default function InventoryPage() {
             <TableRow>
               <TableHead className="px-6 font-semibold text-zinc-900">SKU</TableHead>
               <TableHead className="font-semibold text-zinc-900">Product Name</TableHead>
+              <TableHead className="font-semibold text-zinc-900">Category</TableHead>
               <TableHead className="font-semibold text-zinc-900">Brand</TableHead>
               <TableHead className="font-semibold text-zinc-900">Warehouse</TableHead>
               <TableHead className="font-semibold text-zinc-900 text-right">Current Stock</TableHead>
@@ -211,7 +266,7 @@ export default function InventoryPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-48 text-center">
+                <TableCell colSpan={8} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     <p className="text-sm text-zinc-500">Scanning inventory...</p>
@@ -220,15 +275,26 @@ export default function InventoryPage() {
               </TableRow>
             ) : filteredInventory.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-48 text-center text-zinc-500">
+                <TableCell colSpan={8} className="h-48 text-center text-zinc-500">
                    No inventory records found.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredInventory.map((item, idx) => (
-                <TableRow key={item.id || `unassigned-${item.product.id}-${idx}`} className="hover:bg-zinc-50/50">
+              paginatedInventory.map((item, idx) => (
+                <TableRow key={item.id || `unassigned-${item.product.id}-${idx}`} className="hover:bg-zinc-50/50 animate-fade-in">
                   <TableCell className="px-6 font-medium text-zinc-900">{item.product?.sku}</TableCell>
                   <TableCell className="font-medium text-sm">{item.product?.name}</TableCell>
+                  <TableCell className="text-zinc-500 text-xs font-bold uppercase tracking-tight">
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "px-2.5 py-0.5 border text-xs font-black uppercase tracking-wider rounded-md",
+                        getCategoryColor(item.product?.category?.name || "N/A")
+                      )}
+                    >
+                      {item.product?.category?.name || "N/A"}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-zinc-500 text-xs font-bold uppercase tracking-tight">
                     {item.product?.brand?.name || "N/A"}
                   </TableCell>
@@ -257,7 +323,7 @@ export default function InventoryPage() {
                         PENDING ASSIGNMENT
                       </Badge>
                     ) : (
-                      <Badge className="rounded-full px-3 text-[10px] bg-zinc-200 text-zinc-700 hover:bg-zinc-300 border-none font-bold uppercase tracking-wider">
+                      <Badge className="rounded-full px-3 text-[10px] bg-red-900 text-white hover:bg-red-950 border-none font-bold uppercase tracking-wider">
                         OUT OF STOCK
                       </Badge>
                     )}
@@ -285,6 +351,17 @@ export default function InventoryPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination Controls */}
+        <PaginationControls
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          pageSize={pageSize}
+          setPageSize={setPageSize}
+          totalItems={filteredInventory.length}
+          itemName="records"
+          pageSizeOptions={[15, 30, 50, 100]}
+        />
       </div>
 
       <StockModal 
@@ -293,6 +370,7 @@ export default function InventoryPage() {
         onSuccess={fetchInventory}
         type={modalType}
         initialData={selectedItem}
+        pendingItems={(!selectedItem && modalType === "update") ? pendingItems : undefined}
       />
     </div>
   );

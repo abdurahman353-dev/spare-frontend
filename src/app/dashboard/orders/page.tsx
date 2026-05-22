@@ -17,7 +17,8 @@ import {
   Search, 
   Filter, 
   MoreHorizontal, 
-  Eye, 
+  Eye,
+  EyeOff,
   Truck, 
   Loader2, 
   Download, 
@@ -28,7 +29,13 @@ import {
   CheckSquare, 
   Square,
   Package,
-  RefreshCw 
+  RefreshCw,
+  FileText,
+  Trash2,
+  ShoppingBag,
+  User,
+  UserPlus,
+  CreditCard
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -42,9 +49,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import api from "@/lib/axios";
+import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { toast } from "react-hot-toast";
+import { exportOrdersPDF } from "@/lib/pdf-export";
+import { useSettings } from "@/components/providers/SettingsProvider";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export default function AdminOrdersPage() {
+  const { settings } = useSettings();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -65,6 +77,250 @@ export default function AdminOrdersPage() {
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+
+  // POS / Walk-in Order State
+  const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("walkin");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [newCustomerData, setNewCustomerData] = useState({
+    name: "",
+    company_name: "",
+    email: "",
+    phone: "",
+    secondary_phone: "",
+    tax_id: "",
+    address: "",
+    type: "Retail",
+    password: "",
+    confirmPassword: ""
+  });
+
+  const [orderItems, setOrderItems] = useState<any[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("");
+  const [addQuantity, setAddQuantity] = useState<number>(1);
+
+  const [paymentMethod, setPaymentMethod] = useState<string>("Cash");
+  const [paymentRefCode, setPaymentRefCode] = useState<string>("");
+  const [registerAccount, setRegisterAccount] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [activeOrdersTab, setActiveOrdersTab] = useState<"Shipment" | "WalkIn">("Shipment");
+
+  const [paymentStatus, setPaymentStatus] = useState<string>("Paid");
+  const [shippingMethod, setShippingMethod] = useState<string>("Pickup");
+  const [shippingFee, setShippingFee] = useState<number>(0);
+  const [shippingCity, setShippingCity] = useState<string>("Nairobi");
+  const [shippingAddress, setShippingAddress] = useState<string>("Walk-In Counter");
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+
+  const selectedProductDetails = useMemo(() => {
+    return products.find(p => p.id.toString() === selectedProductId);
+  }, [products, selectedProductId]);
+
+  const handleAddItemToOrder = () => {
+    if (!selectedProductId || !selectedWarehouseId) {
+      toast.error("Please select a product and warehouse");
+      return;
+    }
+    const product = products.find(p => p.id.toString() === selectedProductId);
+    if (!product) return;
+
+    const inventory = product.inventories?.find((i: any) => i.warehouse_id.toString() === selectedWarehouseId);
+    const stockAvailable = inventory ? inventory.quantity : 0;
+    const warehouseName = inventory?.warehouse?.name || "Selected Warehouse";
+
+    if (addQuantity < 1) {
+      toast.error("Quantity must be at least 1");
+      return;
+    }
+
+    if (addQuantity > stockAvailable) {
+      toast.error(`Insufficient stock! Only ${stockAvailable} items available.`);
+      return;
+    }
+
+    // Check if item already exists in orderItems from this warehouse
+    const existingIndex = orderItems.findIndex(
+      item => item.product_id.toString() === selectedProductId && item.warehouse_id.toString() === selectedWarehouseId
+    );
+
+    if (existingIndex > -1) {
+      const newQty = orderItems[existingIndex].quantity + addQuantity;
+      if (newQty > stockAvailable) {
+        toast.error(`Cannot add more. Total quantity exceeds stock limit of ${stockAvailable}`);
+        return;
+      }
+      const updated = [...orderItems];
+      updated[existingIndex].quantity = newQty;
+      setOrderItems(updated);
+    } else {
+      setOrderItems([
+        ...orderItems,
+        {
+          product_id: product.id,
+          name: product.name,
+          warehouse_id: parseInt(selectedWarehouseId),
+          warehouse_name: warehouseName,
+          quantity: addQuantity,
+          price: parseFloat(product.price),
+          stock: stockAvailable
+        }
+      ]);
+    }
+
+    // Reset selectors
+    setSelectedProductId("");
+    setSelectedWarehouseId("");
+    setAddQuantity(1);
+    toast.success("Item added to order list");
+  };
+
+  const handleRemoveItemFromOrder = (index: number) => {
+    setOrderItems(orderItems.filter((_, i) => i !== index));
+  };
+
+  const generateWalkInRef = () => {
+    const ts = Date.now().toString(36).toUpperCase();
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    return `WK-${ts}-${rand}`;
+  };
+
+  const isDigitalPayment = (method: string) => ["M-Pesa", "Card", "Bank Transfer"].includes(method);
+
+  const handleSubmitWalkInOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (orderItems.length === 0) {
+      toast.error("Please add at least one item to the order.");
+      return;
+    }
+
+    // Digital payment ref validation
+    if (isDigitalPayment(paymentMethod) && !paymentRefCode.trim()) {
+      toast.error(`Please enter the ${paymentMethod} reference code.`);
+      return;
+    }
+
+    // New customer validation
+    if (selectedCustomerId === "new") {
+      if (!newCustomerData.name || !newCustomerData.email) {
+        toast.error("Customer Name and Email are required.");
+        return;
+      }
+      const gmailRx = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+      if (!gmailRx.test(newCustomerData.email)) {
+        toast.error("Email must be a valid Gmail address (e.g. name@gmail.com).");
+        return;
+      }
+      if (newCustomerData.phone) {
+        const phoneRx = /^0[71]\d{8}$/;
+        if (!phoneRx.test(newCustomerData.phone.replace(/\s/g, ""))) {
+          toast.error("Phone must be 10 digits starting with 07 or 01 (e.g. 0712345678).");
+          return;
+        }
+      }
+      if (registerAccount) {
+        if (!newCustomerData.password) {
+          toast.error("Password is required when registering a login account.");
+          return;
+        }
+        if (newCustomerData.password !== newCustomerData.confirmPassword) {
+          toast.error("Passwords do not match.");
+          return;
+        }
+        if (newCustomerData.password.length < 8) {
+          toast.error("Password must be at least 8 characters.");
+          return;
+        }
+      }
+    }
+
+    setIsSavingOrder(true);
+    try {
+      let targetCustomerId: number | null = null;
+
+      if (selectedCustomerId === "walkin") {
+        const existingWalkIn = customers.find(c => c.name.toLowerCase() === "walk-in customer");
+        if (existingWalkIn) {
+          targetCustomerId = existingWalkIn.id;
+        } else {
+          const payload = {
+            name: "Walk-In Customer",
+            phone: "0700000000",
+            address: "Walk-In Counter",
+            type: "Retail"
+          };
+          const res = await api.post("/customers", payload);
+          targetCustomerId = res.data.id;
+        }
+      } else if (selectedCustomerId === "new") {
+        const customerPayload: any = {
+          name: newCustomerData.name,
+          email: newCustomerData.email,
+          phone: newCustomerData.phone,
+          address: newCustomerData.address,
+          company_name: newCustomerData.company_name,
+          type: newCustomerData.type
+        };
+        if (registerAccount && newCustomerData.password) {
+          customerPayload.password = newCustomerData.password;
+          customerPayload.password_confirmation = newCustomerData.confirmPassword;
+        }
+        const res = await api.post("/customers", customerPayload);
+        targetCustomerId = res.data.id;
+      } else {
+        targetCustomerId = parseInt(selectedCustomerId);
+      }
+
+      if (!targetCustomerId) throw new Error("Unable to resolve customer ID");
+
+      const totalItemsCost = orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+      const totalAmount = totalItemsCost + Number(shippingFee);
+      const finalPaymentMethod = isDigitalPayment(paymentMethod)
+        ? `${paymentMethod} (Ref: ${paymentRefCode.trim()})`
+        : paymentMethod;
+      const walkInRef = generateWalkInRef();
+
+      const orderPayload = {
+        customer_id: targetCustomerId,
+        tracking_number: walkInRef,
+        total_amount: totalAmount,
+        status: "Delivered",
+        payment_status: paymentStatus,
+        payment_method: finalPaymentMethod,
+        shipping_method: shippingMethod,
+        shipping_fee: shippingFee,
+        shipping_country: "Kenya",
+        shipping_city: shippingCity,
+        shipping_address: shippingAddress,
+        items: orderItems.map(item => ({
+          product_id: item.product_id,
+          warehouse_id: item.warehouse_id,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      };
+
+      await api.post("/orders", orderPayload);
+      toast.success(`Walk-in order ${walkInRef} created successfully!`);
+      setIsWalkInModalOpen(false);
+      setOrderItems([]);
+      setSelectedCustomerId("walkin");
+      setPaymentRefCode("");
+      setRegisterAccount(false);
+      setNewCustomerData({ name: "", company_name: "", email: "", phone: "", secondary_phone: "", tax_id: "", address: "", type: "Retail", password: "", confirmPassword: "" });
+      fetchOrders();
+      fetchMetadata();
+    } catch (err: any) {
+      console.error("Failed to create walk-in order:", err);
+      toast.error(err.response?.data?.message || "Failed to submit walk-in order.");
+    } finally {
+      setIsSavingOrder(false);
+    }
+  };
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -88,10 +344,14 @@ export default function AdminOrdersPage() {
 
   const fetchMetadata = async () => {
     try {
-      const [wRes] = await Promise.all([
-        api.get("/warehouses")
+      const [wRes, cRes, pRes] = await Promise.all([
+        api.get("/warehouses"),
+        api.get("/customers"),
+        api.get("/products")
       ]);
       setWarehouses(wRes.data);
+      setCustomers(cRes.data);
+      setProducts(pRes.data);
     } catch (err) {
       console.error("Failed to fetch metadata:", err);
     }
@@ -107,8 +367,10 @@ export default function AdminOrdersPage() {
     if (warehouseFilter !== "All Origins") {
       baseOrders = orders.filter(o => o.items?.some((i: any) => i.warehouse_id.toString() === warehouseFilter));
     }
-    const cities = Array.from(new Set(baseOrders.map(o => o.shipping_city).filter(Boolean)));
-    return cities.sort();
+    const destinations = Array.from(
+      new Map(baseOrders.filter(o => o.shipping_city).map(o => [o.shipping_city, o.shipping_country])).entries()
+    );
+    return destinations.sort((a, b) => (a[0] as string).localeCompare(b[0] as string));
   }, [orders, warehouseFilter]);
 
   useEffect(() => {
@@ -172,6 +434,15 @@ export default function AdminOrdersPage() {
     document.body.removeChild(link);
   };
 
+  const handleExportPDF = () => {
+    if (orders.length === 0) {
+      toast.error("No orders available to export");
+      return;
+    }
+    exportOrdersPDF(orders, settings.currency || "Ksh", settings.store_logo || undefined, settings.store_name || undefined);
+    toast.success("PDF generated successfully");
+  };
+
   const handleClearFilters = () => {
     setStatusFilter("All Status");
     setWarehouseFilter("All Origins");
@@ -181,14 +452,21 @@ export default function AdminOrdersPage() {
     setSearchQuery("");
   };
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  // Split orders into Shipment and Walk-In by tracking number prefix
+  const shipmentOrders = useMemo(() => orders.filter(o => !((o.tracking_number || "").startsWith("WK-"))), [orders]);
+  const walkInOrders = useMemo(() => orders.filter(o => (o.tracking_number || "").startsWith("WK-")), [orders]);
+
   const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
+    const base = activeOrdersTab === "WalkIn" ? walkInOrders : shipmentOrders;
+    return base.filter(order => {
       const trackingNumber = order.tracking_number || "";
       const customerName = order.customer?.name || "";
       const customerEmail = order.customer?.email || "";
       const warehouseName = order.items?.[0]?.warehouse?.name || "";
       const destinationCity = order.shipping_city || "";
-
       return (
         trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -197,7 +475,17 @@ export default function AdminOrdersPage() {
         destinationCity.toLowerCase().includes(searchQuery.toLowerCase())
       );
     });
-  }, [orders, searchQuery]);
+  }, [orders, searchQuery, activeOrdersTab, shipmentOrders, walkInOrders]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, warehouseFilter, cityFilter, statusFilter, dateFrom, dateTo, activeOrdersTab]);
+
+  const totalPages = Math.ceil(filteredOrders.length / pageSize);
+  const paginatedOrders = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(startIndex, startIndex + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
 
   const statuses = ["All Status", "Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
@@ -210,20 +498,41 @@ export default function AdminOrdersPage() {
         </div>
         <div className="flex gap-3">
           <Button 
-            onClick={handleExport}
+            onClick={handleExportPDF}
             disabled={loading || orders.length === 0}
-            variant="outline"
-            className="rounded-lg shadow-sm font-bold border-zinc-200"
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none"
           >
-            <Download className="mr-2 h-4 w-4 text-zinc-500" /> Export Batch
+            <FileText className="mr-1.5 h-4 w-4" /> Export PDF
           </Button>
           <Button 
-            onClick={() => fetchOrders()}
-            className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
+            onClick={() => setIsWalkInModalOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5"
           >
-            Refresh Data
+            <ShoppingBag className="h-4 w-4" /> New Walk-In Order
           </Button>
         </div>
+      </div>
+
+      {/* Tab Selector: Shipment vs Walk-In */}
+      <div className="flex border-b border-zinc-200">
+        <button
+          onClick={() => setActiveOrdersTab("Shipment")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2",
+            activeOrdersTab === "Shipment" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700"
+          )}
+        >
+          <Truck className="h-4 w-4" /> Shipment Orders
+          <span className="ml-1 bg-zinc-100 text-zinc-600 rounded-full px-2 py-0.5 text-[10px] font-black">{shipmentOrders.length}</span>
+        </button>
+        <button
+          onClick={() => setActiveOrdersTab("WalkIn")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2",
+            activeOrdersTab === "WalkIn" ? "border-emerald-600 text-emerald-600" : "border-transparent text-zinc-500 hover:text-zinc-700"
+          )}
+        >
+          <ShoppingBag className="h-4 w-4" /> Walk-In Orders
+          <span className="ml-1 bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5 text-[10px] font-black">{walkInOrders.length}</span>
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
@@ -257,8 +566,8 @@ export default function AdminOrdersPage() {
             onChange={(e) => setCityFilter(e.target.value)}
           >
             <option>All Destinations</option>
-            {dynamicCityOptions.map(c => (
-              <option key={c} value={c}>{c}</option>
+            {dynamicCityOptions.map(([city, country]) => (
+              <option key={city as string} value={city as string}>{city as string}, {country as string || 'Tanzania'}</option>
             ))}
           </select>
         </div>
@@ -340,162 +649,227 @@ export default function AdminOrdersPage() {
         </AnimatePresence>
 
       <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
-        <Table>
-          <TableHeader className="bg-zinc-50/50">
-            <TableRow>
-              <TableHead className="w-[50px] px-6 text-center">
-                 <button 
-                  onClick={() => {
+        {activeOrdersTab === "WalkIn" ? (
+          <Table>
+            <TableHeader className="bg-emerald-50/60">
+              <TableRow>
+                <TableHead className="px-4 font-semibold text-zinc-900">WK Reference</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Customer Profile</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Source Warehouse</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Fulfillment</TableHead>
+                <TableHead className="font-semibold text-zinc-900 text-center">Pay Status</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Payment / Ref</TableHead>
+                <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
+                <TableHead className="px-6 w-[50px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={10} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
+              ) : filteredOrders.length === 0 ? (
+                <TableRow><TableCell colSpan={10} className="h-32 text-center text-zinc-400 font-medium">No walk-in orders found.</TableCell></TableRow>
+              ) : (
+                paginatedOrders.map((order) => {
+                  const isGuest = order.customer?.name?.toLowerCase() === "walk-in customer";
+                  const sourceWarehouse = order.items?.[0]?.warehouse?.name || "—";
+                  return (
+                  <TableRow key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
+                    <TableCell className="px-4 py-3">
+                      <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                        {order.tracking_number}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
+                        {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
+                        {isGuest ? (
+                          <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
+                        ) : (
+                          <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Registered</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
+                      <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{order.items?.[0]?.product?.name || "Spare Part"}</p>
+                        {order.items?.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{order.items.length - 1} more</p>}
+                        <p className="text-[10px] text-zinc-500">{order.items?.length || 0} item(s)</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" />
+                        <p className="text-xs font-bold text-indigo-700">{sourceWarehouse}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {order.shipping_method === "Pickup" ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
+                        </span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full">
+                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Dispatch
+                          </span>
+                          <p className="text-[10px] text-zinc-400">{order.shipping_city}</p>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge className={cn("rounded-full px-2 text-[10px] font-bold border-none",
+                        order.payment_status === "Paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                      )}>{order.payment_status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">{order.payment_method || "Cash"}</p>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <p className="text-sm font-black text-zinc-900">Ksh {parseFloat(order.total_amount || 0).toLocaleString()}</p>
+                    </TableCell>
+                    <TableCell className="px-6 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-emerald-100")}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52 rounded-xl border-zinc-200 shadow-xl p-1">
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Walk-In Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
+                              <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            {order.payment_status !== "Paid" ? (
+                              <DropdownMenuItem
+                                onClick={async () => { try { await api.put(`/orders/${order.id}`, { payment_status: "Paid" }); toast.success("Marked as Paid"); fetchOrders(); } catch { toast.error("Update failed"); } }}
+                                className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"
+                              >
+                                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Paid
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={async () => { try { await api.put(`/orders/${order.id}`, { payment_status: "Pending" }); toast.success("Marked as Pending"); fetchOrders(); } catch { toast.error("Update failed"); } }}
+                                className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
+                              >
+                                <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={async () => { try { await api.put(`/orders/${order.id}`, { status: "Cancelled", payment_status: "Refunded" }); toast.success("Order voided & refunded"); fetchOrders(); } catch { toast.error("Update failed"); } }}
+                              className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        ) : (
+          <Table>
+            <TableHeader className="bg-zinc-50/50">
+              <TableRow>
+                <TableHead className="w-[50px] px-6 text-center">
+                  <button onClick={() => {
                     if (selectedOrderIds.length === filteredOrders.length) setSelectedOrderIds([]);
                     else setSelectedOrderIds(filteredOrders.map(o => o.id));
-                  }}
-                  className="text-zinc-400 hover:text-zinc-900 transition-colors"
-                >
-                  {selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                </button>
-              </TableHead>
-              <TableHead className="px-4 font-semibold text-zinc-900">Order Ref</TableHead>
-              <TableHead className="font-semibold text-zinc-900">Customer</TableHead>
-              <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
-              <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
-              <TableHead className="font-semibold text-zinc-900">Main Products</TableHead>
-              <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
-              <TableHead className="font-semibold text-zinc-900">Products Costs</TableHead>
-              <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
-              <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
-              <TableHead className="font-semibold text-zinc-900 text-center">Status</TableHead>
-              <TableHead className="px-6 w-[70px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={11} className="h-48 text-center">
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm text-zinc-500 font-medium">Synchronizing orders...</p>
-                  </div>
-                </TableCell>
+                  }} className="text-zinc-400 hover:text-zinc-900 transition-colors">
+                    {selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                  </button>
+                </TableHead>
+                <TableHead className="px-4 font-semibold text-zinc-900">Order Ref</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Customer</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Main Products</TableHead>
+                <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Products Costs</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
+                <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
+                <TableHead className="font-semibold text-zinc-900 text-center">Status</TableHead>
+                <TableHead className="px-6 w-[70px]"></TableHead>
               </TableRow>
-            ) : filteredOrders.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={11} className="h-48 text-center text-zinc-500">
-                   No orders found matching your filters.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredOrders.map((order) => (
-                <TableRow key={order.id} className={cn(
-                  "hover:bg-zinc-50/50 transition-colors group",
-                  selectedOrderIds.includes(order.id) && "bg-zinc-50/50"
-                )}>
-                  <TableCell className="px-6 text-center">
-                    <button 
-                      onClick={() => {
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={12} className="h-48 text-center"><div className="flex flex-col items-center justify-center gap-2"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="text-sm text-zinc-500 font-medium">Synchronizing orders...</p></div></TableCell></TableRow>
+              ) : filteredOrders.length === 0 ? (
+                <TableRow><TableCell colSpan={12} className="h-48 text-center text-zinc-500">No shipment orders found.</TableCell></TableRow>
+              ) : (
+                paginatedOrders.map((order) => (
+                  <TableRow key={order.id} className={cn("hover:bg-zinc-50/50 transition-colors group", selectedOrderIds.includes(order.id) && "bg-zinc-50/50")}>
+                    <TableCell className="px-6 text-center">
+                      <button onClick={() => {
                         if (selectedOrderIds.includes(order.id)) setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id));
                         else setSelectedOrderIds([...selectedOrderIds, order.id]);
-                      }}
-                      className={cn(
-                        "transition-colors",
-                        selectedOrderIds.includes(order.id) ? "text-[#0052cc]" : "text-zinc-200 group-hover:text-zinc-400"
-                      )}
-                    >
-                      {selectedOrderIds.includes(order.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                    </button>
-                  </TableCell>
-                  <TableCell className="px-4 py-4">
-                    <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p>
-                      <p className="text-[11px] text-zinc-500 font-medium">{order.customer?.email}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                       <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
-                          {order.items?.[0]?.warehouse?.name?.split(' ').shift() || "Origin"}
-                       </div>
-                       <ArrowRightLeft className="h-3 w-3 text-zinc-300" />
-                       <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
-                          {order.shipping_city}
-                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-0.5">
-                      <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
-                      <p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-0.5 max-w-[150px]">
-                      <p className="text-xs font-bold text-zinc-800 truncate">
-                        {order.items?.[0]?.product?.name || "Genuine Spare Part"}
-                      </p>
-                      {order.items && order.items.length > 1 && (
-                        <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Package className="h-3 w-3 text-zinc-400" />
-                      <span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs font-bold text-zinc-600">
-                    Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-xs font-bold text-zinc-600">
-                    Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <p className="text-xs font-black text-zinc-900">Ksh {parseFloat(order.total_amount || 0).toLocaleString()}</p>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge className={cn(
-                      "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950 hover:bg-yellow-500" : 
-                      order.status === "Processing" ? "bg-orange-500 text-white hover:bg-orange-600" :
-                      order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white hover:bg-blue-700" :
-                      order.status === "Delivered" ? "bg-emerald-500 text-white hover:bg-emerald-600" :
-                      "bg-zinc-200 text-zinc-700"
-                    )}>
-                      {order.status === "In Transit" ? "SHIPPED" : order.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="px-6 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-zinc-100")}>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">
-                        <DropdownMenuGroup>
-                          <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Options</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
-                            <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm">
-                            <RefreshCw className="mr-2 h-4 w-4 text-indigo-500" /> Mark Processing
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm">
-                            <Truck className="mr-2 h-4 w-4 text-blue-500" /> Mark Shipped
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
-                            <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
-                          </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                      }} className={cn("transition-colors", selectedOrderIds.includes(order.id) ? "text-[#0052cc]" : "text-zinc-200 group-hover:text-zinc-400")}>
+                        {selectedOrderIds.includes(order.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </button>
+                    </TableCell>
+                    <TableCell className="px-4 py-4"><p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p></TableCell>
+                    <TableCell><div className="space-y-0.5"><p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p><p className="text-[11px] text-zinc-500 font-medium">{order.customer?.email}</p></div></TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name?.split(' ').shift() || "Origin"}</div>
+                        <span className="text-[10px] font-black text-zinc-400 italic">TO</span>
+                        <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">{order.shipping_city}, {order.shipping_country || 'Kenya'}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
+                    <TableCell><div className="space-y-0.5 max-w-[150px]"><p className="text-xs font-bold text-zinc-800 truncate">{order.items?.[0]?.product?.name || "Genuine Spare Part"}</p>{order.items && order.items.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>}</div></TableCell>
+                    <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
+                    <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
+                    <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
+                    <TableCell className="text-right"><p className="text-xs font-black text-zinc-900">Ksh {parseFloat(order.total_amount || 0).toLocaleString()}</p></TableCell>
+                    <TableCell className="text-center">
+                      <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                        order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : order.status === "Processing" ? "bg-orange-500 text-white" :
+                        order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white" :
+                        order.status === "Delivered" ? "bg-emerald-500 text-white" : "bg-zinc-200 text-zinc-700"
+                      )}>{order.status === "In Transit" ? "SHIPPED" : order.status}</Badge>
+                    </TableCell>
+                    <TableCell className="px-6 text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-zinc-100")}><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">
+                          <DropdownMenuGroup>
+                            <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Options</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm"><Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm"><RefreshCw className="mr-2 h-4 w-4 text-indigo-500" /> Mark Processing</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm"><Truck className="mr-2 h-4 w-4 text-blue-500" /> Mark Shipped</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"><CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered</DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        )}
+        <PaginationControls
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          pageSize={pageSize}
+          setPageSize={setPageSize}
+          totalItems={filteredOrders.length}
+          itemName="records"
+          pageSizeOptions={[15, 30, 50, 100]}
+        />
       </div>
 
       {/* Order Details Modal */}
@@ -534,7 +908,7 @@ export default function AdminOrdersPage() {
                       <p className="text-[10px] font-bold text-emerald-400 uppercase">Final Destination</p>
                       <p className="text-sm font-bold text-emerald-700 uppercase">
                         {selectedOrder?.shipping_city 
-                          ? `${selectedOrder.shipping_country || 'Tanzania'}, ${selectedOrder.shipping_city}, ${selectedOrder.shipping_address}` 
+                          ? `${selectedOrder.shipping_city}, ${selectedOrder.shipping_country || 'Tanzania'}` 
                           : "Delivery Address"}
                       </p>
                     </div>
@@ -578,6 +952,344 @@ export default function AdminOrdersPage() {
           <DialogFooter className="p-4 bg-zinc-50 border-t">
             <Button variant="outline" className="font-bold text-xs rounded-lg" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Walk-in POS Order Creation Modal */}
+      <Dialog open={isWalkInModalOpen} onOpenChange={setIsWalkInModalOpen}>
+        <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
+          <DialogHeader className="p-6 bg-white border-b">
+            <DialogTitle className="text-xl font-bold text-zinc-900">Place Walk-In Store Order</DialogTitle>
+            <DialogDescription className="text-zinc-400 font-medium text-xs mt-1">
+              Create an immediate store order, select inventory items, and process walk-in customer payment.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmitWalkInOrder} className="flex flex-col">
+            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+              
+              {/* Section 1: Customer Profile */}
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">1. Customer Identification</h4>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Customer Type</label>
+                  <div className="flex gap-2">
+                    {(["walkin", "new"] as const).map(opt => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setSelectedCustomerId(opt)}
+                        className={cn("flex-1 h-10 rounded-lg text-xs font-bold border transition-colors",
+                          selectedCustomerId === opt
+                            ? opt === "new" ? "bg-blue-600 text-white border-blue-600" : "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-white text-zinc-500 border-zinc-200 hover:border-zinc-400"
+                        )}
+                      >
+                        {opt === "walkin" ? "Quick Walk-In (Guest)" : "+ Register New Customer"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Searchable Existing Customer Lookup */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-zinc-500">Or Search Existing Customer Account</label>
+                  <SearchableDropdown
+                    items={customers
+                      .filter(c => c.name.toLowerCase() !== "walk-in customer")
+                      .map(c => ({ id: c.id.toString(), name: `${c.name} — ${c.email}` }))}
+                    value={!["walkin","new"].includes(selectedCustomerId) ? selectedCustomerId : ""}
+                    onChange={(val) => setSelectedCustomerId(val || "walkin")}
+                    placeholder="Search by name or email..."
+                  />
+                </div>
+
+                {selectedCustomerId === "new" && (
+                  <div className="space-y-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
+                        <Input placeholder="Customer Name" className="h-10 border-zinc-200 rounded-lg bg-white"
+                          value={newCustomerData.name} onChange={(e) => setNewCustomerData({...newCustomerData, name: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">Gmail Address * <span className="text-zinc-400">(name@gmail.com)</span></label>
+                        <Input type="email" placeholder="name@gmail.com" className="h-10 border-zinc-200 rounded-lg bg-white"
+                          value={newCustomerData.email} onChange={(e) => setNewCustomerData({...newCustomerData, email: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">Phone <span className="text-zinc-400">(07XXXXXXXX)</span></label>
+                        <Input placeholder="0712345678" className="h-10 border-zinc-200 rounded-lg bg-white"
+                          value={newCustomerData.phone} onChange={(e) => setNewCustomerData({...newCustomerData, phone: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">City / Town</label>
+                        <Input placeholder="Nairobi" className="h-10 border-zinc-200 rounded-lg bg-white"
+                          value={newCustomerData.address} onChange={(e) => setNewCustomerData({...newCustomerData, address: e.target.value})} />
+                      </div>
+                    </div>
+
+                    {/* Register Login Account Toggle */}
+                    <div className="pt-2 border-t border-blue-100">
+                      <label className="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={registerAccount}
+                          onChange={(e) => { setRegisterAccount(e.target.checked); if (!e.target.checked) setNewCustomerData(p => ({...p, password: "", confirmPassword: ""})); }}
+                          className="w-4 h-4 accent-blue-600 rounded"
+                        />
+                        <span className="text-xs font-bold text-zinc-700">Register Login Account for this Customer</span>
+                      </label>
+                    </div>
+
+                    {registerAccount && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-500">Password *</label>
+                          <div className="relative">
+                            <Input
+                              type={showNewPass ? "text" : "password"}
+                              placeholder="Min 8 characters"
+                              className="h-10 border-zinc-200 rounded-lg bg-white pr-10"
+                              value={newCustomerData.password}
+                              onChange={(e) => setNewCustomerData({...newCustomerData, password: e.target.value})}
+                            />
+                            <button type="button" onClick={() => setShowNewPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                              {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-500">Confirm Password *</label>
+                          <div className="relative">
+                            <Input
+                              type={showConfirmPass ? "text" : "password"}
+                              placeholder="Repeat password"
+                              className="h-10 border-zinc-200 rounded-lg bg-white pr-10"
+                              value={newCustomerData.confirmPassword}
+                              onChange={(e) => setNewCustomerData({...newCustomerData, confirmPassword: e.target.value})}
+                            />
+                            <button type="button" onClick={() => setShowConfirmPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
+                              {showConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Add Inventory Items */}
+              <div className="space-y-4 pt-4 border-t border-zinc-100">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">2. Select & Add Spare Parts</h4>
+                <div className="grid grid-cols-12 gap-3 items-end">
+                  <div className="col-span-5 space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Product</label>
+                    <SearchableDropdown
+                      items={products.map(p => ({ id: p.id.toString(), name: `${p.name} — Ksh ${Number(p.price).toLocaleString()}` }))}
+                      value={selectedProductId}
+                      onChange={(val) => { setSelectedProductId(val); setSelectedWarehouseId(""); }}
+                      placeholder="Search spare parts..."
+                    />
+                  </div>
+
+                  <div className="col-span-4 space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Source Warehouse</label>
+                    <SearchableDropdown
+                      items={(selectedProductDetails?.inventories || []).map((inv: any) => ({ id: inv.warehouse_id.toString(), name: `${inv.warehouse?.name} (Stock: ${inv.quantity})` }))}
+                      value={selectedWarehouseId}
+                      onChange={(val) => setSelectedWarehouseId(val)}
+                      placeholder={selectedProductId ? "Select warehouse..." : "Select product first..."}
+                      disabled={!selectedProductId}
+                    />
+                  </div>
+
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Qty</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      className="h-10 border-zinc-200 rounded-lg"
+                      value={addQuantity}
+                      onChange={(e) => setAddQuantity(parseInt(e.target.value) || 1)}
+                      disabled={!selectedWarehouseId}
+                    />
+                  </div>
+
+                  <div className="col-span-1">
+                    <Button
+                      type="button"
+                      onClick={handleAddItemToOrder}
+                      disabled={!selectedWarehouseId}
+                      className="h-10 w-full bg-zinc-900 text-white rounded-lg hover:bg-zinc-800"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Items Added Table */}
+                {orderItems.length > 0 ? (
+                  <div className="border border-zinc-200 rounded-xl overflow-hidden bg-zinc-50/50 mt-3">
+                    <Table>
+                      <TableHeader className="bg-zinc-50">
+                        <TableRow>
+                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600">Product</TableHead>
+                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600">Warehouse</TableHead>
+                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-center">Qty</TableHead>
+                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-right">Price</TableHead>
+                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-right">Subtotal</TableHead>
+                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 w-12"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {orderItems.map((item, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell className="py-2 text-xs font-bold text-zinc-800">{item.name}</TableCell>
+                            <TableCell className="py-2 text-xs text-zinc-500 font-medium">{item.warehouse_name}</TableCell>
+                            <TableCell className="py-2 text-xs text-center font-bold text-zinc-700">{item.quantity}</TableCell>
+                            <TableCell className="py-2 text-xs text-right text-zinc-600">Ksh {item.price.toLocaleString()}</TableCell>
+                            <TableCell className="py-2 text-xs text-right font-black text-zinc-900">Ksh {(item.price * item.quantity).toLocaleString()}</TableCell>
+                            <TableCell className="py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItemFromOrder(idx)}
+                                className="text-red-500 hover:text-red-700 text-xs font-bold"
+                              >
+                                Remove
+                              </button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="p-6 text-center border-2 border-dashed border-zinc-200 rounded-xl text-zinc-400 text-xs font-bold uppercase tracking-wider bg-zinc-50/20">
+                    No spare parts added to this walk-in order.
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: Billing & Payment */}
+              <div className="space-y-4 pt-4 border-t border-zinc-100">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">3. Payment & Settlement</h4>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Payment Status</label>
+                    <select
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20 text-zinc-600 font-medium"
+                      value={paymentStatus}
+                      onChange={(e) => setPaymentStatus(e.target.value)}
+                    >
+                      <option value="Paid">Fully Paid</option>
+                      <option value="Pending">Payment Pending</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Payment Method</label>
+                    <select
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20 text-zinc-600 font-medium"
+                      value={paymentMethod}
+                      onChange={(e) => { setPaymentMethod(e.target.value); setPaymentRefCode(""); }}
+                    >
+                      <option value="Cash">Cash Sale</option>
+                      <option value="M-Pesa">M-Pesa Direct</option>
+                      <option value="Card">Visa / MasterCard</option>
+                      <option value="Bank Transfer">Bank EFT</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Fulfillment Method</label>
+                    <select
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20 text-zinc-600 font-medium"
+                      value={shippingMethod}
+                      onChange={(e) => { setShippingMethod(e.target.value); if (e.target.value === "Pickup") setShippingFee(0); }}
+                    >
+                      <option value="Pickup">In-Store Collection</option>
+                      <option value="Local Delivery">Dispatch / Shipping</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Digital Payment Reference Code */}
+                {isDigitalPayment(paymentMethod) && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500 flex items-center gap-1.5">
+                      <CreditCard className="h-3.5 w-3.5 text-blue-500" />
+                      {paymentMethod} Reference Code <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      placeholder={`Enter ${paymentMethod} transaction reference...`}
+                      className="h-10 border-blue-200 rounded-lg bg-blue-50/30 focus:ring-blue-200"
+                      value={paymentRefCode}
+                      onChange={(e) => setPaymentRefCode(e.target.value)}
+                    />
+                    <p className="text-[10px] text-zinc-400">This will be saved as: {paymentMethod} (Ref: {paymentRefCode || "..."}) on the order.</p>
+                  </div>
+                )}
+
+                {shippingMethod === "Local Delivery" && (
+                  <div className="grid grid-cols-3 gap-4 bg-zinc-50/50 p-4 rounded-xl border border-zinc-100">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Delivery Fee (Ksh)</label>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-10 border-zinc-200 rounded-lg"
+                        value={shippingFee}
+                        onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Destination City</label>
+                      <Input
+                        className="h-10 border-zinc-200 rounded-lg"
+                        value={shippingCity}
+                        onChange={(e) => setShippingCity(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Delivery Address</label>
+                      <Input
+                        className="h-10 border-zinc-200 rounded-lg"
+                        value={shippingAddress}
+                        onChange={(e) => setShippingAddress(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 flex justify-between items-center mt-3">
+                  <span className="font-bold text-zinc-500 text-xs uppercase">Grand Total (Tax Included)</span>
+                  <span className="text-xl font-black text-zinc-900">
+                    Ksh {(orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0) + Number(shippingFee)).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <DialogFooter className="p-4 bg-zinc-50 border-t flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="font-bold text-xs rounded-lg"
+                onClick={() => setIsWalkInModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSavingOrder}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center"
+              >
+                {isSavingOrder && <Loader2 className="h-4 w-4 animate-spin mr-1.5" />}
+                COMPLETE WALK-IN ORDER
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

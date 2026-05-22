@@ -8,15 +8,19 @@ import { CarFront, Lock, Mail, ArrowRight, ShieldCheck, Eye, EyeOff, Loader2 } f
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import { useSettings } from "@/components/providers/SettingsProvider";
 import toast from "react-hot-toast";
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { settings } = useSettings();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+
+  const brandName = settings.store_name || "Portal";
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,14 +50,6 @@ export default function LoginPage() {
         </svg>
       </div>
 
-      <div className="absolute top-8 left-8">
-        <Link href="/" className="flex items-center gap-2 text-zinc-900 group">
-          <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/20">
-            <CarFront className="h-6 w-6" />
-          </div>
-          <span className="text-xl font-black tracking-tight uppercase">AutoSpare<span className="text-primary text-2xl">.</span></span>
-        </Link>
-      </div>
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -69,7 +65,7 @@ export default function LoginPage() {
             <div className="space-y-1">
               <CardTitle className="text-4xl font-black tracking-tighter text-zinc-900 uppercase">Secure Login</CardTitle>
               <CardDescription className="text-zinc-500 text-lg font-medium">
-                Access your personalized AutoSpare portal
+                Access your personalized {brandName} portal
               </CardDescription>
             </div>
           </CardHeader>

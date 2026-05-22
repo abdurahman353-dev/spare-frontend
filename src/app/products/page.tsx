@@ -11,9 +11,11 @@ import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, Log
 import api from "@/lib/axios";
 import { useCart } from "@/context/CartContext";
 import Image from "next/image";
-import { cn } from "@/lib/utils";
+import { cn, getCategoryColor } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "react-hot-toast";
+import { useSettings } from "@/components/providers/SettingsProvider";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 interface Category {
   id: number;
@@ -97,6 +99,8 @@ function ProductImageCarousel({ product }: { product: Product }) {
 }
 
 function ProductCard({ product }: { product: Product }) {
+  const { settings } = useSettings();
+  const currency = settings.currency || "Ksh";
   const { cart, addToCart, removeFromCart } = useCart();
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | "">("");
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -112,11 +116,19 @@ function ProductCard({ product }: { product: Product }) {
       )}
     >
       <div className="h-48 bg-zinc-50 flex items-center justify-center p-6 relative">
-        {product.status === "Inactive" && (
+        {product.status === "Inactive" ? (
           <div className="absolute top-3 left-3 z-10">
             <Badge className="bg-red-600 text-white border-none font-bold text-[10px] px-2 py-0.5">INACTIVE</Badge>
           </div>
-        )}
+        ) : availableInventories.length === 0 ? (
+          <div className="absolute top-3 left-3 z-10">
+            <Badge className="bg-zinc-800 text-white border-none font-bold text-[10px] px-2 py-0.5">OUT OF STOCK</Badge>
+          </div>
+        ) : availableInventories.reduce((acc, inv) => acc + inv.quantity, 0) <= 5 ? (
+          <div className="absolute top-3 left-3 z-10">
+            <Badge className="bg-orange-500 text-white border-none font-bold text-[10px] px-2 py-0.5 animate-pulse">LOW STOCK</Badge>
+          </div>
+        ) : null}
         <ProductImageCarousel product={product} />
       </div>
       <CardContent className="p-6 pb-2">
@@ -130,13 +142,13 @@ function ProductCard({ product }: { product: Product }) {
 
         <div className="mt-4 flex items-center justify-between">
           <span className="text-xl font-bold text-[#1e293b] tracking-tight">
-            Ksh {Number(product.price).toLocaleString()}
+            {currency} {Number(product.price).toLocaleString()}
           </span>
           <div className="flex gap-1.5">
             <span className="text-[10px] font-bold bg-[#eff6ff] text-[#0052cc] px-2 py-1 rounded uppercase tracking-wider">
               {product.weight ? `${Number(product.weight).toFixed(2)} KG` : "1.00 KG"}
             </span>
-            <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-1 rounded uppercase tracking-wider">
+            <span className={cn("text-[10px] font-black border px-2.5 py-1 rounded uppercase tracking-wider", getCategoryColor(product.category?.name || "N/A"))}>
               {product.category?.name || "Uncategorized"}
             </span>
           </div>
@@ -284,6 +296,19 @@ export default function PublicProductsPage() {
     });
   }, [products, searchQuery, selectedCategoryIds]);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(9);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategoryIds]);
+
+  const totalPages = Math.ceil(filteredProducts.length / pageSize);
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(startIndex, startIndex + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
+
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
@@ -325,25 +350,32 @@ export default function PublicProductsPage() {
                     onChange={(e) => setCategorySearch(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                  {categories
-                    .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
-                    .map((cat) => (
-                      <label
-                        key={cat.id}
-                        className="flex items-center gap-2 cursor-pointer hover:text-[#0052cc] transition-colors py-1 group"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedCategoryIds.includes(cat.id)}
-                          onChange={() => toggleCategory(cat.id)}
-                          className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
-                        />
-                        <span className="text-[13px] font-medium text-[#475569] group-hover:text-[#1e293b] select-none">
-                          {cat.name}
-                        </span>
-                      </label>
-                    ))}
+                 <div 
+                  className="space-y-2 max-h-[220px] overflow-y-auto pr-2 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
+                  style={{ WebkitOverflowScrolling: "touch" }}
+                >
+                  {categories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 ? (
+                    <p className="text-xs text-zinc-400 font-medium py-2 italic">No categories found</p>
+                  ) : (
+                    categories
+                      .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
+                      .map((cat) => (
+                        <label
+                          key={cat.id}
+                          className="flex items-center gap-2 cursor-pointer hover:text-[#0052cc] transition-colors py-1 group"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedCategoryIds.includes(cat.id)}
+                            onChange={() => toggleCategory(cat.id)}
+                            className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
+                          />
+                          <span className="text-[13px] font-medium text-[#475569] group-hover:text-[#1e293b] select-none">
+                            {cat.name}
+                          </span>
+                        </label>
+                      ))
+                  )}
                 </div>
               </div>
             </aside>
@@ -384,13 +416,26 @@ export default function PublicProductsPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredProducts.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                    />
-                  ))}
+                <div className="space-y-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {paginatedProducts.map((product) => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <PaginationControls
+                    currentPage={currentPage}
+                    setCurrentPage={setCurrentPage}
+                    pageSize={pageSize}
+                    setPageSize={setPageSize}
+                    totalItems={filteredProducts.length}
+                    itemName="parts"
+                    pageSizeOptions={[9, 18, 36, 72]}
+                  />
                 </div>
               )}
             </div>

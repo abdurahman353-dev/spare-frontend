@@ -15,6 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { Hero } from "@/components/Hero";
+import { HubMap } from "@/components/HubMap";
+import { useState, useEffect } from "react";
+import api from "@/lib/axios";
+import { useSettings } from "@/components/providers/SettingsProvider";
 
 const categories = [
   { name: "Engine Parts", icon: Wrench, desc: "Pistons, valves, and timing belts" },
@@ -24,6 +28,48 @@ const categories = [
 ];
 
 export default function Home() {
+  const { settings } = useSettings();
+  const [countriesList, setCountriesList] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const [destResponse, locResponse] = await Promise.all([
+          api.get("/shipping-destinations/active").catch(() => ({ data: [] })),
+          api.get("/locations/countries").catch(() => ({ data: [] }))
+        ]);
+        const activeDestinations = destResponse.data || [];
+        const realLocations = locResponse.data || [];
+
+        const uniqueCountries = new Set<string>();
+        activeDestinations.forEach((dest: any) => {
+          if (dest.country) uniqueCountries.add(dest.country.trim());
+        });
+        realLocations.forEach((loc: any) => {
+          if (loc.name && loc.is_active !== false) uniqueCountries.add(loc.name.trim());
+        });
+
+        const list: string[] = [];
+        uniqueCountries.forEach((country) => {
+          const isHQ = country.toLowerCase() === "kenya";
+          list.push(`${country}${isHQ ? " (HQ)" : ""}`);
+        });
+
+        if (list.length > 0) {
+          // Sort so HQ is first
+          list.sort((a, b) => {
+            if (a.includes("(HQ)")) return -1;
+            if (b.includes("(HQ)")) return 1;
+            return a.localeCompare(b);
+          });
+          setCountriesList(list);
+        }
+      } catch (e) {
+        console.error("Failed to fetch countries for home:", e);
+      }
+    };
+    fetchCountries();
+  }, [settings]);
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
@@ -172,30 +218,44 @@ export default function Home() {
         </section>
 
         {/* Distribution Map Placeholder */}
-        <section className="py-24 bg-secondary">
-          <div className="container mx-auto px-4">
-            <div className="flex flex-col lg:flex-row items-center gap-12">
-              <div className="lg:w-1/2">
-                <h2 className="text-3xl md:text-4xl font-bold mb-6">Regional Distribution Hubs</h2>
-                <p className="text-lg text-muted-foreground mb-8">
-                  We operate multiple distribution centers across East Africa to ensure your parts arrive exactly when you need them.
-                </p>
-                <ul className="space-y-4">
-                  {["Kenya (HQ)", "Uganda", "Tanzania", "Rwanda", "Burundi"].map((country) => (
-                    <li key={country} className="flex items-center gap-3">
-                      <MapPin className="h-5 w-5 text-primary" />
-                      <span className="font-medium text-lg">{country}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="lg:w-1/2 bg-card p-8 rounded-2xl shadow-lg w-full h-80 flex items-center justify-center border">
-                {/* Map graphic placeholder */}
-                <p className="text-muted-foreground font-mono">[Interactive Map Area]</p>
+        {countriesList.length > 0 && (
+          <section className="py-24 bg-secondary">
+            <div className="container mx-auto px-4">
+              <div className="flex flex-col lg:flex-row items-center gap-12">
+                <div className="lg:w-1/2">
+                  <h2 className="text-3xl md:text-4xl font-bold mb-6">Regional Distribution Hubs</h2>
+                  <p className="text-lg text-muted-foreground mb-8">
+                    We operate multiple distribution centers across East Africa to ensure your parts arrive exactly when you need them.
+                  </p>
+                  <ul className="space-y-4">
+                    {countriesList.map((country) => {
+                      const isHq = country.includes("(HQ)");
+                      const cleanName = country.replace(" (HQ)", "");
+                      return (
+                        <li key={country} className="flex items-center gap-3.5 group cursor-default">
+                          <div className="h-8 w-8 rounded-lg bg-blue-50/50 group-hover:bg-blue-100 flex items-center justify-center transition-all duration-300 shrink-0 border border-zinc-100">
+                            <MapPin className="h-4 w-4 text-blue-600" />
+                          </div>
+                          <span className="font-semibold text-lg text-zinc-700 group-hover:translate-x-1 group-hover:text-zinc-900 transition-all duration-300 flex items-center gap-2">
+                            <span>{cleanName}</span>
+                            {isHq && (
+                              <span className="text-[10px] bg-blue-50/80 text-blue-600 font-extrabold px-1.5 py-0.5 rounded border border-blue-100 uppercase tracking-wider">
+                                HQ
+                              </span>
+                            )}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                <div className="lg:w-1/2 w-full h-[350px] z-0">
+                  <HubMap />
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
       </main>
 

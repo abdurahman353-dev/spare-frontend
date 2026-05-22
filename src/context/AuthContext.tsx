@@ -13,6 +13,7 @@ interface User {
   country?: string;
   city?: string;
   address?: string;
+  phone?: string | null;
 }
 
 interface AuthContextType {
@@ -58,10 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     setUser(user);
     
-    if (user.role === "admin") {
-      router.push("/dashboard");
-    } else if (user.must_change_password) {
+    if (user.must_change_password) {
       router.push("/change-password");
+    } else if (user.role === "admin" || user.role === "superadmin") {
+      router.push("/dashboard");
     } else {
       router.push("/products");
     }
@@ -104,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       changePassword,
       isAuthenticated: !!user,
-      isAdmin: user?.role === "admin"
+      isAdmin: user?.role === "admin" || user?.role === "superadmin"
     }}>
       {children}
     </AuthContext.Provider>

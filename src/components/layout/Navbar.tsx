@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Menu, X, CarFront, Moon, Sun } from "lucide-react";
+import { Menu, X, CarFront } from "lucide-react";
 import { useState } from "react";
-import { useTheme } from "next-themes";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +16,10 @@ const navLinks = [
   { name: "Contact", href: "/contact" },
 ];
 
-import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, CreditCard, ChevronDown } from "lucide-react";
+import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, CreditCard, ChevronDown, LayoutDashboard } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useSettings } from "@/components/providers/SettingsProvider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,21 +34,33 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const { cart } = useCart();
   const { user, logout, isAuthenticated } = useAuth();
+  const { settings } = useSettings();
   const cartCount = cart.reduce((count, item) => count + item.quantity, 0);
+
+  const brandName = settings.store_name || "";
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-            <div className="h-9 w-9 bg-primary flex items-center justify-center text-white font-black text-xl rounded-sm shadow-lg shadow-primary/20">
-              A
-            </div>
-            <span className="text-xl font-black tracking-tighter text-zinc-900">AUTOSPARE<span className="text-primary italic">.</span></span>
-          </Link>
+          {(settings.store_logo || brandName) ? (
+            <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+              {settings.store_logo ? (
+                <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 border border-zinc-200/60">
+                  <img src={settings.store_logo} alt={brandName || "Logo"} className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div className="h-9 w-9 bg-primary flex items-center justify-center text-white font-black text-xl rounded-sm shadow-lg shadow-primary/20">
+                  {brandName[0]?.toUpperCase() || "A"}
+                </div>
+              )}
+              {brandName && (
+                <span className="text-xl font-black tracking-tighter text-zinc-900">{brandName.toUpperCase()}<span className="text-primary italic">.</span></span>
+              )}
+            </Link>
+          ) : null}
         </div>
 
         {/* Desktop Nav */}
@@ -74,16 +86,6 @@ export function Navbar() {
 
         <div className="hidden md:flex items-center gap-8">
           <div className="flex items-center gap-4 border-r pr-8">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-              <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-              <span className="sr-only">Toggle theme</span>
-            </Button>
-
             <Link href="/cart" className="relative group p-2 rounded-full hover:bg-secondary transition-colors">
               <motion.div
                 key={cartCount}
@@ -94,7 +96,7 @@ export function Navbar() {
                 <ShoppingCart className="h-5 w-5 text-zinc-700 group-hover:text-primary transition-colors" />
               </motion.div>
               {cartCount > 0 && (
-                <motion.span 
+                <motion.span
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border-2 border-white shadow-lg"
@@ -114,7 +116,9 @@ export function Navbar() {
                       <UserIcon className="h-4 w-4" />
                     </div>
                     <div className="hidden lg:flex flex-col items-start leading-none">
-                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</span>
+                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                        {user?.role === "superadmin" ? "Super Admin" : user?.role === "admin" ? "Admin" : "Customer"}
+                      </span>
                       <span className="text-sm font-bold text-zinc-900 uppercase tracking-tighter flex items-center gap-1 group-hover:text-primary transition-colors">
                         {user?.name.split(' ')[0]}
                         <ChevronDown className="h-3 w-3" />
@@ -125,22 +129,47 @@ export function Navbar() {
                 <DropdownMenuContent align="end" className="w-56 mt-2 rounded-xl border-none shadow-2xl p-2 bg-white ring-1 ring-black/5 animate-in fade-in zoom-in duration-200">
                   <DropdownMenuGroup>
                     <DropdownMenuLabel className="px-3 py-2">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Loyalty Status</p>
-                      <p className="text-sm font-black text-primary tracking-tighter uppercase mt-0.5">PLATINUM CUSTOMER</p>
+                      {user?.role === "superadmin" || user?.role === "admin" ? (
+                        <>
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">System Role</p>
+                          <p className="text-sm font-black text-primary tracking-tighter uppercase mt-0.5">
+                            {user?.role === "superadmin" ? "SUPER ADMINISTRATOR" : "ADMINISTRATOR"}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Loyalty Status</p>
+                          <p className="text-sm font-black text-primary tracking-tighter uppercase mt-0.5">PLATINUM CUSTOMER</p>
+                        </>
+                      )}
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator className="bg-zinc-50" />
-                    <DropdownMenuItem onClick={() => router.push("/account")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
-                      <UserIcon className="h-4 w-4" /> Account Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push("/account?tab=orders")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
-                      <Package className="h-4 w-4" /> My Orders
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push("/account?tab=payment")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
-                      <CreditCard className="h-4 w-4" /> Payment Methods
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push("/account?tab=settings")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
-                      <SettingsIcon className="h-4 w-4" /> Account Settings
-                    </DropdownMenuItem>
+                    
+                    {user?.role === "superadmin" || user?.role === "admin" ? (
+                      <>
+                        <DropdownMenuItem onClick={() => router.push("/dashboard")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <LayoutDashboard className="h-4 w-4" /> Admin Panel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push("/dashboard/settings")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <SettingsIcon className="h-4 w-4" /> System Settings
+                        </DropdownMenuItem>
+                      </>
+                    ) : (
+                      <>
+                        <DropdownMenuItem onClick={() => router.push("/account")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <UserIcon className="h-4 w-4" /> Account Dashboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push("/account?tab=orders")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <Package className="h-4 w-4" /> My Orders
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push("/account?tab=payment")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <CreditCard className="h-4 w-4" /> Payment Methods
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push("/account?tab=settings")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <SettingsIcon className="h-4 w-4" /> Account Settings
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator className="bg-zinc-50" />
                   <DropdownMenuItem onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-red-600 hover:bg-red-50 transition-all cursor-pointer">
@@ -173,15 +202,6 @@ export function Navbar() {
 
         {/* Mobile menu button */}
         <div className="md:hidden flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          >
-            <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
           <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
             {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>

@@ -5,8 +5,14 @@ import { Zap } from "lucide-react";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/components/providers/SettingsProvider";
 
 export const Hero = () => {
+  const { settings } = useSettings();
+  const brandName = settings.store_name || "";
+  const tagline = settings.store_tagline || "";
+  const description = settings.store_description || "";
+
   return (
     <section className="relative h-[90vh] flex items-center bg-zinc-950 overflow-hidden">
       {/* Background Video Layer */}
@@ -32,20 +38,29 @@ export const Hero = () => {
           transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
           className="max-w-4xl"
         >
-          <div className="flex items-center gap-2 mb-8">
-            <span className="h-px w-12 bg-[#0052cc]"></span>
-            <span className="text-[#0052cc] font-bold tracking-[0.2em] text-sm uppercase">Elite Automotive Logistics</span>
-          </div>
+          {brandName && (
+            <div className="flex items-center gap-2 mb-8">
+              <span className="h-px w-12 bg-[#0052cc]"></span>
+              <span className="text-[#0052cc] font-bold tracking-[0.2em] text-sm uppercase">{brandName}</span>
+            </div>
+          )}
           
-          <h1 className="text-6xl md:text-8xl font-black text-white mb-8 leading-[0.95] tracking-tight">
-            GENUINE <br/>
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">PRECISION.</span>
-          </h1>
+          {tagline && (
+            <h1 className="text-6xl md:text-8xl font-black text-white mb-8 leading-[0.95] tracking-tight">
+              {tagline.toUpperCase() === "GENUINE PRECISION." || tagline.toUpperCase() === "GENUINE PRECISION" ? (
+                <>
+                  GENUINE <br/>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-zinc-500">PRECISION.</span>
+                </>
+              ) : tagline}
+            </h1>
+          )}
           
-          <p className="text-xl md:text-2xl text-zinc-400 mb-12 max-w-2xl font-medium leading-relaxed">
-            The official distribution gateway for certified Mercedes-Benz spare parts across the East African region. 
-            <span className="text-white ml-2 italic">Imported from Stuttgart.</span>
-          </p>
+          {description && (
+            <p className="text-xl md:text-2xl text-zinc-400 mb-12 max-w-2xl font-medium leading-relaxed">
+              {description}
+            </p>
+          )}
           
           <div className="flex flex-wrap gap-6">
             <Link 

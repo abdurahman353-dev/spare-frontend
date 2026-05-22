@@ -29,3 +29,31 @@ api.interceptors.response.use(
 );
 
 export default api;
+
+let activeDestinationsPromise: Promise<any> | null = null;
+let countriesPromise: Promise<any> | null = null;
+
+export const getActiveDestinationsCached = () => {
+  if (!activeDestinationsPromise) {
+    activeDestinationsPromise = api.get("/shipping-destinations/active")
+      .then((res) => res.data)
+      .catch((err) => {
+        activeDestinationsPromise = null;
+        throw err;
+      });
+  }
+  return activeDestinationsPromise;
+};
+
+export const getCountriesCached = () => {
+  if (!countriesPromise) {
+    countriesPromise = api.get("/locations/countries")
+      .then((res) => res.data)
+      .catch((err) => {
+        countriesPromise = null;
+        throw err;
+      });
+  }
+  return countriesPromise;
+};
+

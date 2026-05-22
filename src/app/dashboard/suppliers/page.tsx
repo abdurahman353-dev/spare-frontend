@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -99,12 +99,27 @@ export default function AdminSuppliersPage() {
     }
   };
 
-  const filteredSuppliers = suppliers.filter(s => {
-    const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         s.country.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "All Status" || s.verification_status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  const filteredSuppliers = useMemo(() => {
+    return suppliers.filter(s => {
+      const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           s.country.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === "All Status" || s.verification_status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [suppliers, searchQuery, statusFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
+  const totalPages = Math.ceil(filteredSuppliers.length / pageSize);
+  const paginatedSuppliers = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredSuppliers.slice(startIndex, startIndex + pageSize);
+  }, [filteredSuppliers, currentPage, pageSize]);
 
   if (loading) {
     return (
@@ -181,7 +196,7 @@ export default function AdminSuppliersPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredSuppliers.map((supplier) => (
+              paginatedSuppliers.map((supplier) => (
                 <TableRow key={supplier.id} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="px-6">
                     <div className="flex items-center gap-3">
@@ -240,6 +255,96 @@ export default function AdminSuppliersPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination Controls */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-white border-t border-zinc-200">
+          <div className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+            Showing <span className="text-zinc-900 font-black">{filteredSuppliers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to <span className="text-zinc-900 font-black">{Math.min(filteredSuppliers.length, currentPage * pageSize)}</span> of <span className="text-zinc-900 font-black">{filteredSuppliers.length}</span> records
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="h-9 px-2 border border-zinc-200 rounded-lg text-xs font-semibold bg-white outline-none text-zinc-600 focus:ring-2 focus:ring-primary/20"
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              <option value={15}>Show 15</option>
+              <option value={30}>Show 30</option>
+              <option value={50}>Show 50</option>
+              <option value={100}>Show 100</option>
+            </select>
+
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                className="h-9 w-9 p-0 rounded-lg font-bold border-zinc-200 text-zinc-600"
+              >
+                «
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="h-9 px-2.5 rounded-lg font-bold border-zinc-200 text-zinc-600 text-xs uppercase"
+              >
+                Prev
+              </Button>
+
+              <div className="flex items-center gap-1.5 px-2">
+                <span className="text-xs text-zinc-400 font-bold uppercase">Page</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={currentPage || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "") {
+                      setCurrentPage("" as any);
+                      return;
+                    }
+                    const num = Number(val);
+                    if (num >= 1 && num <= totalPages) {
+                      setCurrentPage(num);
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!currentPage || currentPage < 1) {
+                      setCurrentPage(1);
+                    }
+                  }}
+                  className="w-12 h-9 px-1 text-center border border-zinc-200 rounded-lg text-xs font-black bg-white text-zinc-800 outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <span className="text-xs text-zinc-400 font-bold uppercase">of {totalPages || 1}</span>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-9 px-2.5 rounded-lg font-bold border-zinc-200 text-zinc-600 text-xs uppercase"
+              >
+                Next
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-9 w-9 p-0 rounded-lg font-bold border-zinc-200 text-zinc-600"
+              >
+                »
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Onboard Supplier Modal */}

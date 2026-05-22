@@ -22,12 +22,14 @@ interface StockModalProps {
   onSuccess: () => void;
   type: "update" | "transfer";
   initialData?: any;
+  pendingItems?: any[];
 }
 
-export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: StockModalProps) {
+export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pendingItems }: StockModalProps) {
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [bulkFormData, setBulkFormData] = useState<any[]>([]);
   
   const [formData, setFormData] = useState({
     id: "",
@@ -37,7 +39,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
     to_warehouse_id: "",
     quantity: "", // Absolute quantity for add, transfer amount for transfer
     adjustment: "", // For edit mode (increment/decrement)
-    min_stock: "10"
+    min_stock: ""
   });
 
   useEffect(() => {
@@ -54,7 +56,28 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
             to_warehouse_id: "",
             quantity: initialData.quantity?.toString() || "0",
             adjustment: "",
-            min_stock: initialData.min_stock?.toString() || "10"
+            min_stock: initialData.min_stock?.toString() || ""
+          });
+          setBulkFormData([]);
+        } else if (pendingItems && pendingItems.length > 0) {
+          // Bulk assign mode for pending items
+          setBulkFormData(pendingItems.map(item => ({
+            id: item.id?.toString(),
+            product_id: item.product_id?.toString() || item.product?.id?.toString(),
+            product_name: item.product?.name || "Unknown Product",
+            warehouse_id: "",
+            quantity: "",
+            min_stock: ""
+          })));
+          setFormData({
+            id: "",
+            product_id: "",
+            warehouse_id: "",
+            from_warehouse_id: "",
+            to_warehouse_id: "",
+            quantity: "",
+            adjustment: "",
+            min_stock: ""
           });
         } else {
           // Add mode
@@ -66,8 +89,9 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
             to_warehouse_id: "",
             quantity: "",
             adjustment: "",
-            min_stock: "10"
+            min_stock: ""
           });
+          setBulkFormData([]);
         }
       } else if (type === "transfer") {
         setFormData({
@@ -78,7 +102,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
           to_warehouse_id: "",
           quantity: "",
           adjustment: "",
-          min_stock: "10"
+          min_stock: ""
         });
       }
     }
@@ -110,11 +134,90 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
     }
   };
 
+  const handleEditWarehouse = async (id: string | number, newName: string) => {
+    try {
+      await api.put(`/warehouses/${id}`, { name: newName });
+      setWarehouses((prev) =>
+        prev.map((w) => (w.id.toString() === id.toString() ? { ...w, name: newName } : w))
+      );
+      toast.success("Warehouse renamed successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to rename warehouse");
+    }
+  };
+
+  const handleDeleteWarehouse = async (id: string | number) => {
+    try {
+      await api.delete(`/warehouses/${id}`);
+      setWarehouses((prev) => prev.filter((w) => w.id.toString() !== id.toString()));
+      if (formData.warehouse_id === id.toString()) {
+        setFormData((prev) => ({ ...prev, warehouse_id: "" }));
+      }
+      if (formData.from_warehouse_id === id.toString()) {
+        setFormData((prev) => ({ ...prev, from_warehouse_id: "" }));
+      }
+      if (formData.to_warehouse_id === id.toString()) {
+        setFormData((prev) => ({ ...prev, to_warehouse_id: "" }));
+      }
+      toast.success("Warehouse deleted successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete warehouse");
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
+      if (type === "update" && bulkFormData.length > 0) {
+        const itemsToUpdate = bulkFormData.filter(item => item.warehouse_id);
+        
+        if (itemsToUpdate.length === 0) {
+          toast.error("Please select a warehouse for at least one item.");
+          setLoading(false);
+          return;
+        }
+
+        for (const item of itemsToUpdate) {
+          if (!item.quantity && !item.min_stock) {
+            toast.error("Please enter quantity and low stock alert");
+            setLoading(false);
+            return;
+          }
+          if (!item.quantity) {
+            toast.error("Please enter quantity");
+            setLoading(false);
+            return;
+          }
+          if (!item.min_stock) {
+            toast.error("Please enter low stock alert");
+            setLoading(false);
+            return;
+          }
+        }
+
+        await Promise.all(itemsToUpdate.map(item => {
+          const payload = {
+            product_id: Number(item.product_id),
+            warehouse_id: Number(item.warehouse_id),
+            quantity: Number(item.quantity),
+            min_stock: Number(item.min_stock)
+          };
+          
+          if (item.id) {
+            return api.put(`/inventory/${item.id}`, payload);
+          } else {
+            return api.post("/inventory", payload);
+          }
+        }));
+        
+        toast.success("Pending stock assigned successfully!");
+        onSuccess();
+        onClose();
+        return;
+      }
+
       if (type === "update") {
         if (!formData.product_id) return toast.error("Please select a part.");
         if (!formData.warehouse_id) return toast.error("Please select a warehouse.");
@@ -180,13 +283,72 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
                 {type === "transfer" ? <ArrowRightLeft className="h-5 w-5" /> : <PackagePlus className="h-5 w-5" />}
               </div>
               <DialogTitle className="text-xl font-bold">
-                {type === "transfer" ? "Stock Transfer" : formData.id ? "Adjust Stock" : "Add Stock"}
+                {type === "transfer" ? "Stock Transfer" : bulkFormData.length > 0 ? "Assign Pending Stock" : formData.id ? "Adjust Stock" : "Add Stock"}
               </DialogTitle>
             </div>
           </DialogHeader>
 
           <div className="py-6 space-y-4">
-            {type === "update" ? (
+            {type === "update" && bulkFormData.length > 0 ? (
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="bg-blue-50 text-blue-700 p-3 rounded-lg text-xs font-medium border border-blue-100">
+                  Assign stock to pending items. Leave warehouse unselected to skip assigning an item.
+                </div>
+                {bulkFormData.map((item, index) => (
+                  <div key={item.id || `pending-${index}`} className="p-4 border border-zinc-200 rounded-lg space-y-3 bg-zinc-50 relative">
+                    <h4 className="font-bold text-sm text-zinc-900 border-b border-zinc-200 pb-2">{item.product_name}</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs font-semibold text-zinc-500">Warehouse</Label>
+                        <SearchableDropdown
+                          items={warehouses}
+                          value={item.warehouse_id}
+                          onChange={(val) => {
+                            const newData = [...bulkFormData];
+                            newData[index].warehouse_id = val;
+                            setBulkFormData(newData);
+                          }}
+                          placeholder="Select warehouse"
+                          onAdd={handleAddWarehouse}
+                          onEdit={handleEditWarehouse}
+                          onDelete={handleDeleteWarehouse}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs font-semibold text-zinc-500">Quantity</Label>
+                          <Input 
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const newData = [...bulkFormData];
+                              newData[index].quantity = e.target.value;
+                              setBulkFormData(newData);
+                            }}
+                            placeholder="0"
+                            className="h-9 border-zinc-200 rounded-lg bg-white"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-semibold text-zinc-500">Low Stock Alert</Label>
+                          <Input 
+                            type="number"
+                            value={item.min_stock}
+                            onChange={(e) => {
+                              const newData = [...bulkFormData];
+                              newData[index].min_stock = e.target.value;
+                              setBulkFormData(newData);
+                            }}
+                            placeholder="10"
+                            className="h-9 border-zinc-200 rounded-lg bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : type === "update" ? (
               <>
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold text-zinc-500">Part</Label>
@@ -205,6 +367,8 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
                     onChange={(val) => setFormData({ ...formData, warehouse_id: val })}
                     placeholder="Search and select warehouse"
                     onAdd={handleAddWarehouse}
+                    onEdit={handleEditWarehouse}
+                    onDelete={handleDeleteWarehouse}
                   />
                 </div>
                 
@@ -274,6 +438,8 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
                       onChange={(val) => setFormData({ ...formData, from_warehouse_id: val })}
                       placeholder="Source"
                       onAdd={handleAddWarehouse}
+                      onEdit={handleEditWarehouse}
+                      onDelete={handleDeleteWarehouse}
                     />
                   </div>
                   <div className="space-y-1">
@@ -284,6 +450,8 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData }: St
                       onChange={(val) => setFormData({ ...formData, to_warehouse_id: val })}
                       placeholder="Destination"
                       onAdd={handleAddWarehouse}
+                      onEdit={handleEditWarehouse}
+                      onDelete={handleDeleteWarehouse}
                     />
                   </div>
                 </div>

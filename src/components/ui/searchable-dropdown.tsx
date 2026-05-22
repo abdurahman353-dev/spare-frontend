@@ -1,12 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Check, Plus, Trash2, Loader2, Search, ChevronDown } from "lucide-react";
+import { Check, Plus, Trash2, Loader2, Search, ChevronDown, Edit2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Item {
   id: string | number;
   name: string;
+  flagCode?: string;
 }
 
 interface SearchableDropdownProps {
@@ -16,6 +20,9 @@ interface SearchableDropdownProps {
   placeholder: string;
   onAdd?: (name: string) => Promise<void>;
   onDelete?: (id: string | number) => Promise<void>;
+  onEdit?: (id: string | number, newName: string) => Promise<void>;
+  className?: string;
+  disabled?: boolean;
 }
 
 export function SearchableDropdown({
@@ -25,11 +32,19 @@ export function SearchableDropdown({
   placeholder,
   onAdd,
   onDelete,
-}: SearchableDropdownProps) {
+  onEdit,
+  className,
+  disabled,
+}: SearchableDropdownProps): React.ReactElement {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [adding, setAdding] = React.useState(false);
   const [deletingId, setDeletingId] = React.useState<string | number | null>(null);
+  const [editingId, setEditingId] = React.useState<string | number | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = React.useState<string | number | null>(null);
+  const [editModalData, setEditModalData] = React.useState<{ id: string | number; name: string } | null>(null);
+  const [editInputValue, setEditInputValue] = React.useState("");
+
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -74,6 +89,7 @@ export function SearchableDropdown({
     try {
       await onAdd(search.trim());
       setSearch("");
+      setOpen(false);
     } catch (err) {
       console.error(err);
     } finally {
@@ -81,17 +97,50 @@ export function SearchableDropdown({
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, id: string | number) => {
+  const handleDeleteClick = (e: React.MouseEvent, id: string | number) => {
     e.stopPropagation();
     if (!onDelete) return;
-    if (!confirm("Delete this item permanently?")) return;
-    setDeletingId(id);
+    setDeleteConfirmId(id);
+    setOpen(false);
+  };
+
+  const confirmDelete = async () => {
+    if (!onDelete || !deleteConfirmId) return;
+    setDeletingId(deleteConfirmId);
     try {
-      await onDelete(id);
+      await onDelete(deleteConfirmId);
     } catch (err) {
       console.error(err);
     } finally {
       setDeletingId(null);
+      setDeleteConfirmId(null);
+    }
+  };
+
+  const handleEditClick = (e: React.MouseEvent, id: string | number, currentName: string) => {
+    e.stopPropagation();
+    if (!onEdit) return;
+    setEditModalData({ id, name: currentName });
+    setEditInputValue(currentName);
+    setOpen(false);
+  };
+
+  const confirmEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onEdit || !editModalData) return;
+    const newName = editInputValue.trim();
+    if (!newName || newName === editModalData.name) {
+      setEditModalData(null);
+      return;
+    }
+    setEditingId(editModalData.id);
+    try {
+      await onEdit(editModalData.id, newName);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEditingId(null);
+      setEditModalData(null);
     }
   };
 
@@ -100,14 +149,24 @@ export function SearchableDropdown({
       {/* Trigger */}
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
           "flex h-10 w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-left shadow-sm transition-all",
           "hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20",
-          open && "border-primary ring-2 ring-primary/20"
+          open && "border-primary ring-2 ring-primary/20",
+          disabled && "opacity-50 cursor-not-allowed",
+          className
         )}
       >
-        <span className={cn(selectedItem ? "text-zinc-900 font-medium" : "text-zinc-400")}>
+        <span className={cn(selectedItem ? "text-zinc-900 font-medium" : "text-zinc-400", "flex items-center gap-2")}>
+          {selectedItem?.flagCode && (
+            <img
+              src={`https://flagcdn.com/w40/${selectedItem.flagCode.toLowerCase()}.png`}
+              className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0"
+              alt=""
+            />
+          )}
           {selectedItem ? selectedItem.name : placeholder}
         </span>
         <ChevronDown className={cn("h-4 w-4 text-zinc-400 transition-transform", open && "rotate-180")} />
@@ -151,7 +210,7 @@ export function SearchableDropdown({
                 <div
                   key={item.id}
                   onMouseDown={(e) => {
-                    e.preventDefault(); // prevent blur
+                    e.preventDefault();
                     handleSelect(item);
                   }}
                   className={cn(
@@ -167,25 +226,51 @@ export function SearchableDropdown({
                         value === item.id.toString() ? "opacity-100" : "opacity-0"
                       )}
                     />
+                    {item.flagCode && (
+                      <img
+                        src={`https://flagcdn.com/w40/${item.flagCode.toLowerCase()}.png`}
+                        className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0"
+                        alt=""
+                      />
+                    )}
                     <span className="text-sm font-medium text-zinc-800 whitespace-nowrap">{item.name}</span>
                   </div>
-                  {onDelete && (
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        handleDelete(e, item.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-600 text-zinc-400 transition-all"
-                      title="Delete"
-                    >
-                      {deletingId === item.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3 w-3" />
-                      )}
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {onEdit && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleEditClick(e, item.id, item.name);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-all"
+                        title="Edit"
+                      >
+                        {editingId === item.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Edit2 className="h-3 w-3" />
+                        )}
+                      </button>
+                    )}
+                    {onDelete && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleDeleteClick(e, item.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-600 text-zinc-400 transition-all"
+                        title="Delete"
+                      >
+                        {deletingId === item.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3 w-3" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -214,6 +299,79 @@ export function SearchableDropdown({
           )}
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent className="sm:max-w-[400px] bg-white rounded-xl shadow-lg border border-zinc-200">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-zinc-900">Confirm Deletion</DialogTitle>
+            </div>
+            <DialogDescription className="text-zinc-500 pt-3">
+              Are you sure you want to permanently delete{" "}
+              <strong className="text-zinc-900">{items.find((i) => i.id === deleteConfirmId)?.name}</strong>?{" "}
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="pt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)} className="rounded-lg h-10 w-full sm:w-auto">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deletingId !== null}
+              className="rounded-lg h-10 font-bold bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto"
+            >
+              {deletingId !== null ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Delete Item
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Modal */}
+      <Dialog open={!!editModalData} onOpenChange={(open) => !open && setEditModalData(null)}>
+        <DialogContent className="sm:max-w-[400px] bg-white rounded-xl shadow-lg border border-zinc-200">
+          <form onSubmit={confirmEdit}>
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shrink-0">
+                  <Edit2 className="h-5 w-5" />
+                </div>
+                <DialogTitle className="text-xl font-bold text-zinc-900">Rename Item</DialogTitle>
+              </div>
+              <DialogDescription className="text-zinc-500 pt-2">
+                Enter the new name for this item below.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              <Input
+                value={editInputValue}
+                onChange={(e) => setEditInputValue(e.target.value)}
+                className="h-11 rounded-lg border-zinc-200 font-medium"
+                autoFocus
+              />
+            </div>
+            <DialogFooter className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditModalData(null)} className="rounded-lg h-10 w-full sm:w-auto">
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={editingId !== null || !editInputValue.trim()}
+                className="rounded-lg h-10 font-bold bg-primary text-white w-full sm:w-auto"
+              >
+                {editingId !== null ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

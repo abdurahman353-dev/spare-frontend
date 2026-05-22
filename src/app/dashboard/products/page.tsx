@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, getCategoryColor } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { 
   Table, 
@@ -12,7 +12,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, Loader2, Package, ImageIcon, Eye } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, Loader2, Package, ImageIcon, Eye, FileText, Upload, X, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -28,8 +28,14 @@ import { ProductModal } from "@/components/modals/ProductModal";
 import { ProductViewModal } from "@/components/modals/ProductViewModal";
 import Image from "next/image";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+import { useSettings } from "@/components/providers/SettingsProvider";
+import { exportProductsPDF } from "@/lib/pdf-export";
+import { toast } from "react-hot-toast";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export default function ProductsPage() {
+  const { settings } = useSettings();
+  const currency = settings.currency || "Ksh";
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,6 +51,8 @@ export default function ProductsPage() {
   
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingProduct, setViewingProduct] = useState<any>(null);
+
+
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -89,6 +97,9 @@ export default function ProductsPage() {
   };
 
   // Advanced Filtering & Search
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
       const name = product.name || "";
@@ -108,6 +119,16 @@ export default function ProductsPage() {
       return matchesSearch && matchesCategory && matchesName && matchesBrand && matchesStatus;
     });
   }, [products, searchQuery, selectedCategoryId, selectedName, selectedBrandId, selectedStatus]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategoryId, selectedName, selectedBrandId, selectedStatus]);
+
+  const totalPages = Math.ceil(filteredProducts.length / pageSize);
+  const paginatedProducts = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(startIndex, startIndex + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
 
   const uniqueCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean).map(c => JSON.stringify(c)))).map(c => JSON.parse(c as string));
   const filterCategoryOptions = uniqueCategories.map(c => ({ id: c.id.toString(), name: c.name }));
@@ -131,6 +152,17 @@ export default function ProductsPage() {
     setSearchQuery("");
   };
 
+  const handleExportPDF = () => {
+    if (products.length === 0) {
+      toast.error("No products available to export");
+      return;
+    }
+    exportProductsPDF(products, currency, settings.store_logo || undefined, settings.store_name || undefined);
+    toast.success("PDF generated successfully");
+  };
+
+
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -138,12 +170,21 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Products</h1>
           <p className="text-zinc-500 text-sm mt-1">Manage your genuine Mercedes-Benz parts catalog.</p>
         </div>
-        <Button 
-          onClick={openAddModal}
-          className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
-        >
-          <Plus className="mr-2 h-4 w-4" /> Add Product
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={handleExportPDF}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none"
+          >
+            <FileText className="mr-1.5 h-4 w-4" /> Export PDF
+          </Button>
+
+          <Button
+            onClick={openAddModal}
+            className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
+          >
+            <Plus className="mr-2 h-4 w-4" /> Add Product
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
@@ -205,6 +246,7 @@ export default function ProductsPage() {
               <TableHead className="font-semibold text-zinc-900">Name</TableHead>
               <TableHead className="font-semibold text-zinc-900">Category</TableHead>
               <TableHead className="font-semibold text-zinc-900">Brand</TableHead>
+              <TableHead className="font-semibold text-zinc-900">Weight (KG)</TableHead>
               <TableHead className="font-semibold text-zinc-900 text-right">Price</TableHead>
               <TableHead className="font-semibold text-zinc-900 text-center">Status</TableHead>
               <TableHead className="px-6 w-[70px]"></TableHead>
@@ -213,7 +255,7 @@ export default function ProductsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-48 text-center">
+                <TableCell colSpan={8} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     <p className="text-sm text-zinc-500 font-medium">Synchronizing parts...</p>
@@ -222,24 +264,33 @@ export default function ProductsPage() {
               </TableRow>
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-48 text-center text-zinc-500">
+                <TableCell colSpan={8} className="h-48 text-center text-zinc-500">
                    No products found in the catalog.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product) => (
+              paginatedProducts.map((product) => (
                 <TableRow key={product.id} className="hover:bg-zinc-50/50 transition-colors">
                   <TableCell className="px-6 font-bold text-zinc-900">{product.sku}</TableCell>
                   <TableCell className="font-semibold text-zinc-700">{product.name}</TableCell>
                   <TableCell className="text-zinc-500 text-xs font-bold uppercase tracking-tight">
-                    <Badge variant="secondary" className="bg-zinc-100 text-zinc-600 border-none px-2 py-0.5">
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "px-2.5 py-0.5 border text-xs font-black uppercase tracking-wider rounded-md",
+                        getCategoryColor(product.category?.name || "N/A")
+                      )}
+                    >
                       {product.category?.name || "N/A"}
                     </Badge>
                   </TableCell>
                   <TableCell className="font-semibold text-zinc-700 text-sm">
                     {product.brand?.name || "N/A"}
                   </TableCell>
-                  <TableCell className="text-right font-black text-zinc-900">Ksh {Number(product.price).toLocaleString()}</TableCell>
+                  <TableCell className="font-bold text-indigo-600 text-sm">
+                    {product.weight ? `${parseFloat(product.weight).toFixed(2)} KG` : "1.00 KG"}
+                  </TableCell>
+                  <TableCell className="text-right font-black text-zinc-900">{currency} {Number(product.price).toLocaleString()}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant={product.status === "Active" ? "default" : "outline"} className={cn(
                       "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
@@ -275,19 +326,32 @@ export default function ProductsPage() {
             )}
           </TableBody>
         </Table>
+
+        {/* Pagination Controls */}
+        <PaginationControls
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          pageSize={pageSize}
+          setPageSize={setPageSize}
+          totalItems={filteredProducts.length}
+          itemName="products"
+          pageSizeOptions={[15, 30, 50, 100]}
+        />
       </div>
 
-      <ProductModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <ProductModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         onSuccess={fetchProducts}
         product={editingProduct}
       />
-      <ProductViewModal 
+      <ProductViewModal
         isOpen={isViewModalOpen}
         onClose={() => setIsViewModalOpen(false)}
         product={viewingProduct}
       />
+
+
     </div>
   );
 }

@@ -21,6 +21,8 @@ export default function DashboardLayout({
         router.replace("/login");
       } else if (user.must_change_password) {
         router.replace("/change-password");
+      } else if (user.role !== "admin" && user.role !== "superadmin") {
+        router.replace("/products");
       }
     }
   }, [user, loading, router]);
@@ -33,8 +35,8 @@ export default function DashboardLayout({
     );
   }
 
-  // Prevent flash of content if user is unauthorized or must change password
-  if (!user || user.must_change_password) {
+  // Prevent flash of content if user is unauthorized or must change password or is not admin
+  if (!user || user.must_change_password || (user.role !== "admin" && user.role !== "superadmin")) {
     return null;
   }
 

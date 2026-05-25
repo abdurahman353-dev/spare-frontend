@@ -614,3 +614,266 @@ export const exportWaybillManifestPDF = async (
 
   doc.save(`waybill-manifest-${shipment.waybill || "shipment"}.pdf`);
 };
+
+export const exportCustomerStatementPDF = async (
+  customer: any,
+  company: PdfCompanySettings
+) => {
+  const { default: jsPDFClass } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+
+  const doc = new jsPDFClass({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+
+  const currency = company.currency || "Ksh";
+  const storeName = company.storeName || "AUTOSPARE EAST AFRICA";
+  const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+  const margins = { top: 12, right: 10, bottom: 14, left: 10 };
+  const printableWidth = pageWidth - margins.left - margins.right;
+
+  // 1. Draw Company Header
+  let leftX = margins.left;
+  if (company.storeLogo) {
+    try {
+      const logoSize = 18;
+      doc.addImage(
+        company.storeLogo,
+        getImageFormat(company.storeLogo),
+        margins.left,
+        margins.top,
+        logoSize,
+        logoSize
+      );
+      leftX = margins.left + logoSize + 4;
+    } catch {
+      leftX = margins.left;
+    }
+  }
+
+  // Company Name
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(30, 41, 59); // Slate-800
+  doc.text(storeName.toUpperCase(), leftX, margins.top + 4);
+
+  // Tagline
+  if (company.storeTagline) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(100, 116, 139); // Slate-500
+    doc.text(company.storeTagline, leftX, margins.top + 8);
+  }
+
+  // Corporate Address & Details (Right Aligned)
+  const companyDetails = [
+    company.physicalAddress || "Automated Logistics Hub, Nairobi, Kenya",
+    company.contactPhone ? `Tel: ${company.contactPhone}` : "Tel: +254 745 621 159",
+    company.contactEmail ? `Email: ${company.contactEmail}` : "Email: sales@autospare.co.ke",
+    "Website: www.autospare.co.ke",
+    "PIN: P051528643W" // B2B Corporate PIN fallback
+  ];
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(71, 85, 105); // Slate-600
+  companyDetails.forEach((line, index) => {
+    doc.text(line, pageWidth - margins.right, margins.top + 3 + (index * 3.8), { align: "right" });
+  });
+
+  // Main Header separator line
+  doc.setDrawColor(226, 232, 240); // Slate-200
+  doc.setLineWidth(0.4);
+  doc.line(margins.left, margins.top + 22, pageWidth - margins.right, margins.top + 22);
+
+  let currentY = margins.top + 28;
+
+  // Title: "B2B ACCOUNT STATEMENT"
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 82, 204); // Primary Blue
+  doc.text("OFFICIAL B2B ACCOUNT STATEMENT", margins.left, currentY);
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Statement Period: All-Time History`, margins.left, currentY + 4.5);
+  doc.text(`Generated On: ${new Date().toLocaleString()}`, margins.left, currentY + 8.5);
+
+  // Customer billing & rank info boxes side by side
+  currentY += 12;
+  
+  // Draw light grey container for Statement Info
+  doc.setFillColor(248, 250, 252); // Slate-50
+  doc.setDrawColor(241, 245, 249); // Slate-100
+  doc.setLineWidth(0.3);
+  doc.rect(margins.left, currentY, printableWidth, 30, "DF");
+
+  // Customer details (Left side of container)
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42); // Slate-900
+  doc.text("CUSTOMER PROFILE / STATEMENT TO:", margins.left + 5, currentY + 6);
+
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Name: ${customer.name || "Guest Walk-In"}`, margins.left + 5, currentY + 12);
+  doc.text(`Company: ${customer.company_name || "N/A"}`, margins.left + 5, currentY + 17);
+  doc.text(`Tax PIN: ${customer.tax_id || "N/A"}`, margins.left + 5, currentY + 22);
+  doc.text(`Address: ${customer.address || "No address on file"}`, margins.left + 5, currentY + 27);
+
+  // B2B Rank details (Right side of container)
+  const ltv = parseFloat(customer.orders_sum_total_amount || "0");
+  
+  // Rank threshold mapping
+  let rankName = "Bronze";
+  if (ltv >= 150000) rankName = "Platinum";
+  else if (ltv >= 50000) rankName = "Gold";
+  else if (ltv >= 10000) rankName = "Silver";
+
+  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.text("B2B MEMBERSHIP STATUS:", margins.left + 110, currentY + 6);
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Customer Type: ${customer.type || "Retail"}`, margins.left + 110, currentY + 12);
+  doc.text(`Current Tier: ${rankName}`, margins.left + 110, currentY + 17);
+  doc.text(`Member Since: ${customer.created_at ? new Date(customer.created_at).toLocaleDateString() : "2026"}`, margins.left + 110, currentY + 22);
+  doc.text(`Lifetime Value (LTV): ${currency} ${ltv.toLocaleString()}`, margins.left + 110, currentY + 27);
+
+  currentY += 36;
+
+  // Let's calculate totals for Statement summary stats cards
+  const orders = customer.orders || [];
+  const totalOrdersCount = orders.length;
+  const totalFulfillmentFeesPaid = orders.reduce((sum: number, o: any) => sum + parseFloat(o.shipping_fee || 0), 0);
+  
+  // Draw summary cards
+  doc.setFillColor(241, 245, 249); // Slate-100
+  doc.rect(margins.left, currentY, printableWidth * 0.3, 14, "F");
+  doc.rect(margins.left + (printableWidth * 0.35), currentY, printableWidth * 0.3, 14, "F");
+  doc.rect(margins.left + (printableWidth * 0.7), currentY, printableWidth * 0.3, 14, "F");
+
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(71, 85, 105);
+  doc.text("TOTAL TRANSACTIONS", margins.left + 2, currentY + 5);
+  doc.text("TOTAL LOGISTICS FEES", margins.left + (printableWidth * 0.35) + 2, currentY + 5);
+  doc.text("NET ACCUMULATED LTV", margins.left + (printableWidth * 0.7) + 2, currentY + 5);
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+  doc.text(`${totalOrdersCount} Orders`, margins.left + 2, currentY + 11);
+  doc.text(`${currency} ${totalFulfillmentFeesPaid.toLocaleString()}`, margins.left + (printableWidth * 0.35) + 2, currentY + 11);
+  doc.text(`${currency} ${ltv.toLocaleString()}`, margins.left + (printableWidth * 0.7) + 2, currentY + 11);
+
+  currentY += 20;
+
+  // Detailed Transaction Table using autoTable
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(15, 23, 42);
+  doc.text("DETAILED TRANSACTION HISTORY", margins.left, currentY);
+
+  currentY += 4;
+
+  const tableHeaders = [
+    "Date",
+    "Reference",
+    "Items Summary",
+    "Fulfillment Route",
+    "Payment / Ref",
+    "Fee",
+    "Total Paid",
+    "Status"
+  ];
+
+  const tableRows = orders.map((order: any) => {
+    const formattedDate = new Date(order.created_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
+    const trackingRef = order.tracking_number || `#ORD-${order.id}`;
+    
+    // Summary of items
+    const items = order.items || [];
+    const itemsSummary = items.map((i: any) => `${i.product?.name || "Part"} (Qty: ${i.quantity})`).join(", ") || "No parts listed";
+
+    // Fulfillment path
+    const isPickup = order.shipping_method === "Pickup";
+    const route = isPickup 
+      ? "In-Store counter"
+      : `${items?.[0]?.warehouse?.name || "Main Warehouse"} -> ${order.shipping_city || "Destination"}`;
+
+    const pay = `${order.payment_method || "M-Pesa"}${order.payment_ref_code ? ` (Ref: ${order.payment_ref_code})` : ""}`;
+    const fee = `${currency} ${parseFloat(order.shipping_fee || 0).toLocaleString()}`;
+    const total = `${currency} ${parseFloat(order.total_amount || 0).toLocaleString()}`;
+    const status = order.status || "Pending";
+
+    return [
+      formattedDate,
+      trackingRef,
+      itemsSummary,
+      route,
+      pay,
+      fee,
+      total,
+      status
+    ];
+  });
+
+  if (tableRows.length === 0) {
+    tableRows.push(["—", "—", "No recorded transactions for this customer", "—", "—", `${currency} 0`, `${currency} 0`, "—"]);
+  }
+
+  autoTable(doc, {
+    head: [tableHeaders],
+    body: tableRows,
+    startY: currentY,
+    tableWidth: printableWidth,
+    showHead: "everyPage",
+    theme: "striped",
+    headStyles: {
+      fillColor: [0, 82, 204],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 7.5,
+      halign: "left"
+    },
+    styles: {
+      fontSize: 7,
+      cellPadding: 2,
+      overflow: "linebreak",
+      valign: "middle"
+    },
+    columnStyles: {
+      0: { cellWidth: printableWidth * 0.1 },
+      1: { cellWidth: printableWidth * 0.12, fontStyle: "bold" },
+      2: { cellWidth: printableWidth * 0.28, overflow: "linebreak" },
+      3: { cellWidth: printableWidth * 0.18, overflow: "linebreak" },
+      4: { cellWidth: printableWidth * 0.12, overflow: "linebreak" },
+      5: { cellWidth: printableWidth * 0.08, halign: "right" },
+      6: { cellWidth: printableWidth * 0.08, halign: "right", fontStyle: "bold" },
+      7: { cellWidth: printableWidth * 0.06, halign: "center" }
+    },
+    margin: { top: margins.top, right: margins.right, bottom: margins.bottom, left: margins.left },
+    didDrawPage: (data: any) => {
+      // Add Footer on each page
+      const pageStr = `Page ${doc.getNumberOfPages()}`;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(148, 163, 184); // Slate-400
+      doc.text(pageStr, margins.left, pageHeight - margins.bottom + 5);
+      doc.text(
+        `© ${new Date().getFullYear()} ${storeName}. Secure B2B Logistics Platform.`,
+        pageWidth - margins.right - 90,
+        pageHeight - margins.bottom + 5
+      );
+    }
+  });
+
+  // Save the statement PDF
+  doc.save(`b2b-statement-${customer.name?.toLowerCase().replace(/\s+/g, "-") || "customer"}.pdf`);
+};

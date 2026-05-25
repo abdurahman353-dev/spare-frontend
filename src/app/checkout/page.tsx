@@ -16,10 +16,12 @@ import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
+import { useSettings } from "@/components/providers/SettingsProvider";
 
 export default function CheckoutPage() {
   const { cart, cartTotal, cartWeight, clearCart } = useCart();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { settings } = useSettings();
   const [step, setStep] = useState(1);
   const [completed, setCompleted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -88,16 +90,14 @@ export default function CheckoutPage() {
     let totalFee = 0;
     
     for (const item of cart) {
-      // Find matching destination rate:
-      // Priority 1: Exact product override for this route/warehouse
+      // Priority 1: Exact product+warehouse override for this route
       let rate = destinations.find(d => 
         d.country === shippingDetails.country && 
         d.city === shippingDetails.city && 
         d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
         d.product_id?.toString() === item.id?.toString()
       );
-      
-      // Priority 2: Global route rate (product_id = null) for this warehouse
+      // Priority 2: Global warehouse rate (product_id = null)
       if (!rate) {
         rate = destinations.find(d => 
           d.country === shippingDetails.country && 
@@ -106,8 +106,7 @@ export default function CheckoutPage() {
           !d.product_id
         );
       }
-      
-      // Fallback: If no warehouse match, search by country/city and product/global
+      // Priority 3: Product-specific rate without warehouse constraint
       if (!rate) {
         rate = destinations.find(d => 
           d.country === shippingDetails.country && 
@@ -115,33 +114,56 @@ export default function CheckoutPage() {
           d.product_id?.toString() === item.id?.toString()
         );
       }
+      // Fallback: Any route rate for this country/city
       if (!rate) {
         rate = destinations.find(d => 
           d.country === shippingDetails.country && 
-          d.city === shippingDetails.city && 
+          d.city === shippingDetails.city &&
           !d.product_id
         );
       }
       
       if (rate) {
-        const itemWeight = parseFloat((item.weight ?? 1.0).toString());
-        const weightRate = parseFloat(rate.weight_rate || 0);
-        const baseStandard = parseFloat(rate.standard_fee || 0);
-        const distance = parseFloat(rate.distance || 0);
-        const distanceRate = parseFloat(rate.distance_rate || 0);
-        
+        // Use the exact configured fee from DB — no formula recalculation
         const itemQty = item.quantity || 1;
-        const standardFee = weightRate * (itemWeight * itemQty) * distanceRate;
-        
-        if (method === "express") {
-          totalFee += (standardFee * 1.5);
-        } else {
-          totalFee += standardFee;
-        }
+        const feePerItem = method === "express"
+          ? parseFloat(rate.express_fee || 0)
+          : parseFloat(rate.standard_fee || 0);
+        totalFee += feePerItem * itemQty;
       }
     }
     
     return totalFee;
+  };
+
+  // Helper to get per-item shipping fee for the checkout payload
+  const getItemShippingFee = (item: any, method: "standard" | "express"): number => {
+    let rate = destinations.find(d => 
+      d.country === shippingDetails.country && 
+      d.city === shippingDetails.city && 
+      d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
+      d.product_id?.toString() === item.id?.toString()
+    );
+    if (!rate) {
+      rate = destinations.find(d => 
+        d.country === shippingDetails.country && 
+        d.city === shippingDetails.city && 
+        d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
+        !d.product_id
+      );
+    }
+    if (!rate) {
+      rate = destinations.find(d => 
+        d.country === shippingDetails.country && 
+        d.city === shippingDetails.city &&
+        !d.product_id
+      );
+    }
+    if (!rate) return 0;
+    const feePerItem = method === "express"
+      ? parseFloat(rate.express_fee || 0)
+      : parseFloat(rate.standard_fee || 0);
+    return feePerItem * (item.quantity || 1);
   };
 
   // Sync available cities and shipping fee when destinations or prefilled city changes
@@ -207,7 +229,8 @@ export default function CheckoutPage() {
               id: item.id, 
               quantity: item.quantity, 
               price: item.price,
-              warehouse_id: item.warehouse_id 
+              warehouse_id: item.warehouse_id,
+              shipping_fee: getItemShippingFee(item, shippingMethod)
             })),
             total: cartTotal + shippingFee,
             shipping_fee: shippingFee,
@@ -252,7 +275,7 @@ export default function CheckoutPage() {
             ))}
           </div>
           <p className="text-muted-foreground mb-8 text-center max-w-md text-lg">
-            Thank you for choosing AutoSpare East Africa. Your order has been received and is being processed for rapid dispatch.
+            Thank you for choosing {settings?.store_name || "AutoSpare East Africa"}. Your order has been received and is being processed for rapid dispatch.
           </p>
           <div className="flex gap-4">
             <Link 

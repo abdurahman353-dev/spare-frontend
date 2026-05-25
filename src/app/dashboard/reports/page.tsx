@@ -130,6 +130,13 @@ export default function AdminReportsPage() {
     return filteredOrders;
   }, [filteredOrders, orderChannelFilter]);
 
+  // Channel-aware revenue: respects both Paid/non-cancelled AND the active channel filter
+  // This ensures Walk-In totals show only walk-in fees, and Shipment totals show only shipment fees
+  const channelRevenueOrders = useMemo(
+    () => channelFilteredOrders.filter(o => o.payment_status === "Paid" && o.status !== "Cancelled"),
+    [channelFilteredOrders]
+  );
+
   // Pagination for Sales table
   const [salesPage, setSalesPage] = useState(1);
   const SALES_PAGE_SIZE = 15;
@@ -146,10 +153,13 @@ export default function AdminReportsPage() {
     return inventory.slice(start, start + INVENTORY_PAGE_SIZE);
   }, [inventory, inventoryPage]);
 
-  const totalRevenue  = revenueOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  // Summary stats respect the active channel filter so Walk-In and Shipment totals are accurate
+  const totalRevenue  = channelRevenueOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  const totalShippingFeesInPeriod = channelRevenueOrders.reduce((s, o) => s + Number(o.shipping_fee || 0), 0);
   const totalVAT      = totalRevenue * 0.16;
   const netRevenue    = totalRevenue - totalVAT;
   const periodLabel   = `${new Date(startDate).toLocaleDateString("en-KE", { day:"numeric", month:"short", year:"numeric" })} – ${new Date(endDate).toLocaleDateString("en-KE", { day:"numeric", month:"short", year:"numeric" })}`;
+  const channelLabel  = orderChannelFilter === "All" ? "All Channels" : orderChannelFilter;
 
   // BI Calculations: Timeline Data
   const timelineData = useMemo(() => {

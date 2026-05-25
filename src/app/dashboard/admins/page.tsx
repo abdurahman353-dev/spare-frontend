@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { 
   Table, 
   TableBody, 
@@ -283,6 +284,25 @@ export default function AdminsAndAuditsPage() {
     );
   }, [auditLogs, auditSearch]);
 
+  // Pagination
+  const [adminPage, setAdminPage] = useState(1);
+  const [auditPage, setAuditPage] = useState(1);
+  const PAGE_SIZE = 15;
+
+  const paginatedAdmins = useMemo(() => {
+    const start = (adminPage - 1) * PAGE_SIZE;
+    return filteredAdmins.slice(start, start + PAGE_SIZE);
+  }, [filteredAdmins, adminPage]);
+
+  const paginatedAuditLogs = useMemo(() => {
+    const start = (auditPage - 1) * PAGE_SIZE;
+    return filteredAuditLogs.slice(start, start + PAGE_SIZE);
+  }, [filteredAuditLogs, auditPage]);
+
+  // Reset pagination when search changes
+  useMemo(() => { setAdminPage(1); }, [adminSearch]);
+  useMemo(() => { setAuditPage(1); }, [auditSearch]);
+
   const getActionBadgeColor = (action: string) => {
     switch (action) {
       case "LOGIN":
@@ -410,7 +430,7 @@ export default function AdminsAndAuditsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAdmins.map((admin) => (
+                  paginatedAdmins.map((admin) => (
                     <TableRow key={admin.id} className="hover:bg-zinc-50/50 transition-colors">
                       <TableCell className="px-6">
                         <div className="flex items-center gap-3">
@@ -465,7 +485,7 @@ export default function AdminsAndAuditsPage() {
                           "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase border tracking-wider",
                           admin.is_active
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-zinc-100 text-zinc-400 border-zinc-200"
+                            : "bg-red-50 text-red-700 border-red-200"
                         )}>
                           {admin.is_active ? "Active" : "Deactivated"}
                         </Badge>
@@ -506,6 +526,14 @@ export default function AdminsAndAuditsPage() {
               </TableBody>
             </Table>
           </div>
+          <PaginationControls
+            currentPage={adminPage}
+            setCurrentPage={setAdminPage}
+            pageSize={PAGE_SIZE}
+            setPageSize={() => {}}
+            totalItems={filteredAdmins.length}
+            itemName="admins"
+          />
         </div>
       )}
 
@@ -558,7 +586,7 @@ export default function AdminsAndAuditsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAuditLogs.map((log) => (
+                  paginatedAuditLogs.map((log) => (
                     <TableRow key={log.id} className="hover:bg-zinc-50/50 transition-colors">
                       <TableCell className="px-6 text-xs font-mono text-zinc-500">
                         {new Date(log.created_at).toLocaleString("en-US", {
@@ -604,6 +632,14 @@ export default function AdminsAndAuditsPage() {
               </TableBody>
             </Table>
           </div>
+          <PaginationControls
+            currentPage={auditPage}
+            setCurrentPage={setAuditPage}
+            pageSize={PAGE_SIZE}
+            setPageSize={() => {}}
+            totalItems={filteredAuditLogs.length}
+            itemName="logs"
+          />
         </div>
       )}
 

@@ -10,7 +10,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Search, Filter, Plus, Loader2, Navigation, Package, ArrowRight, RefreshCw, X, MoreHorizontal, Edit, Trash2, CheckSquare, Square, ArrowRightLeft } from "lucide-react";
+import { Search, Filter, Plus, Loader2, Navigation, Package, ArrowRight, RefreshCw, X, MoreHorizontal, Edit, Trash2, CheckSquare, Square, ArrowRightLeft, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -29,6 +29,13 @@ import { toast } from "react-hot-toast";
 import api from "@/lib/axios";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { exportWaybillManifestPDF } from "@/lib/pdf-export";
+import { useSettings } from "@/components/providers/SettingsProvider";
+import {
+  PREDEFINED_CITIES,
+  buildFilterCityOptions,
+  buildFilterCountryOptions,
+} from "@/lib/shipping-locations";
 
 const EAST_AFRICAN_COUNTRIES = [
   { id: "Burundi", name: "Burundi", flagCode: "bi" },
@@ -51,28 +58,19 @@ const EAST_AFRICAN_COUNTRIES = [
   { id: "Zimbabwe", name: "Zimbabwe", flagCode: "zw" },
 ];
 
-const PREDEFINED_CITIES: Record<string, string[]> = {
-  "Burundi": ["Bujumbura", "Gitega", "Ngozi", "Rumonge", "Kayanza", "Muyinga", "Makamba", "Kirundo"],
-  "Comoros": ["Moroni", "Mutsamudu", "Fomboni"],
-  "Djibouti": ["Djibouti city", "Ali Sabieh", "Tadjoura", "Obock"],
-  "Eritrea": ["Asmara", "Massawa", "Keren", "Assab", "Mendefera"],
-  "Ethiopia": ["Addis Ababa", "Dire Dawa", "Bahir Dar", "Gondar", "Mek'ele", "Hawassa", "Jimma", "Adama"],
-  "Kenya": ["Nairobi", "Mombasa", "Kisumu", "Nakuru", "Eldoret", "Malindi", "Thika", "Naivasha", "Nyeri", "Machakos", "Kakamega", "Kisii", "Kitale", "Garissa", "Lodwar", "Lamu", "Kericho", "Embu"],
-  "Madagascar": ["Antananarivo", "Toamasina", "Antsirabe", "Mahajanga", "Fianarantsoa", "Toliara"],
-  "Malawi": ["Lilongwe", "Blantyre", "Mzuzu", "Zomba"],
-  "Mauritius": ["Port Louis", "Beau Bassin-rose hill", "Vacoas-phoenix", "Curepipe", "Quatre Bornes"],
-  "Mozambique": ["Maputo", "Beira", "Nampula", "Chimoio"],
-  "Rwanda": ["Kigali", "Gisenyi", "Butare", "Musanze", "Gitarama", "Kibuye", "Cyangugu", "Rwamagana", "Byumba", "Kibungo"],
-  "Seychelles": ["Victoria", "Anse Boileau", "Bel Ombre", "Beau Vallon"],
-  "Somalia": ["Mogadishu", "Hargeisa", "Garowe", "Kismayo", "Bosaso", "Merca", "Baidoa", "Burao"],
-  "South Sudan": ["Juba", "Malakal", "Wau", "Yei", "Yambio", "Bor", "Bentiu", "Torit", "Rumbek"],
-  "Tanzania": ["Dar es Salaam", "Dodoma", "Arusha", "Mwanza", "Zanzibar City", "Mbeya", "Morogoro", "Tanga", "Tabora", "Moshi", "Kigoma", "Iringa", "Songea", "Musoma"],
-  "Uganda": ["Kampala", "Entebbe", "Jinja", "Gulu", "Mbarara", "Mbale", "Masaka", "Lira", "Arua", "Mukono", "Fort Portal", "Soroti", "Kabale", "Hoima", "Tororo"],
-  "Zambia": ["Lusaka", "Ndola", "Kitwe", "Kabwe", "Livingstone"],
-  "Zimbabwe": ["Harare", "Bulawayo", "Mutare", "Gweru", "Masvingo"]
-};
+interface BulkRoute {
+  warehouse_id: string;
+  warehouse_name: string;
+  country: string;
+  city: string;
+  weight: number;
+  weight_rate: number;
+  distance: number;
+  distance_rate: number;
+}
 
 export default function AdminLogisticsPage() {
+  const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState("Active Shipments");
   const [loading, setLoading] = useState(false);
   const [shipments, setShipments] = useState<any[]>([]);
@@ -91,10 +89,20 @@ export default function AdminLogisticsPage() {
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
   const [cityFormData, setCityFormData] = useState({ countryId: null as number | null, cities: "" });
   
-  // Filtering States (Matches Orders Page)
+  // Active Shipments Filters
+  const [shipmentSearchQuery, setShipmentSearchQuery] = useState("");
+  const [shipmentOriginFilter, setShipmentOriginFilter] = useState("all");
+  const [shipmentCountryFilter, setShipmentCountryFilter] = useState("all");
+  const [shipmentCityFilter, setShipmentCityFilter] = useState("all");
+  const [shipmentCarrierFilter, setShipmentCarrierFilter] = useState("all");
+  const [shipmentDateFrom, setShipmentDateFrom] = useState("");
+  const [shipmentDateTo, setShipmentDateTo] = useState("");
+
+  // Unassigned Orders Filtering States
   const [searchQuery, setSearchQuery] = useState("");
-  const [warehouseFilter, setWarehouseFilter] = useState("All Origins");
-  const [cityFilter, setCityFilter] = useState("All Destinations");
+  const [warehouseFilter, setWarehouseFilter] = useState("all");
+  const [unassignedCountryFilter, setUnassignedCountryFilter] = useState("all");
+  const [unassignedCityFilter, setUnassignedCityFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
@@ -113,23 +121,186 @@ export default function AdminLogisticsPage() {
 
   // Shipping Fee Filters
   const [feeSearchQuery, setFeeSearchQuery] = useState("");
-  const [feeCountryFilter, setFeeCountryFilter] = useState("All");
-  const [feeCityFilter, setFeeCityFilter] = useState("All");
+  const [feeWarehouseFilter, setFeeWarehouseFilter] = useState("all");
+  const [feeCountryFilter, setFeeCountryFilter] = useState("all");
+  const [feeCityFilter, setFeeCityFilter] = useState("all");
   const [feeProductFilter, setFeeProductFilter] = useState("All");
   const [feeStatusFilter, setFeeStatusFilter] = useState("All");
 
-  // Bulk Import
+  // Bulk Import (legacy)
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkCsvText, setBulkCsvText] = useState("");
+
+  // Bulk Zone (new product-based bulk entry)
+  const [isBulkZoneModalOpen, setIsBulkZoneModalOpen] = useState(false);
+  const [bulkZoneProductId, setBulkZoneProductId] = useState<string>("");
+  const [bulkZoneRoutes, setBulkZoneRoutes] = useState<BulkRoute[]>([]);
+  const [isSavingBulk, setIsSavingBulk] = useState(false);
 
   // Derive unique options for filters
   const warehouses = Array.from(new Set(unassignedOrders.map(o => o.items?.[0]?.warehouse).filter(Boolean).map(w => JSON.stringify(w))))
     .map(w => JSON.parse(w));
   
   const dynamicCityOptions = Array.from(new Set(unassignedOrders
-    .filter(o => warehouseFilter === "All Origins" || o.items?.[0]?.warehouse_id.toString() === warehouseFilter)
+    .filter(o => warehouseFilter === "all" || o.items?.[0]?.warehouse_id.toString() === warehouseFilter)
     .map(o => o.shipping_city)
     .filter(Boolean)));
+
+  // Derived Filter Options
+  const filterWarehouseOptions = useMemo(() => {
+    return [
+      { id: "all", name: "Origin Warehouse" },
+      ...warehousesData.map(w => ({ id: w.id.toString(), name: w.name }))
+    ];
+  }, [warehousesData]);
+
+  const filterCarrierOptions = useMemo(() => {
+    const uniqueCarriers = Array.from(new Set(shipments.map(s => s.carrier).filter(Boolean))).sort();
+    return [{ id: "all", name: "All Carriers" }, ...uniqueCarriers.map(c => ({ id: c as string, name: c as string }))];
+  }, [shipments]);
+
+  const shipmentCountryOptions = useMemo(() => {
+    let relevant = shipments;
+    if (shipmentOriginFilter !== "all") {
+      const selectedWh = warehousesData.find((w) => w.id.toString() === shipmentOriginFilter);
+      if (selectedWh) {
+        relevant = shipments.filter((s) =>
+          s.origin?.toLowerCase().includes(selectedWh.name.toLowerCase())
+        );
+      }
+    }
+    const countries = relevant
+      .map((s) => s.destination?.split(",")[1]?.trim())
+      .filter(Boolean) as string[];
+    const pool =
+      countries.length > 0 ? countries : countriesData.map((c) => c.name);
+    return buildFilterCountryOptions(pool);
+  }, [shipments, shipmentOriginFilter, warehousesData, countriesData]);
+
+  const shipmentCityOptions = useMemo(() => {
+    let relevant = shipments;
+    if (shipmentOriginFilter !== "all") {
+      const selectedWh = warehousesData.find((w) => w.id.toString() === shipmentOriginFilter);
+      if (selectedWh) {
+        relevant = shipments.filter((s) =>
+          s.origin?.toLowerCase().includes(selectedWh.name.toLowerCase())
+        );
+      }
+    }
+    if (shipmentCountryFilter !== "all") {
+      relevant = relevant.filter((s) => {
+        const c = s.destination?.split(",")[1]?.trim();
+        return c?.toLowerCase() === shipmentCountryFilter.toLowerCase();
+      });
+    }
+    const fallbackCities = relevant
+      .map((s) => s.destination?.split(",")[0]?.trim())
+      .filter(Boolean) as string[];
+    return buildFilterCityOptions(shipmentCountryFilter, fallbackCities, countriesData);
+  }, [shipments, shipmentOriginFilter, shipmentCountryFilter, warehousesData, countriesData]);
+
+  const unassignedCountryOptions = useMemo(() => {
+    let relevant = unassignedOrders.filter((o) => o.status === "Shipped");
+    if (warehouseFilter !== "all") {
+      relevant = relevant.filter(
+        (o) => o.items?.[0]?.warehouse_id?.toString() === warehouseFilter
+      );
+    }
+    const countries = relevant.map((o) => o.shipping_country).filter(Boolean) as string[];
+    const pool =
+      countries.length > 0 ? countries : countriesData.map((c) => c.name);
+    return buildFilterCountryOptions(pool);
+  }, [unassignedOrders, warehouseFilter, countriesData]);
+
+  const unassignedCityOptions = useMemo(() => {
+    let relevant = unassignedOrders.filter((o) => o.status === "Shipped");
+    if (warehouseFilter !== "all") {
+      relevant = relevant.filter(
+        (o) => o.items?.[0]?.warehouse_id?.toString() === warehouseFilter
+      );
+    }
+    if (unassignedCountryFilter !== "all") {
+      relevant = relevant.filter(
+        (o) => o.shipping_country?.toLowerCase() === unassignedCountryFilter.toLowerCase()
+      );
+    }
+    const fallbackCities = relevant.map((o) => o.shipping_city).filter(Boolean) as string[];
+    return buildFilterCityOptions(unassignedCountryFilter, fallbackCities, countriesData);
+  }, [unassignedOrders, warehouseFilter, unassignedCountryFilter, countriesData]);
+
+  const feeCountryOptions = useMemo(() => {
+    if (feeWarehouseFilter === "all") {
+      return buildFilterCountryOptions([
+        ...countriesData.map((c) => c.name),
+        ...destinations.map((d) => d.country),
+      ]);
+    }
+    const fromDestinations = destinations
+      .filter((d) => d.warehouse_id?.toString() === feeWarehouseFilter)
+      .map((d) => d.country);
+    return buildFilterCountryOptions(
+      fromDestinations.length > 0 ? fromDestinations : countriesData.map((c) => c.name)
+    );
+  }, [feeWarehouseFilter, destinations, countriesData]);
+
+  const feeCityOptions = useMemo(() => {
+    let relevant = destinations;
+    if (feeWarehouseFilter !== "all") {
+      relevant = relevant.filter(
+        (d) => d.warehouse_id?.toString() === feeWarehouseFilter
+      );
+    }
+    if (feeCountryFilter !== "all") {
+      relevant = relevant.filter((d) => d.country === feeCountryFilter);
+    }
+    const fallbackCities = relevant.map((d) => d.city).filter(Boolean) as string[];
+    return buildFilterCityOptions(feeCountryFilter, fallbackCities, countriesData);
+  }, [destinations, feeWarehouseFilter, feeCountryFilter, countriesData]);
+
+  const feeProductOptions = useMemo(() => [
+    { id: "All", name: "All Products Scope" },
+    { id: "global", name: "Global Rules Only" },
+    ...products.map((p) => ({
+      id: p.id.toString(),
+      name: p.sku ? `${p.name} (${p.sku})` : p.name,
+    })),
+  ], [products]);
+
+  const filteredShipments = useMemo(() => {
+    return shipments.filter(shipment => {
+      const q = shipmentSearchQuery.toLowerCase();
+      const matchesSearch = !q || 
+        shipment.waybill?.toLowerCase().includes(q) ||
+        shipment.carrier?.toLowerCase().includes(q) ||
+        shipment.origin?.toLowerCase().includes(q) ||
+        shipment.destination?.toLowerCase().includes(q);
+
+      const matchesOrigin = shipmentOriginFilter === "all" || (() => {
+        const selectedWh = warehousesData.find(w => w.id.toString() === shipmentOriginFilter);
+        return selectedWh ? shipment.origin?.toLowerCase().includes(selectedWh.name.toLowerCase()) : true;
+      })();
+
+      const destParts = shipment.destination?.split(',').map((p: string) => p.trim()) || [];
+      const destCity = destParts[0] || "";
+      const destCountry = destParts[1] || "";
+
+      const matchesCountry = shipmentCountryFilter === "all" || 
+        destCountry.toLowerCase() === shipmentCountryFilter.toLowerCase() ||
+        shipment.destination?.toLowerCase().includes(shipmentCountryFilter.toLowerCase());
+
+      const matchesCity = shipmentCityFilter === "all" || 
+        destCity.toLowerCase() === shipmentCityFilter.toLowerCase() ||
+        shipment.destination?.toLowerCase().includes(shipmentCityFilter.toLowerCase());
+
+      const matchesCarrier = shipmentCarrierFilter === "all" || shipment.carrier === shipmentCarrierFilter;
+
+      const shipDate = shipment.created_at ? new Date(shipment.created_at).setHours(0,0,0,0) : null;
+      const matchesDateFrom = !shipmentDateFrom || !shipDate || shipDate >= new Date(shipmentDateFrom).setHours(0,0,0,0);
+      const matchesDateTo = !shipmentDateTo || !shipDate || shipDate <= new Date(shipmentDateTo).setHours(0,0,0,0);
+
+      return matchesSearch && matchesOrigin && matchesCountry && matchesCity && matchesCarrier && matchesDateFrom && matchesDateTo;
+    });
+  }, [shipments, shipmentSearchQuery, shipmentOriginFilter, shipmentCountryFilter, shipmentCityFilter, shipmentCarrierFilter, shipmentDateFrom, shipmentDateTo, warehousesData]);
 
   const filteredUnassignedOrders = useMemo(() => {
     return unassignedOrders.filter(order => {
@@ -141,23 +312,44 @@ export default function AdminLogisticsPage() {
         (order.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (order.shipping_city?.toLowerCase().includes(searchQuery.toLowerCase()));
 
-      const matchesWarehouse = warehouseFilter === "All Origins" || order.items?.[0]?.warehouse_id.toString() === warehouseFilter;
-      const matchesCity = cityFilter === "All Destinations" || order.shipping_city === cityFilter;
+      const matchesWarehouse = warehouseFilter === "all" || order.items?.[0]?.warehouse_id.toString() === warehouseFilter;
+      const matchesCountry = unassignedCountryFilter === "all" || order.shipping_country?.toLowerCase() === unassignedCountryFilter.toLowerCase();
+      const matchesCity = unassignedCityFilter === "all" || order.shipping_city?.toLowerCase() === unassignedCityFilter.toLowerCase();
       
       const orderDate = new Date(order.created_at).setHours(0,0,0,0);
       const matchesDateFrom = !dateFrom || orderDate >= new Date(dateFrom).setHours(0,0,0,0);
       const matchesDateTo = !dateTo || orderDate <= new Date(dateTo).setHours(0,0,0,0);
 
-      return matchesSearch && matchesWarehouse && matchesCity && matchesDateFrom && matchesDateTo;
+      return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesDateFrom && matchesDateTo;
     });
-  }, [unassignedOrders, searchQuery, warehouseFilter, cityFilter, dateFrom, dateTo]);
+  }, [unassignedOrders, searchQuery, warehouseFilter, unassignedCountryFilter, unassignedCityFilter, dateFrom, dateTo]);
+
+  const handleClearShipmentFilters = () => {
+    setShipmentSearchQuery("");
+    setShipmentOriginFilter("all");
+    setShipmentCountryFilter("all");
+    setShipmentCityFilter("all");
+    setShipmentCarrierFilter("all");
+    setShipmentDateFrom("");
+    setShipmentDateTo("");
+  };
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setWarehouseFilter("All Origins");
-    setCityFilter("All Destinations");
+    setWarehouseFilter("all");
+    setUnassignedCountryFilter("all");
+    setUnassignedCityFilter("all");
     setDateFrom("");
     setDateTo("");
+  };
+
+  const handleClearFeeFilters = () => {
+    setFeeSearchQuery("");
+    setFeeWarehouseFilter("all");
+    setFeeCountryFilter("all");
+    setFeeCityFilter("all");
+    setFeeProductFilter("All");
+    setFeeStatusFilter("All");
   };
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -165,12 +357,33 @@ export default function AdminLogisticsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchQuery, warehouseFilter, cityFilter, dateFrom, dateTo]);
+  }, [
+    activeTab, 
+    searchQuery, 
+    warehouseFilter, 
+    unassignedCountryFilter, 
+    unassignedCityFilter, 
+    dateFrom, 
+    dateTo,
+    shipmentSearchQuery,
+    shipmentOriginFilter,
+    shipmentCountryFilter,
+    shipmentCityFilter,
+    shipmentCarrierFilter,
+    shipmentDateFrom,
+    shipmentDateTo,
+    feeSearchQuery,
+    feeWarehouseFilter,
+    feeCountryFilter,
+    feeCityFilter,
+    feeProductFilter,
+    feeStatusFilter
+  ]);
 
   const paginatedShipments = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
-    return shipments.slice(startIndex, startIndex + pageSize);
-  }, [shipments, currentPage, pageSize]);
+    return filteredShipments.slice(startIndex, startIndex + pageSize);
+  }, [filteredShipments, currentPage, pageSize]);
 
   const paginatedUnassignedOrders = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
@@ -190,15 +403,16 @@ export default function AdminLogisticsPage() {
         dest.city?.toLowerCase().includes(q) ||
         dest.product?.name?.toLowerCase().includes(q) ||
         dest.warehouse?.name?.toLowerCase().includes(q);
-      const matchesCountry = feeCountryFilter === "All" || dest.country === feeCountryFilter;
-      const matchesCity = feeCityFilter === "All" || dest.city === feeCityFilter;
+      const matchesWarehouse = feeWarehouseFilter === "all" || dest.warehouse_id?.toString() === feeWarehouseFilter;
+      const matchesCountry = feeCountryFilter === "all" || dest.country?.toLowerCase() === feeCountryFilter.toLowerCase();
+      const matchesCity = feeCityFilter === "all" || dest.city?.toLowerCase() === feeCityFilter.toLowerCase();
       const matchesProduct = feeProductFilter === "All" ||
         (feeProductFilter === "global" ? !dest.product_id : dest.product_id?.toString() === feeProductFilter);
       const matchesStatus = feeStatusFilter === "All" ||
         (feeStatusFilter === "active" ? dest.is_active : !dest.is_active);
-      return matchesSearch && matchesCountry && matchesCity && matchesProduct && matchesStatus;
+      return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesProduct && matchesStatus;
     });
-  }, [destinations, feeSearchQuery, feeCountryFilter, feeCityFilter, feeProductFilter, feeStatusFilter]);
+  }, [destinations, feeSearchQuery, feeWarehouseFilter, feeCountryFilter, feeCityFilter, feeProductFilter, feeStatusFilter]);
 
   const paginatedFilteredDestinations = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
@@ -309,16 +523,20 @@ export default function AdminLogisticsPage() {
   };
 
   useEffect(() => {
+    // Load metadata on mount for consistent filtering in all tabs
+    fetchWarehouses();
+    fetchLocations();
+    fetchCountriesData();
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
     if (activeTab === "Active Shipments") {
       fetchShipments();
     } else if (activeTab === "Unassigned Orders") {
       fetchUnassignedOrders();
     } else if (activeTab === "Shipping Fee") {
       fetchDestinations();
-      fetchProducts();
-      fetchWarehouses();
-      fetchLocations();
-      fetchCountriesData();
     } else if (activeTab === "Shipping Zones") {
       fetchCountriesData();
     }
@@ -428,6 +646,25 @@ export default function AdminLogisticsPage() {
     }
   };
 
+  const handleDownloadWaybillPdf = async (shipment: any) => {
+    try {
+      await exportWaybillManifestPDF(shipment, {
+        storeName: settings.store_name,
+        storeTagline: settings.store_tagline,
+        storeLogo: settings.store_logo,
+        physicalAddress: settings.physical_address,
+        contactEmail: settings.contact_email,
+        contactPhone: settings.contact_phone,
+        currency: settings.currency || "Ksh",
+      });
+      toast.success("Waybill PDF generated successfully!");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to generate PDF manifest.");
+    }
+  };
+
+
   const handleSaveZone = async (shouldClose = true) => {
     if (!zoneFormData.city || !zoneFormData.country) {
       return toast.error("Please fill in Country and City.");
@@ -479,6 +716,88 @@ export default function AdminLogisticsPage() {
       setIsSaving(false);
     }
   };
+
+  // ─── Bulk Zone Handlers ──────────────────────────────────────────────────
+  const generateBulkRoutes = (productId: string) => {
+    if (!productId) { setBulkZoneRoutes([]); return; }
+    const prod = products.find(p => p.id.toString() === productId);
+    const weight = prod ? parseFloat(prod.weight || 0) : 0;
+    const routes: BulkRoute[] = [];
+    warehousesData.forEach(wh => {
+      countriesData.forEach(country => {
+        (country.cities || []).forEach((city: any) => {
+          // Skip routes already saved for this product+warehouse+country+city
+          const exists = destinations.some(
+            d => d.product_id?.toString() === productId &&
+                 d.warehouse_id?.toString() === wh.id.toString() &&
+                 d.country === country.name &&
+                 d.city === city.name
+          );
+          if (!exists) {
+            routes.push({
+              warehouse_id: wh.id.toString(),
+              warehouse_name: wh.name,
+              country: country.name,
+              city: city.name,
+              weight,
+              weight_rate: 0,
+              distance: 0,
+              distance_rate: 0,
+            });
+          }
+        });
+      });
+    });
+    setBulkZoneRoutes(routes);
+  };
+
+  const handleBulkRouteChange = (idx: number, field: keyof BulkRoute, value: number) => {
+    setBulkZoneRoutes(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+
+  const handleSaveBulkZones = async () => {
+    const routesToSave = bulkZoneRoutes.filter(
+      r => r.weight_rate > 0 || r.distance > 0 || r.distance_rate > 0
+    );
+    if (routesToSave.length === 0) {
+      return toast.error("Please fill in at least one route before saving.");
+    }
+    setIsSavingBulk(true);
+    let saved = 0;
+    let failed = 0;
+    const prod = products.find(p => p.id.toString() === bulkZoneProductId);
+    const weight = prod ? parseFloat(prod.weight || 0) : 0;
+    for (const route of routesToSave) {
+      const standardFee = route.weight_rate * weight * route.distance_rate;
+      const expressFee = standardFee * 1.5;
+      try {
+        await api.post("/shipping-destinations", {
+          product_id: bulkZoneProductId || null,
+          warehouse_id: route.warehouse_id || null,
+          country: route.country,
+          city: route.city,
+          weight,
+          distance: route.distance,
+          standard_fee: standardFee,
+          express_fee: expressFee,
+          weight_rate: route.weight_rate,
+          distance_rate: route.distance_rate,
+          is_active: true,
+        });
+        saved++;
+      } catch {
+        failed++;
+      }
+    }
+    setIsSavingBulk(false);
+    if (saved > 0) toast.success(`${saved} shipping zone${saved > 1 ? 's' : ''} saved successfully!`);
+    if (failed > 0) toast.error(`${failed} route${failed > 1 ? 's' : ''} failed to save.`);
+    setIsBulkZoneModalOpen(false);
+    setBulkZoneProductId("");
+    setBulkZoneRoutes([]);
+    fetchDestinations();
+  };
+  // ────────────────────────────────────────────────────────────────────────
 
   const handleDeleteZone = async () => {
     if (!zoneToDelete) return;
@@ -612,6 +931,7 @@ export default function AdminLogisticsPage() {
     return PREDEFINED_CITIES[selectedCountryName] || [];
   }, [selectedCountryName]);
 
+
   return (
     <div className="space-y-6 p-8 bg-white min-h-screen font-sans">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -628,30 +948,43 @@ export default function AdminLogisticsPage() {
           </Button>
         )}
         {activeTab === "Shipping Fee" && (
-          <Button 
-            className="bg-[#0052cc] text-white hover:bg-[#0052cc]/90 rounded-lg shadow-sm font-bold"
-            onClick={() => {
-               setZoneFormData({ 
-                id: null, 
-                product_id: products[0]?.id || "", 
-                warehouse_id: warehousesData[0]?.id || "",
-                country: "", 
-                city: "", 
-                address_line: "",
-                postal_code: "",
-                weight: 0,
-                distance: 0,
-                standard_fee: 0, 
-                express_fee: 0, 
-                weight_rate: 0, 
-                distance_rate: 0,
-                is_active: true 
-               });
-               setIsZoneModalOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Add New Fee
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="border-[#0052cc] text-[#0052cc] hover:bg-blue-50 rounded-lg shadow-sm font-bold"
+              onClick={() => {
+                setZoneFormData({ 
+                  id: null, 
+                  product_id: products[0]?.id || "", 
+                  warehouse_id: warehousesData[0]?.id || "",
+                  country: "", 
+                  city: "", 
+                  address_line: "",
+                  postal_code: "",
+                  weight: 0,
+                  distance: 0,
+                  standard_fee: 0, 
+                  express_fee: 0, 
+                  weight_rate: 0, 
+                  distance_rate: 0,
+                  is_active: true 
+                });
+                setIsZoneModalOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Single Route
+            </Button>
+            <Button
+              className="bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg shadow-sm font-bold"
+              onClick={() => {
+                setBulkZoneProductId(products[0]?.id?.toString() || "");
+                generateBulkRoutes(products[0]?.id?.toString() || "");
+                setIsBulkZoneModalOpen(true);
+              }}
+            >
+              <ArrowRightLeft className="mr-2 h-4 w-4" /> Add Shipment
+            </Button>
+          </div>
         )}
         {activeTab === "Shipping Zones" && (
           <Button 
@@ -696,151 +1029,303 @@ export default function AdminLogisticsPage() {
       {loading ? (
         <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-[#0052cc]" /></div>
       ) : activeTab === "Active Shipments" ? (
-        <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
-          <Table>
-            <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
-              <TableRow>
-                <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Waybill ID</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Carrier</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Route</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">ETA</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Total Orders</TableHead>
-                <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Status</TableHead>
-                <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px] text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {shipments.length === 0 ? (
+        <div className="space-y-4">
+          {/* Active Shipments Filter Bar */}
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <Input
+                placeholder="Search Waybill / Route..."
+                value={shipmentSearchQuery}
+                onChange={(e) => setShipmentSearchQuery(e.target.value)}
+                className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50"
+              />
+            </div>
+
+            {/* Warehouse Origin SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={filterWarehouseOptions}
+                value={shipmentOriginFilter}
+                onChange={(val) => {
+                  setShipmentOriginFilter(val);
+                  setShipmentCountryFilter("all");
+                  setShipmentCityFilter("all");
+                }}
+                placeholder="Origin Warehouse"
+              />
+            </div>
+
+            {/* Destination Country SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={shipmentCountryOptions}
+                value={shipmentCountryFilter}
+                onChange={(val) => {
+                  setShipmentCountryFilter(val);
+                  setShipmentCityFilter("all");
+                }}
+                placeholder="Destination Country"
+              />
+            </div>
+
+            {/* Destination City SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={shipmentCityOptions}
+                value={shipmentCityFilter}
+                onChange={(val) => setShipmentCityFilter(val)}
+                placeholder="Destination City"
+              />
+            </div>
+
+            {/* Carrier SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={filterCarrierOptions}
+                value={shipmentCarrierFilter}
+                onChange={(val) => setShipmentCarrierFilter(val)}
+                placeholder="Select Carrier..."
+              />
+            </div>
+
+            {/* Date From */}
+            <div className="flex flex-col">
+              <Input
+                type="date"
+                value={shipmentDateFrom}
+                onChange={(e) => setShipmentDateFrom(e.target.value)}
+                placeholder="Date From"
+                className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer"
+              />
+            </div>
+
+            {/* Date To */}
+            <div className="flex flex-col">
+              <Input
+                type="date"
+                value={shipmentDateTo}
+                onChange={(e) => setShipmentDateTo(e.target.value)}
+                placeholder="Date To"
+                className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer"
+              />
+            </div>
+
+            {/* Clear Filters Button */}
+            <div className="flex flex-col justify-center">
+              <Button
+                variant="outline"
+                className="h-11 rounded-lg border-zinc-200 font-bold text-xs text-zinc-600 hover:bg-zinc-50"
+                onClick={handleClearShipmentFilters}
+              >
+                <X className="h-4 w-4 mr-1.5 text-zinc-400" /> Clear
+              </Button>
+            </div>
+          </div>
+
+          {(shipmentSearchQuery || shipmentOriginFilter !== "all" || shipmentCountryFilter !== "all" || shipmentCityFilter !== "all" || shipmentCarrierFilter !== "all" || shipmentDateFrom || shipmentDateTo) && (
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wider">Active Filters:</span>
+                <span className="text-xs font-bold text-zinc-700 bg-zinc-100/80 px-2 py-0.5 rounded-md border border-zinc-200/50">
+                  {filteredShipments.length} matching of {shipments.length}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearShipmentFilters}
+                className="h-7 text-xs font-extrabold text-[#0052cc] hover:text-[#0747a6] hover:bg-blue-50/50 p-1"
+              >
+                <X className="mr-1 h-3 w-3" /> Clear Filters
+              </Button>
+            </div>
+          )}
+
+          {/* Table Container */}
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
                 <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center text-zinc-500 font-medium">No active shipments.</TableCell>
+                  <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Waybill ID</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Carrier</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Route</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">ETA</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Total Orders</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Status</TableHead>
+                  <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px] text-right">Action</TableHead>
                 </TableRow>
-              ) : (
-                paginatedShipments.map((shipment) => (
-                  <TableRow key={shipment.id} className="hover:bg-zinc-50/50 transition-colors">
-                    <TableCell className="px-6 font-black text-zinc-900 text-sm">{shipment.waybill}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={cn(
-                        "border-none px-2 py-0.5 text-[10px] font-bold uppercase",
-                        shipment.carrier?.toLowerCase().includes("dhl") ? "bg-blue-100 text-blue-700" :
-                        shipment.carrier?.toLowerCase().includes("fedex") ? "bg-amber-100 text-amber-700" :
-                        shipment.carrier?.toLowerCase().includes("maersk") ? "bg-cyan-100 text-cyan-700" :
-                        shipment.carrier?.toLowerCase().includes("local") ? "bg-violet-100 text-violet-700" :
-                        "bg-zinc-100 text-zinc-600"
-                      )}>
-                        {shipment.carrier}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
-                          {shipment.origin?.split(' ').shift() || "Origin"}
-                        </div>
-                        <ArrowRightLeft className="h-3 w-3 text-zinc-300" />
-                        <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
-                          {shipment.destination || "Dest"}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs font-bold text-[#0052cc]">{shipment.eta || "N/A"}</TableCell>
-                    <TableCell className="text-xs font-bold text-zinc-700">{shipment.orders_count || 0} Orders</TableCell>
-                    <TableCell>
-                      <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                        shipment.status === "Delivered" ? "bg-emerald-100 text-emerald-700" : 
-                        shipment.status === "In Transit" ? "bg-blue-100 text-[#0052cc]" : "bg-zinc-100 text-zinc-500"
-                      )}>{shipment.status}</Badge>
-                    </TableCell>
-                    <TableCell className="px-6 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full")}>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 rounded-xl border-zinc-200 shadow-xl p-1">
-                          <DropdownMenuGroup>
-                            <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Shipment Actions</DropdownMenuLabel>
-                            <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => handleEditShipment(shipment)}>
-                              <Edit className="mr-2 h-3.5 w-3.5 text-[#0052cc]" /> Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Change Status</DropdownMenuLabel>
-                            <DropdownMenuItem className="cursor-pointer" onClick={() => updateShipmentStatus(shipment.id, "In Transit")}>In Transit</DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer" onClick={() => updateShipmentStatus(shipment.id, "Delivered")}>Delivered</DropdownMenuItem>
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+              </TableHeader>
+              <TableBody>
+                {filteredShipments.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="h-48 text-center text-zinc-500 font-medium">No active shipments.</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-          <PaginationControls
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
-            pageSize={pageSize}
-            setPageSize={setPageSize}
-            totalItems={shipments.length}
-            itemName="shipments"
-            pageSizeOptions={[15, 30, 50, 100]}
-          />
+                ) : (
+                  paginatedShipments.map((shipment) => (
+                    <TableRow key={shipment.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <TableCell className="px-6 font-black text-zinc-900 text-sm">{shipment.waybill}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={cn(
+                          "border-none px-2 py-0.5 text-[10px] font-bold uppercase",
+                          shipment.carrier?.toLowerCase().includes("dhl") ? "bg-blue-100 text-blue-700" :
+                          shipment.carrier?.toLowerCase().includes("fedex") ? "bg-amber-100 text-amber-700" :
+                          shipment.carrier?.toLowerCase().includes("maersk") ? "bg-cyan-100 text-cyan-700" :
+                          shipment.carrier?.toLowerCase().includes("local") ? "bg-violet-100 text-violet-700" :
+                          "bg-zinc-100 text-zinc-600"
+                        )}>
+                          {shipment.carrier}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
+                            {shipment.origin?.split(' ').shift() || "Origin"}
+                          </div>
+                          <ArrowRight className="h-3 w-3 text-zinc-300" />
+                          <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
+                            {shipment.destination || "Dest"}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs font-bold text-[#0052cc]">{shipment.eta || "N/A"}</TableCell>
+                      <TableCell className="text-xs font-bold text-zinc-700">{shipment.orders_count || 0} Orders</TableCell>
+                      <TableCell>
+                        <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                          shipment.status === "Delivered" ? "bg-emerald-100 text-emerald-700" : 
+                          shipment.status === "In Transit" ? "bg-blue-100 text-[#0052cc]" : "bg-zinc-100 text-zinc-500"
+                        )}>{shipment.status}</Badge>
+                      </TableCell>
+                      <TableCell className="px-6 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full")}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Shipment Actions</DropdownMenuLabel>
+                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => handleEditShipment(shipment)}>
+                                <Edit className="mr-2 h-3.5 w-3.5 text-[#0052cc]" /> Edit Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => handleDownloadWaybillPdf(shipment)}>
+                                <FileText className="mr-2 h-3.5 w-3.5 text-emerald-600" /> Download Products PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Change Status</DropdownMenuLabel>
+                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => updateShipmentStatus(shipment.id, "In Transit")}>In Transit</DropdownMenuItem>
+                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => updateShipmentStatus(shipment.id, "Delivered")}>Delivered</DropdownMenuItem>
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            <PaginationControls
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              pageSize={pageSize}
+              setPageSize={setPageSize}
+              totalItems={filteredShipments.length}
+              itemName="shipments"
+              pageSizeOptions={[15, 30, 50, 100]}
+            />
+          </div>
         </div>
       ) : activeTab === "Unassigned Orders" ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
-            <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <Input 
                 placeholder="Search Ref, Customer, Route..." 
-                className="pl-10 h-10 border-zinc-200 rounded-lg bg-white w-full"
+                className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
-            <div className="w-full sm:w-[180px]">
-              <select 
-                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+            {/* Warehouse Origin SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={filterWarehouseOptions}
                 value={warehouseFilter}
-                onChange={(e) => setWarehouseFilter(e.target.value)}
-              >
-                <option value="All Origins">All Origins</option>
-                {warehouses.map(w => (
-                  <option key={w.id} value={w.id}>{w.name}</option>
-                ))}
-              </select>
+                onChange={(val) => {
+                  setWarehouseFilter(val);
+                  setUnassignedCountryFilter("all");
+                  setUnassignedCityFilter("all");
+                }}
+                placeholder="Origin Warehouse"
+              />
             </div>
 
-            <div className="w-full sm:w-[180px]">
-              <select 
-                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
-                value={cityFilter}
-                onChange={(e) => setCityFilter(e.target.value)}
-              >
-                <option value="All Destinations">All Destinations</option>
-                {dynamicCityOptions.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+            {/* Destination Country SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={unassignedCountryOptions}
+                value={unassignedCountryFilter}
+                onChange={(val) => {
+                  setUnassignedCountryFilter(val);
+                  setUnassignedCityFilter("all");
+                }}
+                placeholder="Destination Country"
+              />
             </div>
 
-            <div className="flex gap-2 w-full sm:w-auto">
+            {/* Destination City SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={unassignedCityOptions}
+                value={unassignedCityFilter}
+                onChange={(val) => setUnassignedCityFilter(val)}
+                placeholder="Destination City"
+              />
+            </div>
+
+            {/* Date From & Date To */}
+            <div className="flex gap-2 w-full">
               <Input 
                 type="date"
-                className="h-10 border-zinc-200 rounded-lg text-xs font-medium bg-white w-[130px]"
+                className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
               />
               <Input 
                 type="date"
-                className="h-10 border-zinc-200 rounded-lg text-xs font-medium bg-white w-[130px]"
+                className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
               />
             </div>
 
-            <Button variant="outline" className="w-full sm:w-auto rounded-lg h-10 px-3 border-zinc-200" onClick={handleClearFilters}>
-              <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+            {/* Clear Button */}
+            <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearFilters}>
+              <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear Filters
             </Button>
           </div>
+
+          {(searchQuery || warehouseFilter !== "all" || unassignedCountryFilter !== "all" || unassignedCityFilter !== "all" || dateFrom || dateTo) && (
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wider">Active Filters:</span>
+                <span className="text-xs font-bold text-zinc-700 bg-zinc-100/80 px-2 py-0.5 rounded-md border border-zinc-200/50">
+                  {filteredUnassignedOrders.length} matching of {unassignedOrders.length}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFilters}
+                className="h-7 text-xs font-extrabold text-[#0052cc] hover:text-[#0747a6] hover:bg-blue-50/50 p-1"
+              >
+                <X className="mr-1 h-3 w-3" /> Clear Filters
+              </Button>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
             <Table>
@@ -966,60 +1451,69 @@ export default function AdminLogisticsPage() {
       ) : activeTab === "Shipping Fee" ? (
         <div className="space-y-4">
           {/* Expose Premium Filters & Search controls */}
-          <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
-            <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <Input 
-                placeholder="Search Product, Country, City or Origin..." 
-                className="pl-10 h-10 border-zinc-200 rounded-lg bg-white w-full"
+                placeholder="Search Product, Destination..." 
+                className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50"
                 value={feeSearchQuery}
                 onChange={(e) => setFeeSearchQuery(e.target.value)}
               />
             </div>
 
-            <div className="w-full sm:w-[160px]">
-              <select 
-                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+            {/* Warehouse Origin SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={filterWarehouseOptions}
+                value={feeWarehouseFilter}
+                onChange={(val) => {
+                  setFeeWarehouseFilter(val);
+                  setFeeCountryFilter("all");
+                  setFeeCityFilter("all");
+                }}
+                placeholder="Origin Warehouse"
+              />
+            </div>
+
+            {/* Destination Country SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={feeCountryOptions}
                 value={feeCountryFilter}
-                onChange={(e) => setFeeCountryFilter(e.target.value)}
-              >
-                <option value="All">All Countries</option>
-                {Array.from(new Set(destinations.map(d => d.country).filter(Boolean))).sort().map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+                onChange={(val) => {
+                  setFeeCountryFilter(val);
+                  setFeeCityFilter("all");
+                }}
+                placeholder="Destination Country"
+              />
             </div>
 
-            <div className="w-full sm:w-[160px]">
-              <select 
-                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+            {/* Destination City SearchableDropdown */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={feeCityOptions}
                 value={feeCityFilter}
-                onChange={(e) => setFeeCityFilter(e.target.value)}
-              >
-                <option value="All">All Cities</option>
-                {Array.from(new Set(destinations.map(d => d.city).filter(Boolean))).sort().map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+                onChange={(val) => setFeeCityFilter(val)}
+                placeholder="Destination City"
+              />
             </div>
 
-            <div className="w-full sm:w-[180px]">
-              <select 
-                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+            {/* Product Scope Selector */}
+            <div className="flex flex-col justify-center">
+              <SearchableDropdown
+                items={feeProductOptions}
                 value={feeProductFilter}
-                onChange={(e) => setFeeProductFilter(e.target.value)}
-              >
-                <option value="All">All Products Scope</option>
-                <option value="global">Global Rules Only</option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id.toString()}>{p.name}</option>
-                ))}
-              </select>
+                onChange={(val) => setFeeProductFilter(val)}
+                placeholder="All Products Scope"
+              />
             </div>
 
-            <div className="w-full sm:w-[140px]">
+            {/* Status Scope Selector */}
+            <div className="w-full">
               <select 
-                className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+                className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer"
                 value={feeStatusFilter}
                 onChange={(e) => setFeeStatusFilter(e.target.value)}
               >
@@ -1029,20 +1523,30 @@ export default function AdminLogisticsPage() {
               </select>
             </div>
 
-            <Button 
-              variant="outline" 
-              className="w-full sm:w-auto rounded-lg h-10 px-3 border-zinc-200" 
-              onClick={() => {
-                setFeeSearchQuery("");
-                setFeeCountryFilter("All");
-                setFeeCityFilter("All");
-                setFeeProductFilter("All");
-                setFeeStatusFilter("All");
-              }}
-            >
-              <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+            {/* Clear Button */}
+            <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearFeeFilters}>
+              <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear Filters
             </Button>
           </div>
+
+          {(feeSearchQuery || feeWarehouseFilter !== "all" || feeCountryFilter !== "all" || feeCityFilter !== "all" || feeProductFilter !== "All" || feeStatusFilter !== "All") && (
+            <div className="flex items-center justify-between px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wider">Active Filters:</span>
+                <span className="text-xs font-bold text-zinc-700 bg-zinc-100/80 px-2 py-0.5 rounded-md border border-zinc-200/50">
+                  {filteredDestinations.length} matching of {destinations.length}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFeeFilters}
+                className="h-7 text-xs font-extrabold text-[#0052cc] hover:text-[#0747a6] hover:bg-blue-50/50 p-1"
+              >
+                <X className="mr-1 h-3 w-3" /> Clear Filters
+              </Button>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
             <Table>
@@ -1589,6 +2093,202 @@ export default function AdminLogisticsPage() {
             <DialogFooter className="p-4 bg-zinc-50/50 flex items-center justify-center gap-3 border-t">
               <Button variant="outline" className="flex-1 h-11 rounded-lg font-bold" onClick={() => setIsDeleteCityModalOpen(false)}>Cancel</Button>
               <Button className="flex-1 h-11 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold" onClick={handleDeleteCity}>Delete Permanently</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Bulk Shipping Zone Modal ─────────────────────────────────── */}
+        <Dialog open={isBulkZoneModalOpen} onOpenChange={(open) => { setIsBulkZoneModalOpen(open); if (!open) { setBulkZoneProductId(""); setBulkZoneRoutes([]); } }}>
+          <DialogContent className="max-w-[96vw] w-full md:max-w-[900px] p-0 overflow-hidden bg-white rounded-2xl shadow-2xl border border-zinc-200">
+            <DialogHeader className="p-6 border-b bg-gradient-to-r from-[#0052cc]/5 to-white">
+              <DialogTitle className="text-xl font-bold text-zinc-900 flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5 text-[#0052cc]" />
+                Bulk Shipping Fee Entry
+              </DialogTitle>
+              <p className="text-sm text-zinc-500 mt-1">Select a product — all Origin × Destination routes are auto-generated. Fill in the rates and save.</p>
+            </DialogHeader>
+
+            <div className="p-6 space-y-5">
+              {/* Product Selector */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Applicable Product *</label>
+                  <SearchableDropdown
+                    items={products.map(p => ({ id: p.id.toString(), name: `${p.name} (${p.sku}) — ${parseFloat(p.weight || 0)} KG` }))}
+                    value={bulkZoneProductId}
+                    onChange={(val) => {
+                      setBulkZoneProductId(val);
+                      generateBulkRoutes(val);
+                    }}
+                    placeholder="Search and select a product..."
+                  />
+                </div>
+                {bulkZoneProductId && (() => {
+                  const prod = products.find(p => p.id.toString() === bulkZoneProductId);
+                  return prod ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-center min-w-[140px]">
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Product Weight</p>
+                      <p className="text-2xl font-black text-[#0052cc]">{parseFloat(prod.weight || 0).toFixed(2)}</p>
+                      <p className="text-xs font-bold text-blue-500">KG (Read-Only)</p>
+                    </div>
+                  ) : null;
+                })()}
+              </div>
+
+              {/* Route Count Summary */}
+              {bulkZoneRoutes.length > 0 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="bg-[#0052cc] text-white rounded-full px-2.5 py-0.5 font-black">{bulkZoneRoutes.length}</span>
+                  <span className="text-zinc-500 font-semibold">new routes generated — fill in rates below (rows with all zeros will be skipped)</span>
+                </div>
+              )}
+
+              {/* Routes Table — grouped by warehouse */}
+              {bulkZoneRoutes.length > 0 ? (
+                <div className="overflow-y-auto border border-zinc-200 rounded-xl" style={{ maxHeight: "52vh" }}>
+                  {warehousesData.filter(wh =>
+                    bulkZoneRoutes.some(r => r.warehouse_id === wh.id.toString())
+                  ).map(wh => {
+                    const whRoutes = bulkZoneRoutes.filter(r => r.warehouse_id === wh.id.toString());
+                    return (
+                      <div key={wh.id}>
+                        {/* Warehouse Group Header */}
+                        <div className="sticky top-0 z-10 bg-[#0052cc]/5 border-b border-[#0052cc]/20 px-4 py-2 flex items-center gap-2">
+                          <div className="h-2.5 w-2.5 rounded-full bg-[#0052cc]" />
+                          <span className="text-xs font-black text-[#0052cc] uppercase tracking-widest">Origin Warehouse: {wh.name}</span>
+                          <span className="ml-auto text-[10px] font-bold text-zinc-400">{whRoutes.length} destinations</span>
+                        </div>
+                        {/* Route Rows */}
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-zinc-50 border-b border-zinc-100">
+                              <th className="text-left px-3 py-2 font-bold text-zinc-500 w-[140px]">Dest. Country</th>
+                              <th className="text-left px-3 py-2 font-bold text-zinc-500 w-[130px]">Dest. City</th>
+                              <th className="text-center px-2 py-2 font-bold text-zinc-400 w-[90px]">Weight (KG)</th>
+                              <th className="text-center px-2 py-2 font-bold text-zinc-500 w-[110px]">Weight Rate<br/><span className="text-[9px] font-normal">(Ksh/KG)</span></th>
+                              <th className="text-center px-2 py-2 font-bold text-zinc-500 w-[100px]">Distance<br/><span className="text-[9px] font-normal">(KM)</span></th>
+                              <th className="text-center px-2 py-2 font-bold text-zinc-500 w-[110px]">Distance Rate<br/><span className="text-[9px] font-normal">(Ksh/KM)</span></th>
+                              <th className="text-center px-2 py-2 font-bold text-blue-500 w-[100px]">Std. Fee</th>
+                              <th className="text-center px-2 py-2 font-bold text-amber-500 w-[100px]">Exp. Fee</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {whRoutes.map((route) => {
+                              const globalIdx = bulkZoneRoutes.findIndex(
+                                r => r.warehouse_id === route.warehouse_id && r.country === route.country && r.city === route.city
+                              );
+                              const stdFee = route.weight_rate * route.weight * route.distance_rate;
+                              const expFee = stdFee * 1.5;
+                              return (
+                                <tr key={`${route.warehouse_id}-${route.country}-${route.city}`}
+                                  className="border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors">
+                                  <td className="px-3 py-1.5">
+                                    <span className="font-semibold text-zinc-700">{route.country}</span>
+                                  </td>
+                                  <td className="px-3 py-1.5">
+                                    <span className="font-semibold text-zinc-600">{route.city}</span>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center">
+                                    <input
+                                      type="text"
+                                      readOnly
+                                      tabIndex={-1}
+                                      value={`${route.weight} KG`}
+                                      className="w-full h-8 px-2 border border-zinc-100 rounded-lg text-[11px] font-black text-zinc-500 bg-zinc-100 text-center cursor-default"
+                                      aria-label="Product weight (read-only)"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={route.weight_rate || ""}
+                                      onChange={e => handleBulkRouteChange(globalIdx, "weight_rate", parseFloat(e.target.value) || 0)}
+                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step="1"
+                                      placeholder="0"
+                                      value={route.distance || ""}
+                                      onChange={e => handleBulkRouteChange(globalIdx, "distance", parseFloat(e.target.value) || 0)}
+                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={route.distance_rate || ""}
+                                      onChange={e => handleBulkRouteChange(globalIdx, "distance_rate", parseFloat(e.target.value) || 0)}
+                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-emerald-600 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center">
+                                    <span className={cn(
+                                      "text-xs font-black px-2 py-0.5 rounded",
+                                      stdFee > 0 ? "text-blue-700 bg-blue-50" : "text-zinc-300 bg-zinc-50"
+                                    )}>
+                                      {stdFee > 0 ? `Ksh ${stdFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-center">
+                                    <span className={cn(
+                                      "text-xs font-black px-2 py-0.5 rounded",
+                                      expFee > 0 ? "text-amber-700 bg-amber-50" : "text-zinc-300 bg-zinc-50"
+                                    )}>
+                                      {expFee > 0 ? `Ksh ${expFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : bulkZoneProductId ? (
+                <div className="text-center py-12 text-zinc-400">
+                  <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p className="font-semibold">All routes for this product already exist.</p>
+                  <p className="text-xs mt-1">Edit existing routes from the Shipping Fee table.</p>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-zinc-300">
+                  <Package className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p className="font-semibold text-zinc-400">Select a product above to generate routes</p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-between gap-3">
+              <div className="text-xs text-zinc-400 font-medium">
+                {bulkZoneRoutes.filter(r => r.weight_rate > 0 || r.distance > 0 || r.distance_rate > 0).length > 0 && (
+                  <span className="text-emerald-600 font-bold">
+                    {bulkZoneRoutes.filter(r => r.weight_rate > 0 || r.distance > 0 || r.distance_rate > 0).length} routes ready to save
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm" onClick={() => setIsBulkZoneModalOpen(false)}>Cancel</Button>
+                <Button
+                  className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm"
+                  onClick={handleSaveBulkZones}
+                  disabled={isSavingBulk || bulkZoneRoutes.length === 0}
+                >
+                  {isSavingBulk ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Save All Routes
+                </Button>
+              </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>

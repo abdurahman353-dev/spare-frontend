@@ -223,7 +223,7 @@ export default function Home() {
             <div className="container mx-auto px-4">
               <div className="flex flex-col lg:flex-row items-center gap-12">
                 <div className="lg:w-1/2">
-                  <h2 className="text-3xl md:text-4xl font-bold mb-6">Regional Distribution Hubs</h2>
+                  <h2 className="text-3xl md:text-4xl font-bold mb-6">Regional Distribution points</h2>
                   <p className="text-lg text-muted-foreground mb-8">
                     We operate multiple distribution centers across East Africa to ensure your parts arrive exactly when you need them.
                   </p>

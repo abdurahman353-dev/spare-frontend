@@ -897,7 +897,7 @@ export default function AdminSettingsPage() {
                   <div className="p-6 flex items-center justify-between">
                     <div>
                       <p className="font-semibold text-zinc-900 text-sm">This browser session</p>
-                      <p className="text-xs text-zinc-400 mt-0.5">Logged in now · Nairobi, Kenya</p>
+                      <p className="text-xs text-zinc-400 mt-0.5">Logged in now · {[(user as any)?.city, (user as any)?.country].filter(Boolean).join(", ") || "Location not set"}</p>
                     </div>
                     <Button 
                       onClick={handleLogoutAllDevices}

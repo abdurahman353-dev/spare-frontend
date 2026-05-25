@@ -157,7 +157,7 @@ export function Footer() {
           {/* Distribution */}
           {hubs.length > 0 && (
             <div>
-              <h3 className="font-semibold text-lg mb-4 text-zinc-900">Distribution Hubs</h3>
+              <h3 className="font-semibold text-lg mb-4 text-zinc-900">Distribution points</h3>
               <ul className="space-y-3.5 text-sm text-muted-foreground max-h-[260px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-200 hover:scrollbar-thumb-zinc-300 scrollbar-track-transparent">
                 {hubs.map((hub, idx) => {
                   const parts = hub.split(", ");

@@ -35,7 +35,8 @@ import {
   ShoppingBag,
   User,
   UserPlus,
-  CreditCard
+  CreditCard,
+  Pencil
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -55,6 +56,40 @@ import { exportOrdersPDF } from "@/lib/pdf-export";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { buildFilterCityOptions, buildFilterCountryOptions } from "@/lib/shipping-locations";
+
+/** Label for walk-in filter/table — mirrors Destination City + Delivery Address from the order form */
+function getWalkInDestinationLabel(order: {
+  shipping_method?: string;
+  shipping_city?: string;
+  shipping_address?: string;
+}): string {
+  const city = (order.shipping_city || "").trim();
+  const address = (order.shipping_address || "").trim();
+
+  if (order.shipping_method === "Pickup") {
+    if (city && address) return `${city} · ${address}`;
+    return "In-Store · Walk-In Counter";
+  }
+
+  if (city && address) return `${city} · ${address}`;
+  if (city) return city;
+  if (address) return address;
+  return "";
+}
+
+function isOrderVoided(order: { status?: string; payment_status?: string }): boolean {
+  return order.status === "Cancelled" || order.payment_status === "Refunded";
+}
+
+function getWalkInPayStatusDisplay(order: { status?: string; payment_status?: string }) {
+  if (isOrderVoided(order)) {
+    return { label: "Cancelled / Refunded", className: "bg-red-100 text-red-700" };
+  }
+  if (order.payment_status === "Paid") {
+    return { label: "Paid", className: "bg-emerald-100 text-emerald-700" };
+  }
+  return { label: order.payment_status || "Pending", className: "bg-amber-100 text-amber-700" };
+}
 
 export default function AdminOrdersPage() {
   const { settings } = useSettings();
@@ -120,13 +155,55 @@ export default function AdminOrdersPage() {
   const [paymentStatus, setPaymentStatus] = useState<string>("Paid");
   const [shippingMethod, setShippingMethod] = useState<string>("Pickup");
   const [shippingFee, setShippingFee] = useState<number>(0);
-  const [shippingCity, setShippingCity] = useState<string>("Nairobi");
-  const [shippingAddress, setShippingAddress] = useState<string>("Walk-In Counter");
+  const [shippingCity, setShippingCity] = useState<string>("");
+  const [shippingAddress, setShippingAddress] = useState<string>("");
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [voidOrderTarget, setVoidOrderTarget] = useState<any>(null);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
   const [walkInPayStatusFilter, setWalkInPayStatusFilter] = useState("All");
+
+  // Edit Walk-In Order
+  const [isEditWalkInModalOpen, setIsEditWalkInModalOpen] = useState(false);
+  const [editWalkInTarget, setEditWalkInTarget] = useState<any>(null);
+  const [editWalkInForm, setEditWalkInForm] = useState({
+    payment_method: "",
+    payment_ref_code: "",
+    shipping_method: "",
+    shipping_fee: 0,
+    shipping_city: "",
+    shipping_address: "",
+  });
+  const [isSavingEditWalkIn, setIsSavingEditWalkIn] = useState(false);
+
+  const handleOpenEditWalkIn = (order: any) => {
+    setEditWalkInTarget(order);
+    setEditWalkInForm({
+      payment_method: order.payment_method || "Cash",
+      payment_ref_code: order.payment_ref_code || "",
+      shipping_method: order.shipping_method || "Pickup",
+      shipping_fee: parseFloat(order.shipping_fee || 0),
+      shipping_city: order.shipping_city || "",
+      shipping_address: order.shipping_address || "",
+    });
+    setIsEditWalkInModalOpen(true);
+  };
+
+  const handleSaveEditWalkIn = async () => {
+    if (!editWalkInTarget) return;
+    setIsSavingEditWalkIn(true);
+    try {
+      await api.put(`/orders/${editWalkInTarget.id}`, editWalkInForm);
+      toast.success("Walk-In order updated successfully!");
+      setIsEditWalkInModalOpen(false);
+      setEditWalkInTarget(null);
+      await fetchOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update order.");
+    } finally {
+      setIsSavingEditWalkIn(false);
+    }
+  };
 
   const selectedProductDetails = useMemo(() => {
     return products.find(p => p.id.toString() === selectedProductId);
@@ -202,11 +279,77 @@ export default function AdminOrdersPage() {
 
   const isDigitalPayment = (method: string) => ["M-Pesa", "Card", "Bank Transfer"].includes(method);
 
+  const resetWalkInFormFields = () => {
+    setShippingCity("");
+    setShippingAddress("");
+    setShippingFee(0);
+    setShippingMethod("Pickup");
+    setPaymentStatus("Paid");
+    setPaymentMethod("Cash");
+    setPaymentRefCode("");
+  };
+
+  const handleMarkWalkInPaid = async (order: any) => {
+    try {
+      await api.put(`/orders/${order.id}`, { payment_status: "Paid", status: "Delivered" });
+      toast.success("Payment confirmed — marked as Paid");
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Update failed");
+    }
+  };
+
+  const handleMarkWalkInPending = async (order: any) => {
+    try {
+      await api.put(`/orders/${order.id}`, { payment_status: "Pending", status: "Pending" });
+      toast.success("Marked as Pending");
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Update failed");
+    }
+  };
+
+  const handleOpenVoidDialog = (order: any) => {
+    setVoidOrderTarget(order);
+    setIsVoidDialogOpen(true);
+  };
+
+  const handleConfirmVoidRefund = async () => {
+    if (!voidOrderTarget) return;
+    setIsVoiding(true);
+    try {
+      const res = await api.post(`/orders/${voidOrderTarget.id}/void-refund`);
+      const refunded = parseFloat(res.data?.refunded_amount ?? voidOrderTarget.total_amount ?? 0);
+      toast.success(
+        `Order ${voidOrderTarget.tracking_number} voided. Ksh ${refunded.toLocaleString()} refunded — stock restored to warehouse.`
+      );
+      setIsVoidDialogOpen(false);
+      setVoidOrderTarget(null);
+      await fetchOrders();
+      await fetchMetadata();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to void order. Please try again.");
+    } finally {
+      setIsVoiding(false);
+    }
+  };
+
   const handleSubmitWalkInOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (orderItems.length === 0) {
       toast.error("Please add at least one item to the order.");
       return;
+    }
+
+    if (shippingMethod === "Local Delivery") {
+      if (!shippingCity.trim()) {
+        toast.error("Please enter destination city.");
+        return;
+      }
+      if (!shippingAddress.trim()) {
+        toast.error("Please enter delivery address.");
+        return;
+      }
     }
 
     // Digital payment ref validation
@@ -305,8 +448,8 @@ export default function AdminOrdersPage() {
         shipping_method: shippingMethod,
         shipping_fee: shippingFee,
         shipping_country: "Kenya",
-        shipping_city: shippingCity,
-        shipping_address: shippingAddress,
+        shipping_city: shippingMethod === "Pickup" ? "In-Store" : shippingCity.trim(),
+        shipping_address: shippingMethod === "Pickup" ? "Walk-In Counter" : shippingAddress.trim(),
         items: orderItems.map(item => ({
           product_id: item.product_id,
           warehouse_id: item.warehouse_id,
@@ -323,6 +466,7 @@ export default function AdminOrdersPage() {
       setPaymentRefCode("");
       setRegisterAccount(false);
       setNewCustomerData({ name: "", company_name: "", email: "", phone: "", secondary_phone: "", tax_id: "", address: "", type: "Retail", password: "", confirmPassword: "" });
+      resetWalkInFormFields();
       fetchOrders();
       fetchMetadata();
     } catch (err: any) {
@@ -414,16 +558,9 @@ export default function AdminOrdersPage() {
       base = base.filter(o => o.items?.some((i: any) => i.warehouse_id.toString() === walkInWarehouseFilter));
     }
     const unique = Array.from(
-      new Set(
-        base
-          .map((o: any) => {
-            const cityCountry = [o.shipping_city, o.shipping_country].filter(Boolean).join(", ");
-            return cityCountry || o.shipping_address || "";
-          })
-          .filter(Boolean)
-      )
-    ).sort();
-    return [{ id: "all", name: "Destination / Address" }, ...unique.map((c: any) => ({ id: c, name: c }))];
+      new Set(base.map((o: any) => getWalkInDestinationLabel(o)).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b));
+    return [{ id: "all", name: "Destination / Address" }, ...unique.map((label) => ({ id: label, name: label }))];
   }, [orders, walkInWarehouseFilter]);
 
   // Legacy — kept for compatibility
@@ -504,7 +641,7 @@ export default function AdminOrdersPage() {
       toast.error("No orders available to export");
       return;
     }
-    exportOrdersPDF(orders, settings.currency || "Ksh", settings.store_logo || undefined, settings.store_name || undefined);
+    exportOrdersPDF(filteredOrders, settings.currency || "Ksh", settings.store_logo || undefined, settings.store_name || undefined);
     toast.success("PDF generated successfully");
   };
 
@@ -542,24 +679,28 @@ export default function AdminOrdersPage() {
       const customerEmail = order.customer?.email || "";
       const warehouseName = order.items?.[0]?.warehouse?.name || "";
       const destinationCity = order.shipping_city || "";
+      const destinationAddress = order.shipping_address || "";
+      const walkInDestLabel = getWalkInDestinationLabel(order);
       const matchesSearch = (
         trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
         warehouseName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        destinationCity.toLowerCase().includes(searchQuery.toLowerCase())
+        destinationCity.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        destinationAddress.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        walkInDestLabel.toLowerCase().includes(searchQuery.toLowerCase())
       );
       // Walk-In tab: filter by payment status
-      const matchesPayStatus = activeOrdersTab !== "WalkIn" || walkInPayStatusFilter === "All" || order.payment_status === walkInPayStatusFilter;
+      const matchesPayStatus = activeOrdersTab !== "WalkIn" || walkInPayStatusFilter === "All" ||
+        (walkInPayStatusFilter === "Cancelled / Refunded"
+          ? isOrderVoided(order)
+          : order.payment_status === walkInPayStatusFilter);
       // Walk-In tab: filter by source warehouse
       const matchesWalkInWarehouse = activeOrdersTab !== "WalkIn" || walkInWarehouseFilter === "all" ||
         order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
-      // Walk-In tab: filter by destination / address
-      const orderDestLabel = [order.shipping_city, order.shipping_country].filter(Boolean).join(", ") || order.shipping_address || "";
+      // Walk-In tab: filter by destination city + address label
       const matchesWalkInDest = activeOrdersTab !== "WalkIn" || walkInDestFilter === "all" ||
-        order.shipping_city === walkInDestFilter ||
-        order.shipping_address === walkInDestFilter ||
-        orderDestLabel === walkInDestFilter;
+        getWalkInDestinationLabel(order) === walkInDestFilter;
       // Shipment tab: origin, destination country/city, status, date
       const matchesWarehouse = activeOrdersTab !== "Shipment" || warehouseFilter === "all" ||
         order.items?.some((i: any) => i.warehouse_id?.toString() === warehouseFilter);
@@ -604,7 +745,7 @@ export default function AdminOrdersPage() {
             <FileText className="mr-1.5 h-4 w-4" /> Export PDF
           </Button>
           <Button 
-            onClick={() => setIsWalkInModalOpen(true)}
+            onClick={() => { resetWalkInFormFields(); setIsWalkInModalOpen(true); }}
             className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5"
           >
             <ShoppingBag className="h-4 w-4" /> New Walk-In Order
@@ -729,7 +870,7 @@ export default function AdminOrdersPage() {
             <option value="Paid">Paid</option>
             <option value="Pending">Pending</option>
             <option value="Refunded">Refunded</option>
-            <option value="Cancelled">Cancelled / Void</option>
+            <option value="Cancelled / Refunded">Cancelled / Refunded</option>
           </select>
         </div>
         {/* Clear */}
@@ -878,15 +1019,28 @@ export default function AdminOrdersPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      <Badge className={cn("rounded-full px-2 text-[10px] font-bold border-none",
-                        order.payment_status === "Paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                      )}>{order.payment_status}</Badge>
+                      {(() => {
+                        const pay = getWalkInPayStatusDisplay(order);
+                        return (
+                          <Badge className={cn("rounded-full px-2 text-[10px] font-bold border-none", pay.className)}>
+                            {pay.label}
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">{order.payment_method || "Cash"}</p>
                     </TableCell>
                     <TableCell className="text-right">
-                      <p className="text-sm font-black text-zinc-900">Ksh {parseFloat(order.total_amount || 0).toLocaleString()}</p>
+                      <p className={cn(
+                        "text-sm font-black",
+                        isOrderVoided(order) ? "text-red-500 line-through opacity-75" : "text-zinc-900"
+                      )}>
+                        Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
+                      </p>
+                      {isOrderVoided(order) && (
+                        <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
+                      )}
                     </TableCell>
                     <TableCell className="px-6 text-right">
                       <DropdownMenu>
@@ -900,39 +1054,35 @@ export default function AdminOrdersPage() {
                               <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {order.payment_status !== "Paid" && order.payment_status !== "Refunded" ? (
+                            {order.payment_status !== "Paid" && !isOrderVoided(order) ? (
                               <DropdownMenuItem
-                                onClick={async () => {
-                                  try {
-                                    await api.put(`/orders/${order.id}`, { payment_status: "Paid", status: "Delivered" });
-                                    toast.success("Payment confirmed — marked as Paid");
-                                    fetchOrders();
-                                  } catch { toast.error("Update failed — check API"); }
-                                }}
+                                onClick={() => handleMarkWalkInPaid(order)}
                                 className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"
                               >
                                 <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Paid
                               </DropdownMenuItem>
-                            ) : order.payment_status === "Paid" ? (
+                            ) : order.payment_status === "Paid" && !isOrderVoided(order) ? (
                               <DropdownMenuItem
-                                onClick={async () => {
-                                  try {
-                                    await api.put(`/orders/${order.id}`, { payment_status: "Pending", status: "Pending" });
-                                    toast.success("Marked as Pending");
-                                    fetchOrders();
-                                  } catch { toast.error("Update failed"); }
-                                }}
+                                onClick={() => handleMarkWalkInPending(order)}
                                 className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
                               >
                                 <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
                               </DropdownMenuItem>
                             ) : null}
-                            {order.payment_status !== "Refunded" && (
+                            {!isOrderVoided(order) && order.status === "Pending" && (
                             <DropdownMenuItem
-                              onClick={() => { setVoidOrderTarget(order); setIsVoidDialogOpen(true); }}
+                              onClick={() => handleOpenVoidDialog(order)}
                               className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
                             >
                               <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
+                            </DropdownMenuItem>
+                            )}
+                            {!isOrderVoided(order) && (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenEditWalkIn(order)}
+                              className="cursor-pointer rounded-lg font-bold text-sm text-zinc-600"
+                            >
+                              <Pencil className="mr-2 h-4 w-4" /> Edit Order
                             </DropdownMenuItem>
                             )}
                           </DropdownMenuGroup>
@@ -1505,24 +1655,7 @@ export default function AdminOrdersPage() {
             <Button
               disabled={isVoiding}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-sm"
-              onClick={async () => {
-                if (!voidOrderTarget) return;
-                setIsVoiding(true);
-                try {
-                  await api.put(`/orders/${voidOrderTarget.id}`, {
-                    status: "Cancelled",
-                    payment_status: "Refunded"
-                  });
-                  toast.success(`Order ${voidOrderTarget.tracking_number} voided & refunded. Stock restored.`);
-                  setIsVoidDialogOpen(false);
-                  setVoidOrderTarget(null);
-                  fetchOrders();
-                } catch {
-                  toast.error("Failed to void order. Please try again.");
-                } finally {
-                  setIsVoiding(false);
-                }
-              }}
+              onClick={handleConfirmVoidRefund}
             >
               {isVoiding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
               Confirm Void & Refund
@@ -1530,7 +1663,115 @@ export default function AdminOrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Walk-In Order Dialog */}
+      <Dialog open={isEditWalkInModalOpen} onOpenChange={(open) => { if (!open) { setIsEditWalkInModalOpen(false); setEditWalkInTarget(null); } }}>
+        <DialogContent className="sm:max-w-[500px] bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b border-zinc-100">
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 rounded-full bg-blue-50 flex items-center justify-center shrink-0">
+                <Pencil className="h-5 w-5 text-[#0052cc]" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-zinc-900">Edit Walk-In Order</DialogTitle>
+                <DialogDescription className="text-xs text-zinc-400 font-medium mt-0.5">
+                  Ref: <span className="font-bold text-zinc-600">{editWalkInTarget?.tracking_number}</span>
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+            {/* Payment Method */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Payment Method</label>
+              <select
+                className="h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700"
+                value={editWalkInForm.payment_method}
+                onChange={(e) => setEditWalkInForm({ ...editWalkInForm, payment_method: e.target.value })}
+              >
+                {["Cash", "M-Pesa", "Bank Transfer", "Card", "Credit"].map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            {/* Payment Reference Code */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Payment Reference Code</label>
+              <Input
+                placeholder="e.g. MPESA code, cheque no..."
+                className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold"
+                value={editWalkInForm.payment_ref_code}
+                onChange={(e) => setEditWalkInForm({ ...editWalkInForm, payment_ref_code: e.target.value })}
+              />
+            </div>
+            {/* Shipping Method */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Fulfillment Method</label>
+              <select
+                className="h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700"
+                value={editWalkInForm.shipping_method}
+                onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_method: e.target.value })}
+              >
+                {["Pickup", "Local Delivery"].map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            {editWalkInForm.shipping_method === "Local Delivery" && (
+              <>
+                {/* Shipping Fee */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Shipping Fee (Ksh)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    placeholder="0"
+                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold"
+                    value={editWalkInForm.shipping_fee}
+                    onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_fee: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                {/* Destination City */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
+                  <Input
+                    placeholder="e.g. Nairobi"
+                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold"
+                    value={editWalkInForm.shipping_city}
+                    onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_city: e.target.value })}
+                  />
+                </div>
+                {/* Delivery Address */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Delivery Address</label>
+                  <Input
+                    placeholder="e.g. 123 Moi Avenue"
+                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold"
+                    value={editWalkInForm.shipping_address}
+                    onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_address: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter className="px-6 pb-6 pt-4 border-t border-zinc-100 flex gap-3">
+            <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200"
+              onClick={() => { setIsEditWalkInModalOpen(false); setEditWalkInTarget(null); }}>
+              Cancel
+            </Button>
+            <Button
+              disabled={isSavingEditWalkIn}
+              className="flex-1 bg-[#0052cc] hover:bg-[#0747a6] text-white rounded-xl font-bold shadow-sm"
+              onClick={handleSaveEditWalkIn}
+            >
+              {isSavingEditWalkIn ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Pencil className="h-4 w-4 mr-2" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 }
 

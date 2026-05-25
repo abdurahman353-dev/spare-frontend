@@ -61,14 +61,17 @@ export default function AdminCustomersPage() {
     tax_id: "",
     address: "",
     type: "Retail",
-    password: ""
+    password: "",
+    confirmPassword: ""
   });
   const [showFormPassword, setShowFormPassword] = useState(false);
+  const [showFormConfirmPassword, setShowFormConfirmPassword] = useState(false);
 
   const [errors, setErrors] = useState({
     email: "",
     phone: "",
-    password: ""
+    password: "",
+    confirmPassword: ""
   });
 
   const fetchCustomers = () => {
@@ -90,7 +93,7 @@ export default function AdminCustomersPage() {
 
   const validateForm = () => {
     let isValid = true;
-    const newErrors = { email: "", phone: "", password: "" };
+    const newErrors = { email: "", phone: "", password: "", confirmPassword: "" };
 
     // Email validation
     const emailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
@@ -109,6 +112,12 @@ export default function AdminCustomersPage() {
     // Password is ALWAYS required for all account types
     if (!formData.password || formData.password.length < 8) {
       newErrors.password = "A password (min 8 characters) is required before saving.";
+      isValid = false;
+    }
+
+    // Confirm password must match
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match.";
       isValid = false;
     }
 
@@ -146,7 +155,8 @@ export default function AdminCustomersPage() {
         tax_id: "",
         address: "", 
         type: "Retail",
-        password: ""
+        password: "",
+        confirmPassword: ""
       });
       fetchCustomers();
     } catch (err) {
@@ -464,9 +474,15 @@ export default function AdminCustomersPage() {
                  <div className="text-2xl font-black text-zinc-900">{selectedCustomer?.orders_count || 0} <span className="text-xs text-zinc-400 font-bold uppercase ml-1">Orders</span></div>
                </div>
                <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
-                 <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Primary Node</div>
+                 <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Customer Rank</div>
                  <div className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-                   <MapPin className="h-4 w-4 text-[#0052cc]" /> Nairobi, KE
+                   {(() => {
+                     const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
+                     if (ltv >= 500000) return <><span className="text-yellow-500">★</span> Platinum</>;
+                     if (ltv >= 100000) return <><span className="text-zinc-400">★</span> Gold</>;
+                     if (ltv >= 30000)  return <><span className="text-amber-600">★</span> Silver</>;
+                     return <><span className="text-zinc-300">★</span> Bronze</>;
+                   })()}
                  </div>
                </div>
                <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
@@ -700,6 +716,29 @@ export default function AdminCustomersPage() {
                      </div>
                      {errors.password && <p className="text-[10px] text-red-500 font-bold italic">{errors.password}</p>}
                   </div>
+                   <div className="space-y-1.5">
+                     <label className={cn("text-xs font-semibold", "text-[#0052cc]")}>Confirm Account Password *</label>
+                     <div className="relative">
+                       <Input 
+                         type={showFormConfirmPassword ? "text" : "password"}
+                         placeholder="Re-enter password" 
+                         className={cn("h-10 border-zinc-200 rounded-lg bg-white pr-10", errors.confirmPassword && "border-red-500 ring-1 ring-red-500")} 
+                         value={formData.confirmPassword}
+                         onChange={(e) => {
+                           setFormData({...formData, confirmPassword: e.target.value});
+                           if (errors.confirmPassword) setErrors({...errors, confirmPassword: ""});
+                         }}
+                       />
+                       <button
+                         type="button"
+                         onClick={() => setShowFormConfirmPassword(!showFormConfirmPassword)}
+                         className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#0052cc] transition-colors"
+                       >
+                         {showFormConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                       </button>
+                     </div>
+                     {errors.confirmPassword && <p className="text-[10px] text-red-500 font-bold italic">{errors.confirmPassword}</p>}
+                   </div>            
                </div>
             </div>
           </div>

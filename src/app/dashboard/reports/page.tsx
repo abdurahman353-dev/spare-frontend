@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
@@ -109,7 +110,43 @@ export default function AdminReportsPage() {
     return d >= startDate && d <= endDate;
   }), [orders, startDate, endDate]);
 
-  const totalRevenue  = filteredOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  const isVoidedOrder = (o: any) => o.status === "Cancelled" || o.payment_status === "Refunded";
+  // Revenue only counts explicitly Paid, non-cancelled orders — matches backend scopeExcludingVoided
+  const revenueOrders = useMemo(
+    () => filteredOrders.filter(o => o.payment_status === "Paid" && o.status !== "Cancelled"),
+    [filteredOrders]
+  );
+
+  // Order channel filter: All / Walk-In POS / Shipment Deliveries
+  const [orderChannelFilter, setOrderChannelFilter] = useState("All");
+
+  const channelFilteredOrders = useMemo(() => {
+    if (orderChannelFilter === "Walk-In POS") {
+      return filteredOrders.filter(o => !o.shipping_country || o.shipping_method === "Pickup" || o.shipping_method === "Local Delivery");
+    }
+    if (orderChannelFilter === "Shipment Deliveries") {
+      return filteredOrders.filter(o => o.shipping_country && o.shipping_method !== "Pickup" && o.shipping_method !== "Local Delivery");
+    }
+    return filteredOrders;
+  }, [filteredOrders, orderChannelFilter]);
+
+  // Pagination for Sales table
+  const [salesPage, setSalesPage] = useState(1);
+  const SALES_PAGE_SIZE = 15;
+  const paginatedSalesOrders = useMemo(() => {
+    const start = (salesPage - 1) * SALES_PAGE_SIZE;
+    return channelFilteredOrders.slice(start, start + SALES_PAGE_SIZE);
+  }, [channelFilteredOrders, salesPage]);
+
+  // Pagination for Inventory table
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const INVENTORY_PAGE_SIZE = 15;
+  const paginatedInventory = useMemo(() => {
+    const start = (inventoryPage - 1) * INVENTORY_PAGE_SIZE;
+    return inventory.slice(start, start + INVENTORY_PAGE_SIZE);
+  }, [inventory, inventoryPage]);
+
+  const totalRevenue  = revenueOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
   const totalVAT      = totalRevenue * 0.16;
   const netRevenue    = totalRevenue - totalVAT;
   const periodLabel   = `${new Date(startDate).toLocaleDateString("en-KE", { day:"numeric", month:"short", year:"numeric" })} – ${new Date(endDate).toLocaleDateString("en-KE", { day:"numeric", month:"short", year:"numeric" })}`;
@@ -117,12 +154,12 @@ export default function AdminReportsPage() {
   // BI Calculations: Timeline Data
   const timelineData = useMemo(() => {
     const map = new Map<string, number>();
-    filteredOrders.forEach(o => {
+    revenueOrders.forEach(o => {
       const date = o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE", { month: "short", day: "numeric" }) : "Unknown";
       map.set(date, (map.get(date) || 0) + Number(o.total_amount || 0));
     });
     return Array.from(map.entries()).map(([date, revenue]) => ({ date, revenue })).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [filteredOrders]);
+  }, [revenueOrders]);
 
   // BI Calculations: Status Breakdown
   const statusData = useMemo(() => {
@@ -137,7 +174,7 @@ export default function AdminReportsPage() {
   // BI Calculations: Top Products
   const topProducts = useMemo(() => {
     const map = new Map<string, { revenue: number, qty: number }>();
-    filteredOrders.forEach(o => {
+    revenueOrders.forEach(o => {
       if (o.items && Array.isArray(o.items)) {
         o.items.forEach((item: any) => {
           const pName = item.product?.name || `Product #${item.product_id}`;
@@ -150,17 +187,17 @@ export default function AdminReportsPage() {
     });
     return Array.from(map.entries()).map(([name, data]) => ({ name, revenue: data.revenue, qty: data.qty }))
       .sort((a,b) => b.revenue - a.revenue).slice(0, 5);
-  }, [filteredOrders]);
+  }, [revenueOrders]);
 
   // BI Calculations: Sales by Location
   const locationData = useMemo(() => {
     const map = new Map<string, number>();
-    filteredOrders.forEach(o => {
+    revenueOrders.forEach(o => {
       const loc = o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || 'KE'}` : "Unknown Origin";
       map.set(loc, (map.get(loc) || 0) + Number(o.total_amount || 0));
     });
     return Array.from(map.entries()).map(([name, revenue]) => ({ name, revenue })).sort((a,b) => b.revenue - a.revenue).slice(0, 5);
-  }, [filteredOrders]);
+  }, [revenueOrders]);
 
   // Customer Statement Logic
   const customerOrders = useMemo(() => selectedCustomerId
@@ -300,7 +337,7 @@ export default function AdminReportsPage() {
       autoTable(doc, {
         startY: currentY,
         head: [['Invoice #', 'Date', 'Client', 'Gross (Ksh)', 'VAT 16% (Ksh)', 'Net (Ksh)']],
-        body: filteredOrders.map(o => {
+        body: revenueOrders.map(o => {
           const gross = Number(o.total_amount || 0);
           const vat = gross * 0.16;
           const net = gross - vat;
@@ -410,6 +447,19 @@ export default function AdminReportsPage() {
                   {b.label}
                 </Button>
               ))}
+            </div>
+            {/* Order Channel Filter */}
+            <div className="space-y-1.5 ml-auto">
+              <Label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Order Channel</Label>
+              <select
+                className="h-10 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700"
+                value={orderChannelFilter}
+                onChange={(e) => { setOrderChannelFilter(e.target.value); setSalesPage(1); }}
+              >
+                {["All", "Walk-In POS", "Shipment Deliveries"].map(ch => (
+                  <option key={ch} value={ch}>{ch}</option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -531,9 +581,9 @@ export default function AdminReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOrders.length === 0 ? (
+                    {channelFilteredOrders.length === 0 ? (
                       <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No orders in this period.</TableCell></TableRow>
-                    ) : filteredOrders.map((o, i) => (
+                    ) : paginatedSalesOrders.map((o, i) => (
                       <TableRow key={i} className="hover:bg-zinc-50/80 transition-colors">
                         <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">
                           {o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`}
@@ -552,14 +602,22 @@ export default function AdminReportsPage() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {filteredOrders.length > 0 && (
+                    {channelFilteredOrders.length > 0 && (
                       <TableRow className="bg-zinc-100/50 hover:bg-zinc-100/50">
-                        <TableCell colSpan={4} className="px-6 font-black text-zinc-900 text-sm tracking-widest">TOTAL REVENUE</TableCell>
-                        <TableCell className="text-right font-black text-[#0052cc] text-base">Ksh {totalRevenue.toLocaleString()}</TableCell>
+                        <TableCell colSpan={4} className="px-6 font-black text-zinc-900 text-sm tracking-widest">TOTAL REVENUE ({orderChannelFilter})</TableCell>
+                        <TableCell className="text-right font-black text-[#0052cc] text-base">Ksh {channelFilteredOrders.filter(o => o.payment_status === "Paid" && o.status !== "Cancelled").reduce((s, o) => s + Number(o.total_amount || 0), 0).toLocaleString()}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
+                <PaginationControls
+                  currentPage={salesPage}
+                  setCurrentPage={setSalesPage}
+                  pageSize={SALES_PAGE_SIZE}
+                  setPageSize={() => {}}
+                  totalItems={channelFilteredOrders.length}
+                  itemName="orders"
+                />
               </div>
             </TabsContent>
 
@@ -587,7 +645,7 @@ export default function AdminReportsPage() {
                   <TableBody>
                     {inventory.length === 0 ? (
                       <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No inventory data available.</TableCell></TableRow>
-                    ) : inventory.map((item, i) => {
+                    ) : paginatedInventory.map((item, i) => {
                       const qty = Number(item.quantity);
                       const status = qty === 0 ? "OUT OF STOCK" : qty <= 5 ? "LOW STOCK" : "IN STOCK";
                       const statusCls = qty === 0
@@ -611,6 +669,14 @@ export default function AdminReportsPage() {
                     })}
                   </TableBody>
                 </Table>
+                <PaginationControls
+                  currentPage={inventoryPage}
+                  setCurrentPage={setInventoryPage}
+                  pageSize={INVENTORY_PAGE_SIZE}
+                  setPageSize={() => {}}
+                  totalItems={inventory.length}
+                  itemName="SKUs"
+                />
               </div>
             </TabsContent>
 
@@ -753,9 +819,9 @@ export default function AdminReportsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOrders.length === 0 ? (
+                    {revenueOrders.length === 0 ? (
                       <TableRow><TableCell colSpan={6} className="h-32 text-center text-zinc-400 font-medium">No taxable transactions found.</TableCell></TableRow>
-                    ) : filteredOrders.map((o, i) => {
+                    ) : revenueOrders.map((o, i) => {
                       const gross = Number(o.total_amount || 0);
                       const vat   = gross * 0.16;
                       const net   = gross - vat;
@@ -770,7 +836,7 @@ export default function AdminReportsPage() {
                         </TableRow>
                       );
                     })}
-                    {filteredOrders.length > 0 && (
+                    {revenueOrders.length > 0 && (
                       <TableRow className="bg-zinc-100/50">
                         <TableCell colSpan={3} className="px-6 font-black text-zinc-900 text-sm tracking-widest">AGGREGATE TOTALS</TableCell>
                         <TableCell className="text-right font-black text-zinc-900 text-base">{totalRevenue.toLocaleString()}</TableCell>

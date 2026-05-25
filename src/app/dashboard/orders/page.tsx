@@ -54,6 +54,7 @@ import { toast } from "react-hot-toast";
 import { exportOrdersPDF } from "@/lib/pdf-export";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { buildFilterCityOptions, buildFilterCountryOptions } from "@/lib/shipping-locations";
 
 export default function AdminOrdersPage() {
   const { settings } = useSettings();
@@ -62,14 +63,20 @@ export default function AdminOrdersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   
-  // Advanced Filters
-  const [warehouseFilter, setWarehouseFilter] = useState("All Origins");
-  const [cityFilter, setCityFilter] = useState("All Destinations");
+  // Advanced Filters — Shipment Orders
+  const [warehouseFilter, setWarehouseFilter] = useState("all");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [cityFilter, setCityFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  // Advanced Filters — Walk-In Orders
+  const [walkInWarehouseFilter, setWalkInWarehouseFilter] = useState("all");
+  const [walkInDestFilter, setWalkInDestFilter] = useState("all");
   
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [activeCities, setActiveCities] = useState<any[]>([]);
+  const [countriesData, setCountriesData] = useState<any[]>([]);
   
   // Selection
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
@@ -116,6 +123,10 @@ export default function AdminOrdersPage() {
   const [shippingCity, setShippingCity] = useState<string>("Nairobi");
   const [shippingAddress, setShippingAddress] = useState<string>("Walk-In Counter");
   const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [voidOrderTarget, setVoidOrderTarget] = useState<any>(null);
+  const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
+  const [isVoiding, setIsVoiding] = useState(false);
+  const [walkInPayStatusFilter, setWalkInPayStatusFilter] = useState("All");
 
   const selectedProductDetails = useMemo(() => {
     return products.find(p => p.id.toString() === selectedProductId);
@@ -327,8 +338,8 @@ export default function AdminOrdersPage() {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== "All Status") params.append("status", statusFilter);
-      if (warehouseFilter !== "All Origins") params.append("warehouse_id", warehouseFilter);
-      if (cityFilter !== "All Destinations") params.append("city", cityFilter);
+      if (warehouseFilter !== "all") params.append("warehouse_id", warehouseFilter);
+      if (cityFilter !== "all") params.append("city", cityFilter);
       if (dateFrom) params.append("date_from", dateFrom);
       if (dateTo) params.append("date_to", dateTo);
 
@@ -344,14 +355,16 @@ export default function AdminOrdersPage() {
 
   const fetchMetadata = async () => {
     try {
-      const [wRes, cRes, pRes] = await Promise.all([
+      const [wRes, cRes, pRes, locRes] = await Promise.all([
         api.get("/warehouses"),
         api.get("/customers"),
-        api.get("/products")
+        api.get("/products"),
+        api.get("/locations/countries"),
       ]);
       setWarehouses(wRes.data);
       setCustomers(cRes.data);
       setProducts(pRes.data);
+      setCountriesData(locRes.data);
     } catch (err) {
       console.error("Failed to fetch metadata:", err);
     }
@@ -361,10 +374,62 @@ export default function AdminOrdersPage() {
     fetchMetadata();
   }, []);
 
-  // Dynamically derive destinations based on the selected Warehouse
+  // Filter options — Shipment Orders
+  const warehouseOptions = useMemo(() => [
+    { id: "all", name: "Origin Warehouse" },
+    ...warehouses.map(w => ({ id: w.id.toString(), name: w.name }))
+  ], [warehouses]);
+
+  const countryOptions = useMemo(() => {
+    let base = orders.filter(o => !(o.tracking_number || "").startsWith("WK-"));
+    if (warehouseFilter !== "all") {
+      base = base.filter(o => o.items?.some((i: any) => i.warehouse_id.toString() === warehouseFilter));
+    }
+    const countries = base.map((o: any) => o.shipping_country).filter(Boolean) as string[];
+    const pool = countries.length > 0 ? countries : countriesData.map((c) => c.name);
+    return buildFilterCountryOptions(pool);
+  }, [orders, warehouseFilter, countriesData]);
+
+  const cityOptions = useMemo(() => {
+    let base = orders.filter(o => !(o.tracking_number || "").startsWith("WK-"));
+    if (warehouseFilter !== "all") {
+      base = base.filter(o => o.items?.some((i: any) => i.warehouse_id.toString() === warehouseFilter));
+    }
+    if (countryFilter !== "all") {
+      base = base.filter((o: any) => o.shipping_country?.toLowerCase() === countryFilter.toLowerCase());
+    }
+    const fallbackCities = base.map((o: any) => o.shipping_city).filter(Boolean) as string[];
+    return buildFilterCityOptions(countryFilter, fallbackCities, countriesData);
+  }, [orders, warehouseFilter, countryFilter, countriesData]);
+
+  // Filter options — Walk-In Orders
+  const walkInWarehouseOptions = useMemo(() => [
+    { id: "all", name: "Source Warehouse" },
+    ...warehouses.map(w => ({ id: w.id.toString(), name: w.name }))
+  ], [warehouses]);
+
+  const walkInDestOptions = useMemo(() => {
+    let base = orders.filter(o => (o.tracking_number || "").startsWith("WK-"));
+    if (walkInWarehouseFilter !== "all") {
+      base = base.filter(o => o.items?.some((i: any) => i.warehouse_id.toString() === walkInWarehouseFilter));
+    }
+    const unique = Array.from(
+      new Set(
+        base
+          .map((o: any) => {
+            const cityCountry = [o.shipping_city, o.shipping_country].filter(Boolean).join(", ");
+            return cityCountry || o.shipping_address || "";
+          })
+          .filter(Boolean)
+      )
+    ).sort();
+    return [{ id: "all", name: "Destination / Address" }, ...unique.map((c: any) => ({ id: c, name: c }))];
+  }, [orders, walkInWarehouseFilter]);
+
+  // Legacy — kept for compatibility
   const dynamicCityOptions = useMemo(() => {
     let baseOrders = orders;
-    if (warehouseFilter !== "All Origins") {
+    if (warehouseFilter !== "all") {
       baseOrders = orders.filter(o => o.items?.some((i: any) => i.warehouse_id.toString() === warehouseFilter));
     }
     const destinations = Array.from(
@@ -376,7 +441,7 @@ export default function AdminOrdersPage() {
   useEffect(() => {
     fetchOrders();
     setSelectedOrderIds([]); // Reset selection on filter change
-  }, [statusFilter, warehouseFilter, cityFilter, dateFrom, dateTo]);
+  }, [statusFilter, warehouseFilter, countryFilter, cityFilter, dateFrom, dateTo]);
 
   const handleStatusChange = async (id: number, status: string) => {
     try {
@@ -445,11 +510,21 @@ export default function AdminOrdersPage() {
 
   const handleClearFilters = () => {
     setStatusFilter("All Status");
-    setWarehouseFilter("All Origins");
-    setCityFilter("All Destinations");
+    setWarehouseFilter("all");
+    setCountryFilter("all");
+    setCityFilter("all");
     setDateFrom("");
     setDateTo("");
     setSearchQuery("");
+  };
+
+  const handleClearWalkInFilters = () => {
+    setSearchQuery("");
+    setWalkInPayStatusFilter("All");
+    setWalkInWarehouseFilter("all");
+    setWalkInDestFilter("all");
+    setDateFrom("");
+    setDateTo("");
   };
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -467,19 +542,43 @@ export default function AdminOrdersPage() {
       const customerEmail = order.customer?.email || "";
       const warehouseName = order.items?.[0]?.warehouse?.name || "";
       const destinationCity = order.shipping_city || "";
-      return (
+      const matchesSearch = (
         trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
         warehouseName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         destinationCity.toLowerCase().includes(searchQuery.toLowerCase())
       );
+      // Walk-In tab: filter by payment status
+      const matchesPayStatus = activeOrdersTab !== "WalkIn" || walkInPayStatusFilter === "All" || order.payment_status === walkInPayStatusFilter;
+      // Walk-In tab: filter by source warehouse
+      const matchesWalkInWarehouse = activeOrdersTab !== "WalkIn" || walkInWarehouseFilter === "all" ||
+        order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
+      // Walk-In tab: filter by destination / address
+      const orderDestLabel = [order.shipping_city, order.shipping_country].filter(Boolean).join(", ") || order.shipping_address || "";
+      const matchesWalkInDest = activeOrdersTab !== "WalkIn" || walkInDestFilter === "all" ||
+        order.shipping_city === walkInDestFilter ||
+        order.shipping_address === walkInDestFilter ||
+        orderDestLabel === walkInDestFilter;
+      // Shipment tab: origin, destination country/city, status, date
+      const matchesWarehouse = activeOrdersTab !== "Shipment" || warehouseFilter === "all" ||
+        order.items?.some((i: any) => i.warehouse_id?.toString() === warehouseFilter);
+      const matchesCountry = activeOrdersTab !== "Shipment" || countryFilter === "all" ||
+        order.shipping_country?.toLowerCase() === countryFilter.toLowerCase();
+      const matchesCity = activeOrdersTab !== "Shipment" || cityFilter === "all" ||
+        order.shipping_city?.toLowerCase() === cityFilter.toLowerCase();
+      const matchesStatus = activeOrdersTab !== "Shipment" || statusFilter === "All Status" || order.status === statusFilter;
+      const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
+      const matchesDateFrom = activeOrdersTab !== "Shipment" || !dateFrom || orderDate >= new Date(dateFrom).setHours(0, 0, 0, 0);
+      const matchesDateTo = activeOrdersTab !== "Shipment" || !dateTo || orderDate <= new Date(dateTo).setHours(0, 0, 0, 0);
+      return matchesSearch && matchesPayStatus && matchesWalkInWarehouse && matchesWalkInDest &&
+        matchesWarehouse && matchesCountry && matchesCity && matchesStatus && matchesDateFrom && matchesDateTo;
     });
-  }, [orders, searchQuery, activeOrdersTab, shipmentOrders, walkInOrders]);
+  }, [orders, searchQuery, activeOrdersTab, shipmentOrders, walkInOrders, walkInPayStatusFilter, walkInWarehouseFilter, walkInDestFilter, warehouseFilter, countryFilter, cityFilter, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, warehouseFilter, cityFilter, statusFilter, dateFrom, dateTo, activeOrdersTab]);
+  }, [searchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, dateFrom, dateTo, activeOrdersTab, walkInPayStatusFilter, walkInWarehouseFilter, walkInDestFilter]);
 
   const totalPages = Math.ceil(filteredOrders.length / pageSize);
   const paginatedOrders = useMemo(() => {
@@ -535,74 +634,117 @@ export default function AdminOrdersPage() {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
-        <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <Input 
-            placeholder="Search Ref, Customer, Route..." 
-            className="pl-10 h-10 border-zinc-200 rounded-lg bg-white w-full"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      {/* Filter Bar — Shipment Orders */}
+      {activeOrdersTab === "Shipment" && (
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+        {/* Search */}
+        <div className="relative lg:col-span-2">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <Input placeholder="Search Ref, Customer, Route..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
+            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
         </div>
-
-        <div className="w-full sm:w-[180px]">
-          <select 
-            className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+        {/* Origin Warehouse */}
+        <div className="flex flex-col justify-center">
+          <SearchableDropdown
+            items={warehouseOptions}
             value={warehouseFilter}
-            onChange={(e) => setWarehouseFilter(e.target.value)}
-          >
-            <option>All Origins</option>
-            {warehouses.map(w => (
-              <option key={w.id} value={w.id}>{w.name}</option>
-            ))}
-          </select>
+            onChange={(val) => { setWarehouseFilter(val); setCountryFilter("all"); setCityFilter("all"); }}
+            placeholder="Origin Warehouse"
+          />
         </div>
-
-        <div className="w-full sm:w-[180px]">
-          <select 
-            className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
+        {/* Destination Country */}
+        <div className="flex flex-col justify-center">
+          <SearchableDropdown
+            items={countryOptions}
+            value={countryFilter}
+            onChange={(val) => { setCountryFilter(val); setCityFilter("all"); }}
+            placeholder="Destination Country"
+          />
+        </div>
+        {/* Destination City — cascades from Country */}
+        <div className="flex flex-col justify-center">
+          <SearchableDropdown
+            items={cityOptions}
             value={cityFilter}
-            onChange={(e) => setCityFilter(e.target.value)}
-          >
-            <option>All Destinations</option>
-            {dynamicCityOptions.map(([city, country]) => (
-              <option key={city as string} value={city as string}>{city as string}, {country as string || 'Tanzania'}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="w-full sm:w-[150px]">
-          <select 
-            className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            {statuses.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Input 
-            type="date"
-            className="h-10 border-zinc-200 rounded-lg text-xs font-medium bg-white w-[130px]"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-          />
-          <Input 
-            type="date"
-            className="h-10 border-zinc-200 rounded-lg text-xs font-medium bg-white w-[130px]"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(val) => setCityFilter(val)}
+            placeholder="Destination City"
           />
         </div>
-
-        <Button variant="outline" className="w-full sm:w-auto rounded-lg h-10 px-3 border-zinc-200" onClick={handleClearFilters}>
-           <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+        {/* Status */}
+        <div className="flex flex-col justify-center">
+          <select className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer"
+            value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        {/* Clear */}
+        <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearFilters}>
+          <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
         </Button>
+        {/* Date Range */}
+        <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
+          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+            value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+            value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
       </div>
+      )}
+
+      {/* Filter Bar — Walk-In Orders */}
+      {activeOrdersTab === "WalkIn" && (
+      <div className="bg-white p-5 rounded-xl shadow-sm border border-emerald-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {/* Search */}
+        <div className="relative lg:col-span-2">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+          <Input placeholder="Search WK-Ref, Customer Name..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
+            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+        </div>
+        {/* Source Warehouse */}
+        <div className="flex flex-col justify-center">
+          <SearchableDropdown
+            items={walkInWarehouseOptions}
+            value={walkInWarehouseFilter}
+            onChange={(val) => { setWalkInWarehouseFilter(val); setWalkInDestFilter("all"); }}
+            placeholder="Source Warehouse"
+          />
+        </div>
+        {/* Destination / Address (city) — cascades from warehouse */}
+        <div className="flex flex-col justify-center">
+          <SearchableDropdown
+            items={walkInDestOptions}
+            value={walkInDestFilter}
+            onChange={(val) => setWalkInDestFilter(val)}
+            placeholder="Destination / Address"
+          />
+        </div>
+        {/* Payment Status */}
+        <div className="flex flex-col justify-center">
+          <select
+            className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-emerald-200 w-full text-zinc-600 cursor-pointer"
+            value={walkInPayStatusFilter}
+            onChange={(e) => setWalkInPayStatusFilter(e.target.value)}
+          >
+            <option value="All">All Payment Statuses</option>
+            <option value="Paid">Paid</option>
+            <option value="Pending">Pending</option>
+            <option value="Refunded">Refunded</option>
+            <option value="Cancelled">Cancelled / Void</option>
+          </select>
+        </div>
+        {/* Clear */}
+        <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearWalkInFilters}>
+          <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+        </Button>
+        {/* Date Range */}
+        <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
+          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+            value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+            value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+      </div>
+      )}
 
         {/* Bulk Action Bar - Normalized UI */}
         <AnimatePresence>
@@ -658,6 +800,7 @@ export default function AdminOrdersPage() {
                 <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Source Warehouse</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Destination / Address</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Fulfillment</TableHead>
                 <TableHead className="font-semibold text-zinc-900 text-center">Pay Status</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Payment / Ref</TableHead>
@@ -667,9 +810,9 @@ export default function AdminOrdersPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={10} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
               ) : filteredOrders.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="h-32 text-center text-zinc-400 font-medium">No walk-in orders found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={11} className="h-32 text-center text-zinc-400 font-medium">No walk-in orders found.</TableCell></TableRow>
               ) : (
                 paginatedOrders.map((order) => {
                   const isGuest = order.customer?.name?.toLowerCase() === "walk-in customer";
@@ -709,6 +852,17 @@ export default function AdminOrdersPage() {
                         <p className="text-xs font-bold text-indigo-700">{sourceWarehouse}</p>
                       </div>
                     </TableCell>
+                    {/* Destination / Address column */}
+                    <TableCell>
+                      {order.shipping_method === "Pickup" ? (
+                        <span className="text-[10px] text-zinc-400 font-medium italic">In-Store — No Delivery</span>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-bold text-zinc-700">{order.shipping_city || "—"}</p>
+                          <p className="text-[10px] text-zinc-400 max-w-[120px] truncate">{order.shipping_address || "—"}</p>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {order.shipping_method === "Pickup" ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
@@ -746,27 +900,41 @@ export default function AdminOrdersPage() {
                               <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {order.payment_status !== "Paid" ? (
+                            {order.payment_status !== "Paid" && order.payment_status !== "Refunded" ? (
                               <DropdownMenuItem
-                                onClick={async () => { try { await api.put(`/orders/${order.id}`, { payment_status: "Paid" }); toast.success("Marked as Paid"); fetchOrders(); } catch { toast.error("Update failed"); } }}
+                                onClick={async () => {
+                                  try {
+                                    await api.put(`/orders/${order.id}`, { payment_status: "Paid", status: "Delivered" });
+                                    toast.success("Payment confirmed — marked as Paid");
+                                    fetchOrders();
+                                  } catch { toast.error("Update failed — check API"); }
+                                }}
                                 className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"
                               >
                                 <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Paid
                               </DropdownMenuItem>
-                            ) : (
+                            ) : order.payment_status === "Paid" ? (
                               <DropdownMenuItem
-                                onClick={async () => { try { await api.put(`/orders/${order.id}`, { payment_status: "Pending" }); toast.success("Marked as Pending"); fetchOrders(); } catch { toast.error("Update failed"); } }}
+                                onClick={async () => {
+                                  try {
+                                    await api.put(`/orders/${order.id}`, { payment_status: "Pending", status: "Pending" });
+                                    toast.success("Marked as Pending");
+                                    fetchOrders();
+                                  } catch { toast.error("Update failed"); }
+                                }}
                                 className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
                               >
                                 <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
                               </DropdownMenuItem>
-                            )}
+                            ) : null}
+                            {order.payment_status !== "Refunded" && (
                             <DropdownMenuItem
-                              onClick={async () => { try { await api.put(`/orders/${order.id}`, { status: "Cancelled", payment_status: "Refunded" }); toast.success("Order voided & refunded"); fetchOrders(); } catch { toast.error("Update failed"); } }}
+                              onClick={() => { setVoidOrderTarget(order); setIsVoidDialogOpen(true); }}
                               className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
                             >
                               <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
                             </DropdownMenuItem>
+                            )}
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -895,35 +1063,49 @@ export default function AdminOrdersPage() {
           </DialogHeader>
           <div className="p-6 max-h-[60vh] overflow-y-auto">
             <div className="mb-6 space-y-4">
-              <div className="bg-zinc-50 p-5 rounded-xl border border-zinc-200">
-                <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Origin</p>
-                      <p className="text-sm font-bold text-slate-700 uppercase">
-                        {selectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}
-                      </p>
+                {/* Origin / Destination — hide destination for walk-in in-store */}
+                <div className="bg-zinc-50 p-5 rounded-xl border border-zinc-200">
+                  {selectedOrder?.shipping_method === "Pickup" || selectedOrder?.shipping_method === "In-Store Collection" ? (
+                    <div className="flex items-center gap-3">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Source Warehouse</p>
+                        <p className="text-sm font-bold text-slate-700 uppercase">{selectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}</p>
+                      </div>
+                      <div className="ml-auto">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store Collection
+                        </span>
+                      </div>
                     </div>
-                    <ArrowRightLeft className="h-4 w-4 text-zinc-300" />
-                    <div className="space-y-1 text-right">
-                      <p className="text-[10px] font-bold text-emerald-400 uppercase">Final Destination</p>
-                      <p className="text-sm font-bold text-emerald-700 uppercase">
-                        {selectedOrder?.shipping_city 
-                          ? `${selectedOrder.shipping_city}, ${selectedOrder.shipping_country || 'Tanzania'}` 
-                          : "Delivery Address"}
-                      </p>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Origin</p>
+                        <p className="text-sm font-bold text-slate-700 uppercase">{selectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}</p>
+                      </div>
+                      <ArrowRightLeft className="h-4 w-4 text-zinc-300" />
+                      <div className="space-y-1 text-right">
+                        <p className="text-[10px] font-bold text-emerald-400 uppercase">Final Destination</p>
+                        <p className="text-sm font-bold text-emerald-700 uppercase">
+                          {selectedOrder?.shipping_city ? `${selectedOrder.shipping_city}, ${selectedOrder.shipping_country || 'Kenya'}` : "Delivery Address"}
+                        </p>
+                      </div>
                     </div>
+                  )}
                 </div>
               </div>
-            </div>
 
-            <div className="mb-6">
-              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Customer Information</h4>
-              <div className="bg-white p-4 rounded-xl border border-zinc-200">
-                <p className="font-bold text-zinc-900">{selectedOrder?.customer?.name || "Guest"}</p>
-                <p className="text-sm text-zinc-500 font-medium">{selectedOrder?.customer?.email}</p>
-                <p className="text-sm text-zinc-500 font-medium mt-1">{selectedOrder?.shipping_address}</p>
+              <div className="mb-6">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Customer Information</h4>
+                <div className="bg-white p-4 rounded-xl border border-zinc-200">
+                  <p className="font-bold text-zinc-900">{selectedOrder?.customer?.name || "Guest"}</p>
+                  {/* Hide auto-generated walk-in emails */}
+                  {selectedOrder?.customer?.name?.toLowerCase() !== "walk-in customer" && (
+                    <p className="text-sm text-zinc-500 font-medium">{selectedOrder?.customer?.email}</p>
+                  )}
+                  <p className="text-sm text-zinc-500 font-medium mt-1">{selectedOrder?.shipping_address}</p>
+                </div>
               </div>
-            </div>
 
             <div className="space-y-4">
                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
@@ -1187,12 +1369,17 @@ export default function AdminOrdersPage() {
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500">Payment Method</label>
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Payment Method
+                      {paymentStatus === "Pending" && <span className="ml-2 text-[10px] text-amber-500 font-bold">(Blocked — no payment received)</span>}
+                    </label>
                     <select
-                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20 text-zinc-600 font-medium"
+                      className={cn("w-full h-10 px-3 border rounded-lg text-sm bg-white outline-none text-zinc-600 font-medium transition-opacity",
+                        paymentStatus === "Pending" ? "opacity-40 cursor-not-allowed border-zinc-100 bg-zinc-50" : "border-zinc-200 focus:ring-2 focus:ring-primary/20"
+                      )}
                       value={paymentMethod}
-                      onChange={(e) => { setPaymentMethod(e.target.value); setPaymentRefCode(""); }}
+                      onChange={(e) => { if (paymentStatus !== "Pending") { setPaymentMethod(e.target.value); setPaymentRefCode(""); } }}
+                      disabled={paymentStatus === "Pending"}
                     >
                       <option value="Cash">Cash Sale</option>
                       <option value="M-Pesa">M-Pesa Direct</option>
@@ -1206,7 +1393,7 @@ export default function AdminOrdersPage() {
                     <select
                       className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20 text-zinc-600 font-medium"
                       value={shippingMethod}
-                      onChange={(e) => { setShippingMethod(e.target.value); if (e.target.value === "Pickup") setShippingFee(0); }}
+                      onChange={(e) => { setShippingMethod(e.target.value); if (e.target.value === "Pickup") { setShippingFee(0); setShippingCity(""); setShippingAddress(""); } }}
                     >
                       <option value="Pickup">In-Store Collection</option>
                       <option value="Local Delivery">Dispatch / Shipping</option>
@@ -1232,32 +1419,21 @@ export default function AdminOrdersPage() {
                 )}
 
                 {shippingMethod === "Local Delivery" && (
-                  <div className="grid grid-cols-3 gap-4 bg-zinc-50/50 p-4 rounded-xl border border-zinc-100">
+                  <div className="grid grid-cols-3 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Delivery Fee (Ksh)</label>
-                      <Input
-                        type="number"
-                        min={0}
-                        className="h-10 border-zinc-200 rounded-lg"
-                        value={shippingFee}
-                        onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)}
-                      />
+                      <Input type="number" min={0} placeholder="e.g. 500" className="h-10 border-zinc-200 rounded-lg bg-white"
+                        value={shippingFee || ""} onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)} />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Destination City</label>
-                      <Input
-                        className="h-10 border-zinc-200 rounded-lg"
-                        value={shippingCity}
-                        onChange={(e) => setShippingCity(e.target.value)}
-                      />
+                      <Input placeholder="e.g. Mombasa" className="h-10 border-zinc-200 rounded-lg bg-white"
+                        value={shippingCity} onChange={(e) => setShippingCity(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Delivery Address</label>
-                      <Input
-                        className="h-10 border-zinc-200 rounded-lg"
-                        value={shippingAddress}
-                        onChange={(e) => setShippingAddress(e.target.value)}
-                      />
+                      <Input placeholder="e.g. Tom Mboya St, CBD" className="h-10 border-zinc-200 rounded-lg bg-white"
+                        value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} />
                     </div>
                   </div>
                 )}
@@ -1290,6 +1466,68 @@ export default function AdminOrdersPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Void / Refund Confirmation Dialog */}
+      <Dialog open={isVoidDialogOpen} onOpenChange={(open) => { if (!open) { setIsVoidDialogOpen(false); setVoidOrderTarget(null); } }}>
+        <DialogContent className="sm:max-w-[440px] bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-11 w-11 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-zinc-900">Void & Refund Order</DialogTitle>
+                <DialogDescription className="text-xs text-zinc-400 font-medium mt-0.5">
+                  Ref: <span className="font-bold text-zinc-600">{voidOrderTarget?.tracking_number}</span>
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="px-6 pb-4 space-y-3">
+            <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-2">
+              <p className="text-sm font-bold text-red-700">What happens when you void this order:</p>
+              <ul className="space-y-1.5 text-xs text-red-600 font-medium">
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Payment of <strong>Ksh {parseFloat(voidOrderTarget?.total_amount || 0).toLocaleString()}</strong> is refunded to the customer</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />The amount is deducted from your revenue records</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />All sold items are returned to their source warehouse stock</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Order status is set to <strong>Cancelled / Refunded</strong></li>
+              </ul>
+            </div>
+            <p className="text-xs text-zinc-400 font-medium text-center">This action cannot be undone.</p>
+          </div>
+          <DialogFooter className="px-6 pb-6 flex gap-3">
+            <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200"
+              onClick={() => { setIsVoidDialogOpen(false); setVoidOrderTarget(null); }}>
+              Cancel
+            </Button>
+            <Button
+              disabled={isVoiding}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-sm"
+              onClick={async () => {
+                if (!voidOrderTarget) return;
+                setIsVoiding(true);
+                try {
+                  await api.put(`/orders/${voidOrderTarget.id}`, {
+                    status: "Cancelled",
+                    payment_status: "Refunded"
+                  });
+                  toast.success(`Order ${voidOrderTarget.tracking_number} voided & refunded. Stock restored.`);
+                  setIsVoidDialogOpen(false);
+                  setVoidOrderTarget(null);
+                  fetchOrders();
+                } catch {
+                  toast.error("Failed to void order. Please try again.");
+                } finally {
+                  setIsVoiding(false);
+                }
+              }}
+            >
+              {isVoiding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Confirm Void & Refund
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

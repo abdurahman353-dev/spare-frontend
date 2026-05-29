@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Store, Settings, Bell, Shield, Loader2, Eye, EyeOff, Globe, Plus, Trash2, Image as ImageIcon, Upload } from "lucide-react";
+import { Save, Store, Settings, Bell, Shield, Loader2, Eye, EyeOff, Globe, Plus, Trash2, Image as ImageIcon, Upload, Star } from "lucide-react";
 import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -487,10 +487,11 @@ export default function AdminSettingsPage() {
             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest px-3 pt-2 pb-3">Configuration</p>
             <TabsList className="flex flex-col h-auto w-full bg-transparent p-0 gap-0.5">
               {[
-                { value: "general",       icon: Store,    label: "General Profile" },
-                { value: "notifications", icon: Bell,     label: "Notifications" },
-                { value: "map_hubs",      icon: Globe,    label: "Map Hubs / Regions" },
-                { value: "security",      icon: Shield,   label: "Security" },
+                { value: "general",        icon: Store,    label: "General Profile" },
+                { value: "notifications",  icon: Bell,     label: "Notifications" },
+                { value: "map_hubs",       icon: Globe,    label: "Map Hubs / Regions" },
+                { value: "customer_ranks", icon: Star,     label: "Customer Ranks" },
+                { value: "security",       icon: Shield,   label: "Security" },
               ].map(({ value, icon: Icon, label }) => (
                 <TabsTrigger
                   key={value}
@@ -908,6 +909,81 @@ export default function AdminSettingsPage() {
                     </Button>
                   </div>
                 </div>
+              </div>
+            </TabsContent>
+
+            {/* ── Customer Ranks ── */}
+            <TabsContent value="customer_ranks" className="mt-0 space-y-6">
+              <div>
+                <h2 className="text-lg font-bold text-zinc-900">Customer Ranks</h2>
+                <p className="text-zinc-500 text-sm mt-0.5">Configure minimum lifetime spending (LTV) thresholds to determine each customer rank. These values are used across the customer portal and admin dashboard.</p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3 text-xs text-blue-800 font-semibold leading-relaxed">
+                <Star className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-black text-blue-900 uppercase tracking-wider text-[10px]">Dynamic Rank System</p>
+                  <p className="mt-0.5 text-blue-700/90 font-medium">Rank badges on the customer portal and admin insights will automatically update based on each customer's total spend versus these thresholds. Bronze always starts at Ksh 0.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4 max-w-lg">
+                {[
+                  {
+                    key: "rank_silver_threshold",
+                    label: "Silver Tier Minimum Spend",
+                    desc: "Customers who spend at or above this amount will be promoted to Silver rank.",
+                    default: "10000",
+                    color: "text-slate-500",
+                    icon: "🥈"
+                  },
+                  {
+                    key: "rank_gold_threshold",
+                    label: "Gold Tier Minimum Spend",
+                    desc: "Customers who spend at or above this amount will be promoted to Gold rank.",
+                    default: "50000",
+                    color: "text-yellow-600",
+                    icon: "🥇"
+                  },
+                  {
+                    key: "rank_platinum_threshold",
+                    label: "Platinum Tier Minimum Spend",
+                    desc: "The highest rank — awarded to your most valuable customers.",
+                    default: "150000",
+                    color: "text-blue-600",
+                    icon: "💎"
+                  },
+                ].map((tier) => (
+                  <div key={tier.key} className="border border-zinc-200 rounded-xl p-5 bg-white shadow-sm space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{tier.icon}</span>
+                      <Label className={cn("text-sm font-bold", tier.color)}>{tier.label}</Label>
+                    </div>
+                    <p className="text-xs text-zinc-500">{tier.desc}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-bold text-zinc-400">Ksh</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        name={tier.key}
+                        value={settings[tier.key] ?? tier.default}
+                        onChange={handleChange}
+                        placeholder={tier.default}
+                        className={cn(inputCls, "font-bold max-w-[200px]")}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border border-zinc-100 rounded-xl p-4 bg-zinc-50 text-xs text-zinc-500 space-y-1">
+                <p className="font-bold text-zinc-700">Rank Tiers Summary:</p>
+                <ul className="space-y-1">
+                  <li>🥉 <strong>Bronze</strong> — Ksh 0 to Silver threshold (default entry rank)</li>
+                  <li>🥈 <strong>Silver</strong> — From Silver threshold to Gold threshold</li>
+                  <li>🥇 <strong>Gold</strong> — From Gold threshold to Platinum threshold</li>
+                  <li>💎 <strong>Platinum</strong> — Above Platinum threshold (top-tier B2B clients)</li>
+                </ul>
               </div>
             </TabsContent>
 

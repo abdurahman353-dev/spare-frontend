@@ -32,6 +32,8 @@ import { useSettings } from "@/components/providers/SettingsProvider";
 import { exportProductsPDF } from "@/lib/pdf-export";
 import { toast } from "react-hot-toast";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { BulkOffersModal } from "@/components/modals/BulkOffersModal";
+import { Tag } from "lucide-react";
 
 export default function ProductsPage() {
   const { settings } = useSettings();
@@ -45,6 +47,14 @@ export default function ProductsPage() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
+  // Selection State
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+
+  const selectedProductsList = useMemo(() => {
+    return products.filter(p => selectedProductIds.includes(p.id));
+  }, [products, selectedProductIds]);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
@@ -59,6 +69,7 @@ export default function ProductsPage() {
     try {
       const res = await api.get("/products");
       setProducts(res.data);
+      setSelectedProductIds([]);
     } catch (err) {
       console.error("Failed to fetch products:", err);
     } finally {
@@ -171,6 +182,15 @@ export default function ProductsPage() {
           <p className="text-zinc-500 text-sm mt-1">Manage your genuine Mercedes-Benz parts catalog.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {selectedProductIds.length > 0 && (
+            <Button
+              onClick={() => setIsBulkModalOpen(true)}
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 animate-in fade-in zoom-in-95 duration-200"
+            >
+              <Tag className="h-4 w-4 animate-pulse" /> Set Offers ({selectedProductIds.length})
+            </Button>
+          )}
+
           <Button
             onClick={handleExportPDF}
             className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none"
@@ -242,6 +262,22 @@ export default function ProductsPage() {
         <Table>
           <TableHeader className="bg-zinc-50/50">
             <TableRow>
+              <TableHead className="w-[50px] text-center">
+                <input
+                  type="checkbox"
+                  checked={paginatedProducts.length > 0 && paginatedProducts.every(p => selectedProductIds.includes(p.id))}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      const currentPageIds = paginatedProducts.map(p => p.id);
+                      setSelectedProductIds(prev => Array.from(new Set([...prev, ...currentPageIds])));
+                    } else {
+                      const currentPageIds = paginatedProducts.map(p => p.id);
+                      setSelectedProductIds(prev => prev.filter(id => !currentPageIds.includes(id)));
+                    }
+                  }}
+                  className="rounded border-zinc-300 text-[#0052cc] focus:ring-[#0052cc] h-4 w-4 cursor-pointer"
+                />
+              </TableHead>
               <TableHead className="px-6 font-semibold text-zinc-900">SKU</TableHead>
               <TableHead className="font-semibold text-zinc-900">Name</TableHead>
               <TableHead className="font-semibold text-zinc-900">Category</TableHead>
@@ -255,7 +291,7 @@ export default function ProductsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-48 text-center">
+                <TableCell colSpan={9} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     <p className="text-sm text-zinc-500 font-medium">Synchronizing parts...</p>
@@ -264,13 +300,27 @@ export default function ProductsPage() {
               </TableRow>
             ) : filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-48 text-center text-zinc-500">
+                <TableCell colSpan={9} className="h-48 text-center text-zinc-500">
                    No products found in the catalog.
                 </TableCell>
               </TableRow>
             ) : (
               paginatedProducts.map((product) => (
                 <TableRow key={product.id} className="hover:bg-zinc-50/50 transition-colors">
+                  <TableCell className="text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedProductIds.includes(product.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedProductIds(prev => [...prev, product.id]);
+                        } else {
+                          setSelectedProductIds(prev => prev.filter(id => id !== product.id));
+                        }
+                      }}
+                      className="rounded border-zinc-300 text-[#0052cc] focus:ring-[#0052cc] h-4 w-4 cursor-pointer"
+                    />
+                  </TableCell>
                   <TableCell className="px-6 font-bold text-zinc-900">{product.sku}</TableCell>
                   <TableCell className="font-semibold text-zinc-700">{product.name}</TableCell>
                   <TableCell className="text-zinc-500 text-xs font-bold uppercase tracking-tight">
@@ -290,7 +340,27 @@ export default function ProductsPage() {
                   <TableCell className="font-bold text-indigo-600 text-sm">
                     {product.weight ? `${parseFloat(product.weight).toFixed(2)} KG` : "1.00 KG"}
                   </TableCell>
-                  <TableCell className="text-right font-black text-zinc-900">{currency} {Number(product.price).toLocaleString()}</TableCell>
+                  <TableCell className="text-right">
+                    {product.is_on_offer ? (
+                      <div className="flex flex-col items-end">
+                        <span className="text-[9px] text-rose-600 font-extrabold flex items-center gap-1 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-100 uppercase tracking-tighter shrink-0">
+                          <Tag className="h-2.5 w-2.5" /> Offer
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 justify-end">
+                          <span className="line-through text-[11px] text-zinc-400 font-bold">
+                            {currency} {Number(product.original_price).toLocaleString()}
+                          </span>
+                          <span className="font-black text-rose-600">
+                            {currency} {Number(product.price).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="font-black text-zinc-900">
+                        {currency} {Number(product.price).toLocaleString()}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center">
                     <Badge variant={product.status === "Active" ? "default" : "outline"} className={cn(
                       "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
@@ -349,6 +419,12 @@ export default function ProductsPage() {
         isOpen={isViewModalOpen}
         onClose={() => setIsViewModalOpen(false)}
         product={viewingProduct}
+      />
+      <BulkOffersModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        onSuccess={fetchProducts}
+        selectedProducts={selectedProductsList}
       />
 
 

@@ -34,6 +34,8 @@ const emptyForm = {
   description: "",
   status: "Active",
   images: [] as string[],
+  is_on_offer: false,
+  offer_price: "",
 };
 
 export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductModalProps) {
@@ -54,11 +56,13 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
           name: product.name || "",
           category_id: product.category_id?.toString() || "",
           brand_id: product.brand_id?.toString() || "",
-          price: product.price?.toString() || "",
+          price: product.original_price?.toString() || product.price?.toString() || "",
           weight: product.weight?.toString() || "",
           description: product.description || "",
           status: product.status || "Active",
           images: product.images || [],
+          is_on_offer: !!product.is_on_offer,
+          offer_price: product.offer_price?.toString() || "",
         });
         setPreviews(product.images || []);
       } else {
@@ -196,6 +200,9 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
     if (!formData.category_id) return toast.error("Please select a category.");
     if (!formData.brand_id) return toast.error("Please select a brand.");
     if (!formData.price || Number(formData.price) <= 0) return toast.error("Enter a valid price.");
+    if (formData.is_on_offer && (!formData.offer_price || Number(formData.offer_price) <= 0)) {
+      return toast.error("Enter a valid offer price.");
+    }
 
     setLoading(true);
     try {
@@ -209,6 +216,8 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
         description: formData.description,
         status: formData.status,
         images: formData.images,
+        is_on_offer: formData.is_on_offer,
+        offer_price: formData.is_on_offer ? Number(formData.offer_price) : null,
       };
 
       if (product) {
@@ -396,6 +405,34 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
+
+              <div className="flex items-center space-x-2 pt-6">
+                <input
+                  type="checkbox"
+                  id="is_on_offer"
+                  checked={formData.is_on_offer}
+                  onChange={(e) => setFormData({ ...formData, is_on_offer: e.target.checked })}
+                  className="rounded border-zinc-300 text-[#0052cc] focus:ring-[#0052cc] h-4 w-4 cursor-pointer"
+                />
+                <Label htmlFor="is_on_offer" className="text-xs font-semibold text-zinc-700 cursor-pointer select-none">
+                  Set on Offer
+                </Label>
+              </div>
+
+              {formData.is_on_offer && (
+                <div className="space-y-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <Label className="text-xs font-semibold text-rose-600 font-bold">Offer Price (Ksh) *</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.offer_price}
+                    onChange={(e) => setFormData({ ...formData, offer_price: e.target.value })}
+                    placeholder="0.00"
+                    className="h-10 border-rose-200 focus:border-rose-500 focus:ring-rose-500/20 rounded-lg font-bold text-rose-600 bg-rose-50/10"
+                  />
+                </div>
+              )}
 
               <div className="md:col-span-2 space-y-1">
                 <Label className="text-xs font-semibold text-zinc-500">Technical Description</Label>

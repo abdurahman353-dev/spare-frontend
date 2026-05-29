@@ -481,9 +481,12 @@ export default function AdminCustomersPage() {
                   <div className="text-lg font-bold text-zinc-900 flex items-center gap-2">
                     {(() => {
                       const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
-                      if (ltv >= 150000) return <><span className="text-blue-500 font-black">★</span> Platinum</>;
-                      if (ltv >= 50000) return <><span className="text-yellow-500 font-black">★</span> Gold</>;
-                      if (ltv >= 10000)  return <><span className="text-slate-400 font-black">★</span> Silver</>;
+                      const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+                      const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
+                      const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+                      if (ltv >= platThresh) return <><span className="text-blue-500 font-black">★</span> Platinum</>;
+                      if (ltv >= goldThresh) return <><span className="text-yellow-500 font-black">★</span> Gold</>;
+                      if (ltv >= silverThresh)  return <><span className="text-slate-400 font-black">★</span> Silver</>;
                       return <><span className="text-amber-600 font-black">★</span> Bronze</>;
                     })()}
                   </div>
@@ -520,31 +523,34 @@ export default function AdminCustomersPage() {
                     <ShieldCheck className="h-4 w-4 text-[#0052cc]" /> B2B Membership Rank
                   </h3>
                   {(() => {
-                    const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
-                    let tierName = "Bronze", nextTierName = "Silver", nextTierThreshold = 10000;
-                    let progressPercent = Math.min(100, Math.max(0, (ltv / 10000) * 100));
-                    let discountText = "Standard Pricing — Level up to unlock logistics discounts";
-                    let stars = 1, themeBg = "bg-amber-700", textTheme = "text-amber-800";
-                    let medalColor = "#b45309", cardBorder = "border-amber-100 bg-amber-50/30";
-                    if (ltv >= 150000) {
-                      tierName = "Platinum"; nextTierName = "Max Tier"; nextTierThreshold = 150000;
-                      progressPercent = 100;
-                      discountText = "15% Logistics discount + Express priority dispatch enabled!";
-                      stars = 4; themeBg = "bg-blue-600"; textTheme = "text-blue-700";
-                      medalColor = "#0052cc"; cardBorder = "border-blue-100 bg-blue-50/30";
-                    } else if (ltv >= 50000) {
-                      tierName = "Gold"; nextTierName = "Platinum"; nextTierThreshold = 150000;
-                      progressPercent = Math.min(100, Math.max(0, ((ltv - 50000) / 100000) * 100));
-                      discountText = "10% Logistics discount + Priority support enabled!";
-                      stars = 3; themeBg = "bg-yellow-500"; textTheme = "text-yellow-700";
-                      medalColor = "#d97706"; cardBorder = "border-yellow-100 bg-yellow-50/30";
-                    } else if (ltv >= 10000) {
-                      tierName = "Silver"; nextTierName = "Gold"; nextTierThreshold = 50000;
-                      progressPercent = Math.min(100, Math.max(0, ((ltv - 10000) / 40000) * 100));
-                      discountText = "5% Logistics discount enabled!";
-                      stars = 2; themeBg = "bg-slate-400"; textTheme = "text-slate-600";
-                      medalColor = "#64748b"; cardBorder = "border-slate-200 bg-slate-50/30";
-                    }
+                     const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
+                     const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+                     const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
+                     const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+                     let tierName = "Bronze", nextTierName = "Silver", nextTierThreshold = silverThresh;
+                     let progressPercent = Math.min(100, Math.max(0, (ltv / silverThresh) * 100));
+                     let discountText = "Standard Pricing — Level up to unlock logistics discounts";
+                     let stars = 1, themeBg = "bg-amber-700", textTheme = "text-amber-800";
+                     let medalColor = "#b45309", cardBorder = "border-amber-100 bg-amber-50/30";
+                     if (ltv >= platThresh) {
+                       tierName = "Platinum"; nextTierName = "Max Tier"; nextTierThreshold = platThresh;
+                       progressPercent = 100;
+                       discountText = "15% Logistics discount + Express priority dispatch enabled!";
+                       stars = 4; themeBg = "bg-blue-600"; textTheme = "text-blue-700";
+                       medalColor = "#0052cc"; cardBorder = "border-blue-100 bg-blue-50/30";
+                     } else if (ltv >= goldThresh) {
+                       tierName = "Gold"; nextTierName = "Platinum"; nextTierThreshold = platThresh;
+                       progressPercent = Math.min(100, Math.max(0, ((ltv - goldThresh) / (platThresh - goldThresh)) * 100));
+                       discountText = "10% Logistics discount + Priority support enabled!";
+                       stars = 3; themeBg = "bg-yellow-500"; textTheme = "text-yellow-700";
+                       medalColor = "#d97706"; cardBorder = "border-yellow-100 bg-yellow-50/30";
+                     } else if (ltv >= silverThresh) {
+                       tierName = "Silver"; nextTierName = "Gold"; nextTierThreshold = goldThresh;
+                       progressPercent = Math.min(100, Math.max(0, ((ltv - silverThresh) / (goldThresh - silverThresh)) * 100));
+                       discountText = "5% Logistics discount enabled!";
+                       stars = 2; themeBg = "bg-slate-400"; textTheme = "text-slate-600";
+                       medalColor = "#64748b"; cardBorder = "border-slate-200 bg-slate-50/30";
+                     }
                     const remainingToNext = nextTierThreshold - ltv;
                     return (
                       <div className={cn("border rounded-2xl p-5 flex flex-col space-y-4 shadow-sm", cardBorder)}>

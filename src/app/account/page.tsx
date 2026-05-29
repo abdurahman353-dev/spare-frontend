@@ -10,7 +10,7 @@ import {
   Package, Clock, Settings, ShoppingBag, MapPin, CreditCard, 
   ChevronRight, LogOut, Loader2, User, Lock, ShieldCheck,
   Eye, EyeOff, CheckCircle2, AlertCircle, Plus, Home, Smartphone,
-  Search, Printer, Download, ArrowRightLeft
+  Search, Download, ArrowRightLeft, FileText, Truck, Star
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,11 +20,14 @@ import { Input } from "@/components/ui/input";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "react-hot-toast";
+import { useSettings } from "@/components/providers/SettingsProvider";
+import { exportSingleOrderInvoicePDF, exportCustomerLedgerPDF } from "@/lib/pdf-export";
 
 import { Suspense } from "react";
 
 function AccountPortalInner() {
   const { user, logout } = useAuth();
+  const { settings } = useSettings();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [orders, setOrders] = useState([]);
@@ -149,20 +152,15 @@ function AccountPortalInner() {
   };
 
   const downloadStatement = () => {
-    let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "Order ID,Date,Items,Status,Settlement\n";
-    orders.forEach((order: any) => {
-      const date = new Date(order.created_at).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
-      const items = order.items?.length || 0;
-      csvContent += `#ORD-${order.id},${date},${items},${order.status},Ksh ${order.total_amount}\n`;
-    });
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "AutoSpare_Orders_Statement.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!orders || orders.length === 0) {
+      toast.error("No orders to export");
+      return;
+    }
+    exportCustomerLedgerPDF(orders, user, settings).catch(() => toast.error("Failed to generate PDF"));
+  };
+
+  const downloadInvoice = (order: any) => {
+    exportSingleOrderInvoicePDF(order, settings).catch(() => toast.error("Failed to generate invoice PDF"));
   };
 
   const totalSpent = orders.reduce((sum: number, order: any) => sum + Number(order.total_amount), 0);
@@ -191,9 +189,21 @@ function AccountPortalInner() {
               <p className="text-[#64748b] text-[15px] mt-1">Manage your orders and account preferences.</p>
             </div>
             <div className="flex items-center gap-3">
-               <div className="bg-[#0052cc] text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm">
-                Platinum Customer
-              </div>
+               {(() => {
+                const ltv = totalSpent;
+                const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+                const goldThresh  = parseFloat(settings.rank_gold_threshold    || "50000");
+                const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+                let label = "Bronze Member",   bgClass = "bg-amber-700";
+                if (ltv >= platThresh) { label = "Platinum Customer"; bgClass = "bg-[#0052cc]"; }
+                else if (ltv >= goldThresh)  { label = "Gold Member";     bgClass = "bg-yellow-500"; }
+                else if (ltv >= silverThresh) { label = "Silver Member";   bgClass = "bg-slate-400"; }
+                return (
+                  <div className={cn("text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm", bgClass)}>
+                    <Star className="h-3 w-3 fill-white" /> {label}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -244,7 +254,7 @@ function AccountPortalInner() {
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     className="space-y-8"
                   >
-                    {/* Stats Grid - Matching Image 1 Cleanliness */}
+                    {/* Stats Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {[
                         { label: "Active Orders", value: activeOrders.toString(), color: "text-blue-600" },
@@ -256,6 +266,94 @@ function AccountPortalInner() {
                           <p className={cn("text-2xl font-bold", stat.color)}>{stat.value}</p>
                         </div>
                       ))}
+                    </div>
+
+                    {/* Logistics Lifecycle Stepper Guide */}
+                    <div className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
+                      <div className="px-6 py-4 border-b border-[#e2e8f0] bg-[#f8fafc]">
+                        <h2 className="text-[14px] font-bold text-[#1e293b] flex items-center gap-2">
+                          <Truck className="h-4 w-4 text-[#0052cc]" />
+                          Your Logistics Journey — Step-by-Step Guide
+                        </h2>
+                        <p className="text-[11px] text-[#64748b] mt-0.5">Follow these steps to understand how your order moves from our warehouse to your door.</p>
+                      </div>
+                      <div className="p-6">
+                        <div className="relative">
+                          {/* Connector line */}
+                          <div className="hidden md:block absolute top-8 left-8 right-8 h-0.5 bg-gradient-to-r from-[#0052cc] via-[#0052cc]/40 to-[#f1f5f9] z-0" />
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative z-10">
+                            {[
+                              {
+                                step: 1,
+                                icon: ShoppingBag,
+                                status: "Pending",
+                                title: "Order Placed",
+                                color: "bg-amber-500",
+                                borderColor: "border-amber-200",
+                                bgCard: "bg-amber-50",
+                                desc: "Your order has been received and is being prepared. Our team is verifying your parts and allocating stock from the nearest warehouse.",
+                                tips: ["Check your email for order confirmation", "You can track status in 'My Orders' tab"]
+                              },
+                              {
+                                step: 2,
+                                icon: Package,
+                                status: "Processing",
+                                title: "Hub Processing",
+                                color: "bg-orange-500",
+                                borderColor: "border-orange-200",
+                                bgCard: "bg-orange-50",
+                                desc: "Your parts are being picked, quality-checked, and packaged at our logistics hub. They are getting containerized for dispatch.",
+                                tips: ["Items are being containerized", "Inspect section shows your Logistics Intelligence route"]
+                              },
+                              {
+                                step: 3,
+                                icon: Truck,
+                                status: "Shipped",
+                                title: "Dispatched & In Transit",
+                                color: "bg-[#0052cc]",
+                                borderColor: "border-blue-200",
+                                bgCard: "bg-blue-50",
+                                desc: "Your container has been dispatched! Click 'Inspect' on any order to view the Live Container Tracking section with waybill, carrier, and ETA.",
+                                tips: ["View Waybill & Carrier in Inspect modal", "Logistics Intelligence shows your route"]
+                              },
+                              {
+                                step: 4,
+                                icon: CheckCircle2,
+                                status: "Delivered",
+                                title: "Delivery Confirmed",
+                                color: "bg-emerald-500",
+                                borderColor: "border-emerald-200",
+                                bgCard: "bg-emerald-50",
+                                desc: "Your parts have been delivered to your address. Download the invoice from the order 'Inspect' modal for records. Your spending contributes to your loyalty rank.",
+                                tips: ["Download invoice for your records", "Spending builds your B2B loyalty rank"]
+                              },
+                            ].map((item, idx) => (
+                              <div key={idx} className={cn("rounded-lg border p-4 relative", item.borderColor, item.bgCard)}>
+                                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm mb-3 shadow-sm", item.color)}>
+                                  <item.icon className="h-4 w-4" />
+                                </div>
+                                <div className={cn("inline-flex items-center px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider mb-2", item.color, "text-white")}>
+                                  {item.status}
+                                </div>
+                                <h3 className="text-[13px] font-bold text-[#1e293b] mb-1.5">{item.title}</h3>
+                                <p className="text-[11px] text-[#64748b] leading-relaxed mb-3">{item.desc}</p>
+                                <ul className="space-y-1">
+                                  {item.tips.map((tip, ti) => (
+                                    <li key={ti} className="flex items-start gap-1.5 text-[10px] text-[#64748b] font-medium">
+                                      <ChevronRight className="h-3 w-3 shrink-0 mt-0.5 text-[#0052cc]" />
+                                      {tip}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-[#f1f5f9] flex items-start gap-2 text-[11px] text-[#64748b] font-medium">
+                          <ArrowRightLeft className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#0052cc]" />
+                          <span><strong className="text-[#0052cc]">Pro Tip:</strong> Click the <strong>"Inspect"</strong> button on any order row to see full Logistics Intelligence routing, Live Container Tracking, and download a professional PDF invoice.</span>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Content Table Area */}
@@ -426,14 +524,9 @@ function AccountPortalInner() {
                     <div className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
                       <div className="px-6 py-5 border-b border-[#e2e8f0] flex items-center justify-between">
                         <h2 className="text-[16px] font-bold text-[#1e293b]">Full Order Ledger</h2>
-                        <div className="flex gap-2">
-                           <Button variant="outline" size="sm" onClick={() => window.print()} className="border-[#e2e8f0] text-[12px] font-bold text-[#64748b] uppercase tracking-wider h-9 px-4">
-                            <Printer className="h-4 w-4 mr-2" /> Print
-                          </Button>
-                          <Button onClick={downloadStatement} size="sm" className="bg-[#0052cc] hover:bg-[#0747a6] text-[12px] font-bold text-white uppercase tracking-wider h-9 px-4">
-                            <Download className="h-4 w-4 mr-2" /> Export
-                          </Button>
-                        </div>
+                        <Button onClick={downloadStatement} size="sm" className="bg-[#0052cc] hover:bg-[#0747a6] text-[12px] font-bold text-white uppercase tracking-wider h-9 px-4">
+                          <FileText className="h-4 w-4 mr-2" /> Download Statement PDF
+                        </Button>
                       </div>
                       
                       <div className="overflow-x-auto">
@@ -699,7 +792,9 @@ function AccountPortalInner() {
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0]">
             <Button variant="outline" className="text-[12px] font-bold border-[#e2e8f0] h-9" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
-            <Button className="bg-[#0052cc] hover:bg-[#0747a6] text-white text-[12px] font-bold h-9" onClick={downloadStatement}>Download Invoice</Button>
+            <Button className="bg-[#0052cc] hover:bg-[#0747a6] text-white text-[12px] font-bold h-9" onClick={() => selectedOrder && downloadInvoice(selectedOrder)}>
+              <FileText className="h-4 w-4 mr-2" /> Download Invoice PDF
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

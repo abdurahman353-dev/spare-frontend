@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -97,6 +97,8 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [secondsSinceSync, setSecondsSinceSync] = useState(0);
   
   // Advanced Filters — Shipment Orders
   const [warehouseFilter, setWarehouseFilter] = useState("all");
@@ -477,8 +479,8 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const fetchOrders = async () => {
-    setLoading(true);
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const params = new URLSearchParams();
       if (statusFilter !== "All Status") params.append("status", statusFilter);
@@ -493,9 +495,11 @@ export default function AdminOrdersPage() {
       console.error("Failed to fetch orders:", err);
       toast.error("Failed to sync orders");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+    setLastSyncedAt(new Date());
+    setSecondsSinceSync(0);
+  }, [statusFilter, warehouseFilter, cityFilter, dateFrom, dateTo]);
 
   const fetchMetadata = async () => {
     try {
@@ -575,10 +579,23 @@ export default function AdminOrdersPage() {
     return destinations.sort((a, b) => (a[0] as string).localeCompare(b[0] as string));
   }, [orders, warehouseFilter]);
 
+  // Polling Effect
   useEffect(() => {
     fetchOrders();
     setSelectedOrderIds([]); // Reset selection on filter change
-  }, [statusFilter, warehouseFilter, countryFilter, cityFilter, dateFrom, dateTo]);
+    const interval = setInterval(() => fetchOrders(true), 30000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
+
+  // Countdown Ticker Effect
+  useEffect(() => {
+    const ticker = setInterval(() => {
+      if (lastSyncedAt) {
+        setSecondsSinceSync(Math.floor((Date.now() - lastSyncedAt.getTime()) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, [lastSyncedAt]);
 
   const handleStatusChange = async (id: number, status: string) => {
     try {
@@ -735,6 +752,32 @@ export default function AdminOrdersPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Orders</h1>
           <p className="text-zinc-500 text-sm mt-1">Manage and dispatch customer orders across your logistics network.</p>
+          {lastSyncedAt && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full border transition-colors duration-300 ${
+                secondsSinceSync < 15 
+                  ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
+                  : secondsSinceSync < 30 
+                    ? "text-amber-700 bg-amber-50 border-amber-200" 
+                    : "text-red-700 bg-red-50 border-red-200"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${
+                  secondsSinceSync < 15 
+                    ? "bg-emerald-500" 
+                    : secondsSinceSync < 30 
+                      ? "bg-amber-500" 
+                      : "bg-red-500"
+                }`} />
+                {secondsSinceSync === 0 ? "Just synced" : `Last synced ${secondsSinceSync}s ago`} · Auto-refresh every 30s
+              </span>
+              <button
+                onClick={() => fetchOrders()}
+                className="text-[10px] font-bold text-[#0052cc] hover:text-[#0747a6] flex items-center gap-1 hover:underline underline-offset-2 transition-all"
+              >
+                <RefreshCw className="h-2.5 w-2.5" /> Refresh Now
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex gap-3">
           <Button 
@@ -742,14 +785,16 @@ export default function AdminOrdersPage() {
             disabled={loading || orders.length === 0}
             className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none"
           >
-            <FileText className="mr-1.5 h-4 w-4" /> Export PDF
+            <FileText className="mr-1.5 h-4 w-4" /> {activeOrdersTab === "WalkIn" ? "Export Walk-In PDF" : "Export Shipments PDF"}
           </Button>
-          <Button 
-            onClick={() => { resetWalkInFormFields(); setIsWalkInModalOpen(true); }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5"
-          >
-            <ShoppingBag className="h-4 w-4" /> New Walk-In Order
-          </Button>
+          {activeOrdersTab === "WalkIn" && (
+            <Button 
+              onClick={() => { resetWalkInFormFields(); setIsWalkInModalOpen(true); }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5"
+            >
+              <ShoppingBag className="h-4 w-4" /> New Walk-In Order
+            </Button>
+          )}
         </div>
       </div>
 

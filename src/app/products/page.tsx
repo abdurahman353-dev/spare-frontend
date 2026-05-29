@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, LogOut, Plus, Minus } from "lucide-react";
+import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, LogOut, Plus, Minus, Tag, Zap } from "lucide-react";
 // ... (omitting intermediate code for brevity, but I'll ensure the actual tool call is correct)
 import api from "@/lib/axios";
 import { useCart } from "@/context/CartContext";
@@ -39,6 +39,9 @@ interface Product {
   status?: string;
   weight: number;
   inventories?: Inventory[];
+  is_on_offer?: boolean;
+  offer_price?: number;
+  original_price?: number;
 }
 
 function ProductImageCarousel({ product }: { product: Product }) {
@@ -129,6 +132,13 @@ function ProductCard({ product }: { product: Product }) {
             <Badge className="bg-orange-500 text-white border-none font-bold text-[10px] px-2 py-0.5 animate-pulse">LOW STOCK</Badge>
           </div>
         ) : null}
+        {product.is_on_offer && (
+          <div className="absolute top-3 right-3 z-10">
+            <Badge className="bg-rose-600 hover:bg-rose-700 text-white border-none font-black text-[10px] px-2.5 py-0.5 uppercase tracking-wider shadow-sm flex items-center gap-1 animate-pulse">
+              <Zap className="h-3 w-3 fill-current" /> Save Big
+            </Badge>
+          </div>
+        )}
         <ProductImageCarousel product={product} />
       </div>
       <CardContent className="p-6 pb-2">
@@ -141,9 +151,20 @@ function ProductCard({ product }: { product: Product }) {
         <p className="text-sm text-[#64748b] mt-1 font-medium">SKU: {product.sku}</p>
 
         <div className="mt-4 flex items-center justify-between">
-          <span className="text-xl font-bold text-[#1e293b] tracking-tight">
-            {currency} {Number(product.price).toLocaleString()}
-          </span>
+          {product.is_on_offer ? (
+            <div className="flex flex-col">
+              <span className="line-through text-xs font-bold text-zinc-400">
+                {currency} {Number(product.original_price).toLocaleString()}
+              </span>
+              <span className="text-xl font-black text-rose-600 tracking-tight flex items-center gap-1 animate-pulse">
+                {currency} {Number(product.price).toLocaleString()}
+              </span>
+            </div>
+          ) : (
+            <span className="text-xl font-bold text-[#1e293b] tracking-tight">
+              {currency} {Number(product.price).toLocaleString()}
+            </span>
+          )}
           <div className="flex gap-1.5">
             <span className="text-[10px] font-bold bg-[#eff6ff] text-[#0052cc] px-2 py-1 rounded uppercase tracking-wider">
               {product.weight ? `${Number(product.weight).toFixed(2)} KG` : "1.00 KG"}

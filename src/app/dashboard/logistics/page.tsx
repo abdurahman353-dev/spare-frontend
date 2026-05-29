@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { 
   Table, 
@@ -72,7 +72,7 @@ interface BulkRoute {
 export default function AdminLogisticsPage() {
   const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState("Active Shipments");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [shipments, setShipments] = useState<any[]>([]);
   const [unassignedOrders, setUnassignedOrders] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
@@ -81,6 +81,8 @@ export default function AdminLogisticsPage() {
   const [countries, setCountries] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [secondsSinceSync, setSecondsSinceSync] = useState(0);
   
   // Locations Data (Actual Shipping Zones)
   const [countriesData, setCountriesData] = useState<any[]>([]);
@@ -304,8 +306,8 @@ export default function AdminLogisticsPage() {
 
   const filteredUnassignedOrders = useMemo(() => {
     return unassignedOrders.filter(order => {
-      // REQUIREMENT: Only Shipped products recorded here
-      if (order.status !== "Shipped") return false;
+      // Exclude Walk-In POS orders (WK- prefix) from shipment grouping
+      if (order.tracking_number && order.tracking_number.startsWith("WK-")) return false;
 
       const matchesSearch = !searchQuery || 
         (order.tracking_number?.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -530,17 +532,41 @@ export default function AdminLogisticsPage() {
     fetchProducts();
   }, []);
 
-  useEffect(() => {
+  // Fetch the active tab's data
+  const fetchActiveTabData = useCallback(async (silent = false) => {
     if (activeTab === "Active Shipments") {
-      fetchShipments();
+      if (!silent) setLoading(true);
+      try { const res = await api.get("/shipments"); setShipments(res.data); } catch { toast.error("Failed to refresh shipments"); } finally { if (!silent) setLoading(false); }
     } else if (activeTab === "Unassigned Orders") {
-      fetchUnassignedOrders();
+      if (!silent) setLoading(true);
+      try { const res = await api.get("/shipments/unassigned-orders"); setUnassignedOrders(res.data); } catch { toast.error("Failed to refresh orders"); } finally { if (!silent) setLoading(false); }
     } else if (activeTab === "Shipping Fee") {
-      fetchDestinations();
+      if (!silent) setLoading(true);
+      try { const res = await api.get("/shipping-destinations"); setDestinations(res.data); } catch { toast.error("Failed to refresh shipping zones"); } finally { if (!silent) setLoading(false); }
     } else if (activeTab === "Shipping Zones") {
-      fetchCountriesData();
+      if (!silent) setLoading(true);
+      try { const res = await api.get("/locations/countries"); setCountriesData(res.data); } catch { toast.error("Failed to refresh shipping zones"); } finally { if (!silent) setLoading(false); }
     }
+    setLastSyncedAt(new Date());
+    setSecondsSinceSync(0);
   }, [activeTab]);
+
+  useEffect(() => {
+    fetchActiveTabData();
+    // 30-second auto polling
+    const interval = setInterval(() => fetchActiveTabData(true), 30000);
+    return () => clearInterval(interval);
+  }, [fetchActiveTabData]);
+
+  // 1-second ticker for 'Last synced X seconds ago'
+  useEffect(() => {
+    const ticker = setInterval(() => {
+      if (lastSyncedAt) {
+        setSecondsSinceSync(Math.floor((Date.now() - lastSyncedAt.getTime()) / 1000));
+      }
+    }, 1000);
+    return () => clearInterval(ticker);
+  }, [lastSyncedAt]);
 
   const handleToggleOrderSelection = (orderId: number) => {
     setSelectedOrders(prev => 
@@ -938,6 +964,20 @@ export default function AdminLogisticsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Logistics Containerization</h1>
           <p className="text-zinc-500 text-sm mt-1 font-medium italic">Group orders by Origin-Destination and assign Waybills.</p>
+          {lastSyncedAt && (
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full border ${secondsSinceSync < 15 ? "text-emerald-700 bg-emerald-50 border-emerald-200" : secondsSinceSync < 35 ? "text-amber-700 bg-amber-50 border-amber-200" : "text-red-700 bg-red-50 border-red-200"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${secondsSinceSync < 15 ? "bg-emerald-500" : secondsSinceSync < 35 ? "bg-amber-500" : "bg-red-500"}`} />
+                {secondsSinceSync === 0 ? "Just synced" : `Last synced ${secondsSinceSync}s ago`} · Auto-refresh every 30s
+              </span>
+              <button
+                onClick={() => fetchActiveTabData()}
+                className="text-[10px] font-bold text-[#0052cc] hover:text-[#0747a6] flex items-center gap-1 underline underline-offset-2"
+              >
+                <RefreshCw className="h-2.5 w-2.5" /> Refresh Now
+              </button>
+            </div>
+          )}
         </div>
         {activeTab === "Unassigned Orders" && (
           <Button 

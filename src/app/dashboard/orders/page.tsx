@@ -1213,7 +1213,6 @@ export default function AdminOrdersPage() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm"><RefreshCw className="mr-2 h-4 w-4 text-indigo-500" /> Mark Processing</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm"><Truck className="mr-2 h-4 w-4 text-blue-500" /> Mark Shipped</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"><CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered</DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>

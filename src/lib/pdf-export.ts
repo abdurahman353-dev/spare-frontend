@@ -673,8 +673,6 @@ export const exportCustomerStatementPDF = async (
     company.physicalAddress || "Automated Logistics Hub, Nairobi, Kenya",
     company.contactPhone ? `Tel: ${company.contactPhone}` : "Tel: +254 745 621 159",
     company.contactEmail ? `Email: ${company.contactEmail}` : "Email: sales@autospare.co.ke",
-    "Website: www.autospare.co.ke",
-    "PIN: P051528643W" // B2B Corporate PIN fallback
   ];
 
   doc.setFontSize(8);
@@ -849,14 +847,14 @@ export const exportCustomerStatementPDF = async (
       valign: "middle"
     },
     columnStyles: {
-      0: { cellWidth: printableWidth * 0.1 },
-      1: { cellWidth: printableWidth * 0.12, fontStyle: "bold" },
-      2: { cellWidth: printableWidth * 0.28, overflow: "linebreak" },
-      3: { cellWidth: printableWidth * 0.18, overflow: "linebreak" },
+      0: { cellWidth: printableWidth * 0.10 },
+      1: { cellWidth: printableWidth * 0.13, fontStyle: "bold" },
+      2: { cellWidth: printableWidth * 0.27, overflow: "linebreak" },
+      3: { cellWidth: printableWidth * 0.17, overflow: "linebreak" },
       4: { cellWidth: printableWidth * 0.12, overflow: "linebreak" },
-      5: { cellWidth: printableWidth * 0.08, halign: "right" },
+      5: { cellWidth: printableWidth * 0.09, halign: "right" },
       6: { cellWidth: printableWidth * 0.08, halign: "right", fontStyle: "bold" },
-      7: { cellWidth: printableWidth * 0.06, halign: "center" }
+      7: { cellWidth: printableWidth * 0.04, halign: "center" }
     },
     margin: { top: margins.top, right: margins.right, bottom: margins.bottom, left: margins.left },
     didDrawPage: (data: any) => {

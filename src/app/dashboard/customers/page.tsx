@@ -11,7 +11,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Search, Filter, Mail, Phone, MapPin, UserCheck, Plus, Loader2, Building2, ShieldCheck, CheckCircle2, Eye, EyeOff, MoreHorizontal, UserX, FileText, RefreshCw, Star } from "lucide-react";
+import { Search, Filter, Mail, Phone, MapPin, UserCheck, Plus, Loader2, Building2, ShieldCheck, CheckCircle2, Eye, EyeOff, MoreHorizontal, UserX, FileText, RefreshCw, Star, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import {
@@ -55,6 +55,20 @@ export default function AdminCustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Edit Customer Modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<Customer | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    company_name: "",
+    phone: "",
+    secondary_phone: "",
+    tax_id: "",
+    address: "",
+    type: "Retail",
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     company_name: "",
@@ -167,6 +181,37 @@ export default function AdminCustomersPage() {
       alert("Failed to save customer. Please check if the email is unique.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleOpenEdit = (customer: Customer) => {
+    setEditTarget(customer);
+    setEditFormData({
+      name: customer.name || "",
+      company_name: (customer as any).company_name || "",
+      phone: customer.phone || "",
+      secondary_phone: (customer as any).secondary_phone || "",
+      tax_id: (customer as any).tax_id || "",
+      address: customer.address || "",
+      type: customer.type || "Retail",
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editTarget) return;
+    if (!editFormData.name.trim()) return toast.error("Name is required.");
+    setIsSavingEdit(true);
+    try {
+      await api.put(`/customers/${editTarget.id}`, editFormData);
+      toast.success("Customer updated successfully!");
+      setIsEditModalOpen(false);
+      setEditTarget(null);
+      fetchCustomers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update customer.");
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -292,15 +337,18 @@ export default function AdminCustomersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5 text-xs text-zinc-500 max-w-[160px] truncate">
-                      <MapPin className="h-3 w-3 text-zinc-400 shrink-0" /> {customer.address || "—"}
+                    <div className="flex items-start gap-1.5 text-xs text-zinc-500 max-w-[220px]">
+                      <MapPin className="h-3 w-3 text-zinc-400 shrink-0 mt-0.5" />
+                      <span className="break-words whitespace-normal leading-snug">{customer.address || "—"}</span>
                     </div>
                   </TableCell>
                   <TableCell>
                     <Badge className={cn(
                       "font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 border-none",
                       customer.type === "Wholesale" ? "bg-[#0052cc] text-white" :
-                      customer.type === "Garage" ? "bg-amber-500 text-white" : "bg-zinc-100 text-zinc-700"
+                      customer.type === "Garage"    ? "bg-amber-500 text-white" :
+                      customer.type === "Retail"    ? "bg-emerald-100 text-emerald-700" :
+                      "bg-zinc-100 text-zinc-600"
                     )}>
                       {customer.type}
                     </Badge>
@@ -328,6 +376,12 @@ export default function AdminCustomersPage() {
                             className="cursor-pointer rounded-lg font-bold text-sm"
                           >
                             <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Insights
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleOpenEdit(customer)}
+                            className="cursor-pointer rounded-lg font-bold text-sm"
+                          >
+                            <Pencil className="mr-2 h-4 w-4 text-[#0052cc]" /> Edit Info
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {customer.user ? (
@@ -639,7 +693,7 @@ export default function AdminCustomersPage() {
                         <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Items</TableHead>
                         <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Route</TableHead>
                         <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Payment</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-right">Fee</TableHead>
+                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-right">Shipping Fee</TableHead>
                         <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-right">Total</TableHead>
                         <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-center px-4">Status</TableHead>
                       </TableRow>
@@ -709,6 +763,103 @@ export default function AdminCustomersPage() {
           <DialogFooter className="p-4 border-t bg-white">
             <Button variant="outline" className="w-full h-10 border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-bold text-sm rounded-lg" onClick={() => setIsHistoryModalOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Customer Modal — only editable fields */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+          <DialogHeader className="p-6 border-b bg-white">
+            <DialogTitle className="text-xl font-bold text-zinc-900">Edit Customer Info</DialogTitle>
+            <DialogDescription className="text-xs text-zinc-400 mt-1">
+              Only editable fields are shown. Email and password cannot be changed here.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-500">Contact Name *</label>
+                <Input
+                  placeholder="e.g. John Doe"
+                  className="h-10 border-zinc-200 rounded-lg"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-500">Company Name</label>
+                <Input
+                  placeholder="e.g. Auto Shop LLC"
+                  className="h-10 border-zinc-200 rounded-lg"
+                  value={editFormData.company_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, company_name: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
+                <Input
+                  placeholder="07xxxxxxxx"
+                  className="h-10 border-zinc-200 rounded-lg"
+                  value={editFormData.phone}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "");
+                    if (val.length <= 10) setEditFormData({ ...editFormData, phone: val });
+                  }}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-zinc-500">Tax ID / PIN</label>
+                <Input
+                  placeholder="e.g. P000000000Z"
+                  className="h-10 border-zinc-200 rounded-lg"
+                  value={editFormData.tax_id}
+                  onChange={(e) => setEditFormData({ ...editFormData, tax_id: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-500">Customer Type</label>
+              <select
+                className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none"
+                value={editFormData.type}
+                onChange={(e) => setEditFormData({ ...editFormData, type: e.target.value })}
+              >
+                <option value="Retail">Retail</option>
+                <option value="Wholesale">Wholesale</option>
+                <option value="Garage">Garage</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-500">Main Delivery Address</label>
+              <textarea
+                placeholder="Full street address, city, country..."
+                rows={3}
+                className="w-full px-3 py-2 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-[#0052cc]/20 resize-none"
+                value={editFormData.address}
+                onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+              />
+            </div>
+            <div className="p-3 bg-zinc-50 border border-zinc-100 rounded-lg">
+              <p className="text-[11px] font-semibold text-zinc-400">
+                <span className="text-zinc-600 font-bold">Email:</span> {editTarget?.email}
+                <span className="ml-4 text-zinc-300">|</span>
+                <span className="ml-4 italic">Email and password can only be changed by the customer from their account.</span>
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
+            <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button
+              className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm"
+              onClick={handleSaveEdit}
+              disabled={isSavingEdit || !editFormData.name.trim()}
+            >
+              {isSavingEdit ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              SAVE CHANGES
             </Button>
           </DialogFooter>
         </DialogContent>

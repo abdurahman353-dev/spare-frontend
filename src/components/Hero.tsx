@@ -24,7 +24,7 @@ export const Hero = () => {
           playsInline
           className="w-full h-full object-cover opacity-80"
         >
-          <source src="/mercedes.mp4" type="video/mp4" />
+          <source src="https://res.cloudinary.com/dgpykm8wo/video/upload/v1780093914/hero/u2ujfotnzi7ewl1lqqot.mp4" type="video/mp4" />
         </video>
         {/* Overlay Gradients to ensure text readability */}
         <div className="absolute inset-0 bg-gradient-to-r from-zinc-950/80 via-zinc-950/40 to-transparent z-10" />

@@ -27,6 +27,19 @@ interface AuthContextType {
   isAdmin: boolean;
 }
 
+const setCookie = (name: string, value: string, days = 7) => {
+  if (typeof window !== "undefined") {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax; Secure`;
+  }
+};
+
+const deleteCookie = (name: string) => {
+  if (typeof window !== "undefined") {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax; Secure`;
+  }
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -42,9 +55,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const res = await api.get("/user");
           setUser(res.data);
+          // Refresh/extend the cookie
+          setCookie("auth_token", token);
         } catch (err) {
           localStorage.removeItem("auth_token");
+          deleteCookie("auth_token");
           delete api.defaults.headers.common["Authorization"];
+        }
+      } else {
+        // Double check if cookie is present but localStorage is not (e.g. page refreshed/restored)
+        const match = document.cookie.match(new RegExp('(^| )auth_token=([^;]+)'));
+        if (match && match[2]) {
+          const cookieToken = decodeURIComponent(match[2]);
+          localStorage.setItem("auth_token", cookieToken);
+          api.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
+          try {
+            const res = await api.get("/user");
+            setUser(res.data);
+          } catch (err) {
+            localStorage.removeItem("auth_token");
+            deleteCookie("auth_token");
+            delete api.defaults.headers.common["Authorization"];
+          }
         }
       }
       setLoading(false);
@@ -56,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.post("/login", credentials);
     const { user, token } = res.data;
     localStorage.setItem("auth_token", token);
+    setCookie("auth_token", token);
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     setUser(user);
     
@@ -72,6 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.post("/register", data);
     const { user, token } = res.data;
     localStorage.setItem("auth_token", token);
+    setCookie("auth_token", token);
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     setUser(user);
     router.push("/");
@@ -90,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await api.post("/logout");
     } finally {
       localStorage.removeItem("auth_token");
+      deleteCookie("auth_token");
       delete api.defaults.headers.common["Authorization"];
       setUser(null);
       router.push("/login");
@@ -119,3 +154,4 @@ export function useAuth() {
   }
   return context;
 }
+

@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "react-hot-toast";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { ProductViewModal } from "@/components/modals/ProductViewModal";
 
 interface Category {
   id: number;
@@ -44,7 +45,12 @@ interface Product {
   original_price?: number;
 }
 
-function ProductImageCarousel({ product }: { product: Product }) {
+const isVideo = (src: string) => {
+  if (!src) return false;
+  return src.startsWith("data:video/") || src.includes(".mp4") || src.includes(".webm") || src.includes(".ogg") || src.includes("/video/upload/");
+};
+
+function ProductImageCarousel({ product, priority = false }: { product: Product, priority?: boolean }) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (!product.images || product.images.length === 0) {
@@ -70,23 +76,36 @@ function ProductImageCarousel({ product }: { product: Product }) {
 
   return (
     <>
-      <Image
-        src={product.images[currentIndex]}
-        alt={product.name}
-        fill
-        className="object-cover group-hover:scale-105 transition-transform duration-500"
-      />
+      {isVideo(product.images[currentIndex]) ? (
+        <video
+          src={product.images[currentIndex]}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          muted
+          playsInline
+          autoPlay
+          loop
+        />
+      ) : (
+        <Image
+          src={product.images[currentIndex]}
+          alt={product.name}
+          fill
+          priority={priority}
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          className="object-cover group-hover:scale-105 transition-transform duration-500"
+        />
+      )}
       {product.images.length > 1 && (
         <>
           <button
             onClick={prevImage}
-            className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 bg-white/80 text-zinc-900 rounded-full flex items-center justify-center hover:bg-white shadow-sm opacity-60 hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20"
+            className="absolute left-2 top-1/2 -translate-y-1/2 h-7 w-7 bg-white/90 text-zinc-900 rounded-full flex items-center justify-center hover:bg-white shadow-sm opacity-80 hover:opacity-100 transition-opacity z-20"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             onClick={nextImage}
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 bg-white/80 text-zinc-900 rounded-full flex items-center justify-center hover:bg-white shadow-sm opacity-60 hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20"
+            className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 bg-white/90 text-zinc-900 rounded-full flex items-center justify-center hover:bg-white shadow-sm opacity-80 hover:opacity-100 transition-opacity z-20"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -101,11 +120,12 @@ function ProductImageCarousel({ product }: { product: Product }) {
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product, priority = false }: { product: Product, priority?: boolean }) {
   const { settings } = useSettings();
   const currency = settings.currency || "Ksh";
   const { cart, addToCart, removeFromCart } = useCart();
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | "">("");
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
   const availableInventories = product.inventories?.filter(i => i.quantity > 0) || [];
 
@@ -118,7 +138,10 @@ function ProductCard({ product }: { product: Product }) {
         product.status === "Inactive" && "opacity-75 grayscale-[0.5]"
       )}
     >
-      <div className="h-48 bg-zinc-50 flex items-center justify-center p-6 relative">
+      <div 
+        onClick={() => setIsViewModalOpen(true)}
+        className="h-48 bg-zinc-50 flex items-center justify-center p-6 relative cursor-pointer"
+      >
         {product.status === "Inactive" ? (
           <div className="absolute top-3 left-3 z-10">
             <Badge className="bg-red-600 text-white border-none font-bold text-[10px] px-2 py-0.5">INACTIVE</Badge>
@@ -139,7 +162,7 @@ function ProductCard({ product }: { product: Product }) {
             </Badge>
           </div>
         )}
-        <ProductImageCarousel product={product} />
+        <ProductImageCarousel product={product} priority={priority} />
       </div>
       <CardContent className="p-6 pb-2">
         <div className="text-xs font-bold text-[#0052cc] mb-2 uppercase tracking-tighter line-clamp-1">
@@ -262,6 +285,11 @@ function ProductCard({ product }: { product: Product }) {
           )}
         </Button>
       </CardFooter>
+      <ProductViewModal
+        isOpen={isViewModalOpen}
+        onClose={() => setIsViewModalOpen(false)}
+        product={product}
+      />
     </Card>
   );
 }
@@ -439,10 +467,11 @@ export default function PublicProductsPage() {
               ) : (
                 <div className="space-y-8">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {paginatedProducts.map((product) => (
+                    {paginatedProducts.map((product, index) => (
                       <ProductCard
                         key={product.id}
                         product={product}
+                        priority={index < 6}
                       />
                     ))}
                   </div>

@@ -492,7 +492,7 @@ export default function AdminReportsPage() {
                   <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#0052cc]"/> Revenue Timeline</h3>
                   <div className="h-[250px] w-full">
                     {timelineData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                         <LineChart data={timelineData}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
                           <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#71717a' }} dy={10} />
@@ -512,7 +512,7 @@ export default function AdminReportsPage() {
                   <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><PieChart className="h-4 w-4 text-[#0052cc]"/> Fulfillment Status</h3>
                   <div className="h-[250px] w-full">
                     {statusData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                         <PieChart>
                           <Pie
                             data={statusData}
@@ -561,7 +561,7 @@ export default function AdminReportsPage() {
                   <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><MapPin className="h-4 w-4 text-[#0052cc]"/> Top Regional Destinations</h3>
                   <div className="h-[200px] w-full mt-4">
                     {locationData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                         <BarChart data={locationData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
                           <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />

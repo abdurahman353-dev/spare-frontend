@@ -38,6 +38,11 @@ const emptyForm = {
   offer_price: "",
 };
 
+const isVideo = (src: string) => {
+  if (!src) return false;
+  return src.startsWith("data:video/") || src.includes(".mp4") || src.includes(".webm") || src.includes(".ogg") || src.includes("/video/upload/");
+};
+
 export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductModalProps) {
   const [categories, setCategories] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
@@ -272,10 +277,10 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
-            {/* Image Upload */}
+            {/* Image/Video Upload */}
             <div className="space-y-2">
               <Label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-                Product Images (Max 5)
+                Product Images & Videos (Max 5)
               </Label>
               <div className="grid grid-cols-6 gap-2">
                 {previews.map((src, idx) => (
@@ -283,11 +288,15 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
                     key={idx}
                     className="relative aspect-square rounded-lg overflow-hidden border border-zinc-200 group bg-zinc-50"
                   >
-                    <Image src={src} alt="Preview" fill className="object-cover" />
+                    {isVideo(src) ? (
+                      <video src={src} className="w-full h-full object-cover" muted playsInline />
+                    ) : (
+                      <Image src={src} alt="Preview" fill sizes="100px" className="object-cover" />
+                    )}
                     <button
                       type="button"
                       onClick={() => removeImage(idx)}
-                      className="absolute top-1 right-1 h-5 w-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute top-1 right-1 h-5 w-5 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -305,7 +314,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
                 )}
                 {previews.length === 0 && (
                   <div className="col-span-5 flex items-center justify-center h-full text-xs text-zinc-400 font-medium">
-                    <ImageIcon className="h-4 w-4 mr-2" /> No images added yet
+                    <ImageIcon className="h-4 w-4 mr-2" /> No media added yet
                   </div>
                 )}
               </div>
@@ -315,7 +324,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
                 onChange={handleImageUpload}
                 className="hidden"
                 multiple
-                accept="image/*"
+                accept="image/*,video/*"
               />
             </div>
 

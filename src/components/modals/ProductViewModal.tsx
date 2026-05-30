@@ -8,6 +8,11 @@ import { ImageIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useSettings } from "@/components/providers/SettingsProvider";
 
+const isVideo = (src: string) => {
+  if (!src) return false;
+  return src.startsWith("data:video/") || src.includes(".mp4") || src.includes(".webm") || src.includes(".ogg") || src.includes("/video/upload/");
+};
+
 interface ProductViewModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -46,12 +51,21 @@ export function ProductViewModal({ isOpen, onClose, product }: ProductViewModalP
           <div className="relative h-64 bg-zinc-100 rounded-lg overflow-hidden flex items-center justify-center border border-zinc-200">
             {product.images && product.images.length > 0 ? (
               <>
-                <Image 
-                  src={product.images[currentImageIndex]} 
-                  alt={product.name} 
-                  fill 
-                  className="object-contain" 
-                />
+                {isVideo(product.images[currentImageIndex]) ? (
+                  <video 
+                    src={product.images[currentImageIndex]} 
+                    controls 
+                    className="w-full h-full object-contain" 
+                  />
+                ) : (
+                  <Image 
+                    src={product.images[currentImageIndex]} 
+                    alt={product.name} 
+                    fill 
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    className="object-contain" 
+                  />
+                )}
                 {product.images.length > 1 && (
                   <>
                     <button 

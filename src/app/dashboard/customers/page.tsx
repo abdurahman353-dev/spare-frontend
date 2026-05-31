@@ -347,7 +347,7 @@ export default function AdminCustomersPage() {
                       "font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 border-none",
                       customer.type === "Wholesale" ? "bg-[#0052cc] text-white" :
                       customer.type === "Garage"    ? "bg-amber-500 text-white" :
-                      customer.type === "Retail"    ? "bg-emerald-100 text-emerald-700" :
+                      customer.type === "Retail"    ? "bg-purple-100 text-purple-700" :
                       "bg-zinc-100 text-zinc-600"
                     )}>
                       {customer.type}

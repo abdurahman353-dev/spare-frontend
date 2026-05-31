@@ -10,13 +10,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from "@/components/ui/table";
 import {
-  FileText, Download, Package, Users, Receipt, Printer,
-  Loader2, ClipboardList, MapPin, TrendingUp, Check, ChevronsUpDown
+  FileText, Download, Package, Users, Receipt,
+  Loader2, MapPin, TrendingUp, Check, ChevronsUpDown, Search
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
+import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -70,11 +70,14 @@ function SummaryCard({ label, value, sub }: { label: string; value: string; sub?
 }
 
 export default function AdminReportsPage() {
+  const { settings } = useSettings();
   const [orders, setOrders]       = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [storeName, setStoreName] = useState("My Business");
+  const [storeKraPin, setStoreKraPin] = useState("");
+  const [mounted, setMounted] = useState(false);
 
   const today = new Date().toISOString().split("T")[0];
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
@@ -84,11 +87,23 @@ export default function AdminReportsPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState("sales");
   const [openCustomerSelect, setOpenCustomerSelect] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery) return customers;
+    const q = searchQuery.toLowerCase();
+    return customers.filter(c => 
+      c.name?.toLowerCase().includes(q) || 
+      c.phone?.toLowerCase().includes(q) || 
+      c.email?.toLowerCase().includes(q)
+    );
+  }, [customers, searchQuery]);
 
   useEffect(() => {
-    // Fetch settings first to get the real business name
+    // Fetch admin settings to get business name and KRA PIN
     api.get("/settings").then(r => {
-      if (r.data?.store_name) setStoreName(r.data.store_name);
+      if (r.data?.store_name)    setStoreName(r.data.store_name);
+      if (r.data?.store_kra_pin) setStoreKraPin(r.data.store_kra_pin);
     }).catch(() => {});
 
     Promise.all([
@@ -100,11 +115,15 @@ export default function AdminReportsPage() {
       setInventory(i.data);
       setCustomers(c.data);
     }).catch(console.error)
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setMounted(true);
+      });
   }, []);
 
-  // Filter Orders based on date
+  // Filter Orders based on date and exclude Cancelled orders
   const filteredOrders = useMemo(() => orders.filter(o => {
+    if (o.status?.toLowerCase() === "cancelled") return false;
     if (!o.created_at) return true;
     const d = o.created_at.split("T")[0];
     return d >= startDate && d <= endDate;
@@ -214,6 +233,24 @@ export default function AdminReportsPage() {
     ? orders.filter(o => String(o.customer_id) === selectedCustomerId || String(o.customer?.id) === selectedCustomerId)
     : [], [orders, selectedCustomerId]);
   const selectedCustomer = customers.find(c => String(c.id) === selectedCustomerId);
+
+  const selectedCustomerLtv = useMemo(() => {
+    return customerOrders
+      .filter(o => o.status?.toLowerCase() !== "cancelled")
+      .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  }, [customerOrders]);
+
+  const selectedCustomerRank = useMemo(() => {
+    if (!selectedCustomer) return null;
+    const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+    const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
+    const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+
+    if (selectedCustomerLtv >= platThresh) return { name: "Platinum", icon: "💎", badgeCls: "bg-blue-100 text-blue-800 border-blue-200" };
+    if (selectedCustomerLtv >= goldThresh) return { name: "Gold", icon: "🥇", badgeCls: "bg-amber-100 text-amber-800 border-amber-200" };
+    if (selectedCustomerLtv >= silverThresh) return { name: "Silver", icon: "🥈", badgeCls: "bg-zinc-100 text-zinc-800 border-zinc-200" };
+    return { name: "Bronze", icon: "🥉", badgeCls: "bg-orange-100 text-orange-800 border-orange-200" };
+  }, [selectedCustomer, selectedCustomerLtv, settings]);
 
   // PDF Export Engine
   const exportToPDF = () => {
@@ -486,57 +523,59 @@ export default function AdminReportsPage() {
               </div>
 
               {/* BI Charts Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Revenue Timeline */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
-                  <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#0052cc]"/> Revenue Timeline</h3>
-                  <div className="h-[250px] w-full">
-                    {timelineData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                        <LineChart data={timelineData}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
-                          <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#71717a' }} dy={10} />
-                          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#71717a' }} tickFormatter={(value) => `Ksh ${value.toLocaleString()}`} width={80} />
-                          <RechartsTooltip cursor={{ stroke: '#f4f4f5', strokeWidth: 2 }} contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                          <Line type="monotone" dataKey="revenue" stroke="#0052cc" strokeWidth={3} dot={{ r: 4, fill: '#0052cc', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-sm font-medium text-zinc-400">No data for selected period</div>
-                    )}
+              {activeTab === "sales" && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Revenue Timeline */}
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+                    <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#0052cc]"/> Revenue Timeline</h3>
+                    <div className="h-[250px] w-full">
+                      {timelineData.length > 0 && mounted ? (
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                          <LineChart data={timelineData}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                            <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#71717a' }} dy={10} />
+                            <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10, fill: '#71717a' }} tickFormatter={(value) => `Ksh ${value.toLocaleString()}`} width={80} />
+                            <RechartsTooltip cursor={{ stroke: '#f4f4f5', strokeWidth: 2 }} contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                            <Line type="monotone" dataKey="revenue" stroke="#0052cc" strokeWidth={3} dot={{ r: 4, fill: '#0052cc', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-sm font-medium text-zinc-400">No data for selected period</div>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Status Breakdown */}
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
-                  <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><PieChart className="h-4 w-4 text-[#0052cc]"/> Fulfillment Status</h3>
-                  <div className="h-[250px] w-full">
-                    {statusData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                        <PieChart>
-                          <Pie
-                            data={statusData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                          >
-                            {statusData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || '#a1a1aa'} />
-                            ))}
-                          </Pie>
-                          <RechartsTooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7' }} />
-                          <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-sm font-medium text-zinc-400">No data for selected period</div>
-                    )}
+                  {/* Status Breakdown */}
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
+                    <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><PieChart className="h-4 w-4 text-[#0052cc]"/> Fulfillment Status</h3>
+                    <div className="h-[250px] w-full">
+                      {statusData.length > 0 && mounted ? (
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                          <PieChart>
+                            <Pie
+                              data={statusData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {statusData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || '#a1a1aa'} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e4e4e7' }} />
+                            <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 'bold' }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-sm font-medium text-zinc-400">No data for selected period</div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Secondary BI Row */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -560,8 +599,8 @@ export default function AdminReportsPage() {
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
                   <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><MapPin className="h-4 w-4 text-[#0052cc]"/> Top Regional Destinations</h3>
                   <div className="h-[200px] w-full mt-4">
-                    {locationData.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                    {locationData.length > 0 && mounted && activeTab === "sales" ? (
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                         <BarChart data={locationData} layout="vertical" margin={{ top: 0, right: 30, left: 20, bottom: 0 }}>
                           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
                           <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -716,43 +755,94 @@ export default function AdminReportsPage() {
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[360px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search customers..." className="text-zinc-800 font-semibold" />
-                        <CommandList className="max-h-[260px] overflow-y-auto">
-                          <CommandEmpty className="text-zinc-600 font-medium">No customer found.</CommandEmpty>
-                          <CommandGroup>
-                            {customers.map((c) => (
-                              <CommandItem
+                      <div className="flex flex-col bg-white rounded-xl shadow-md border border-zinc-150 overflow-hidden">
+                        {/* Search Input with Search Icon */}
+                        <div className="flex items-center gap-2 border-b border-zinc-100 px-3 py-2 bg-zinc-50/50">
+                          <Search className="h-4 w-4 text-zinc-400 shrink-0" />
+                          <input
+                            type="text"
+                            placeholder="Search customers..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            className="flex h-9 w-full bg-transparent py-1 text-sm outline-none placeholder:text-zinc-400 font-semibold text-zinc-800"
+                          />
+                        </div>
+                        {/* Scrollable list - explicitly scrollable */}
+                        <div className="max-h-[260px] overflow-y-scroll p-1 space-y-0.5 scrollbar-thin scroll-smooth">
+                          {filteredCustomers.length === 0 ? (
+                            <div className="py-6 text-center text-sm font-medium text-zinc-500">
+                              No customer found.
+                            </div>
+                          ) : (
+                            filteredCustomers.map((c) => (
+                              <button
                                 key={c.id}
-                                value={c.name}
-                                onSelect={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setSelectedCustomerId(String(c.id));
                                   setOpenCustomerSelect(false);
+                                  setSearchQuery("");
                                 }}
-                                className="text-zinc-800 font-semibold cursor-pointer"
+                                className={cn(
+                                  "w-full flex items-center justify-between px-3 py-2 text-sm font-semibold rounded-lg text-left transition-colors duration-150",
+                                  selectedCustomerId === String(c.id)
+                                    ? "bg-[#0052cc]/10 text-[#0052cc]"
+                                    : "text-zinc-700 hover:bg-zinc-100"
+                                )}
                               >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    selectedCustomerId === String(c.id) ? "opacity-100 text-[#0052cc]" : "opacity-0"
-                                  )}
-                                />
-                                {c.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
+                                <div className="flex items-center gap-2">
+                                  <Check
+                                    className={cn(
+                                      "h-4 w-4 shrink-0",
+                                      selectedCustomerId === String(c.id) ? "opacity-100 text-[#0052cc]" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="truncate">{c.name}</span>
+                                </div>
+                                {c.phone && <span className="text-xs text-zinc-400 font-normal shrink-0">{c.phone}</span>}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
                     </PopoverContent>
                   </Popover>
                 </div>
               </div>
 
               {selectedCustomer && (
-                <div className="p-6 bg-[#0052cc]/5 border border-[#0052cc]/10 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
-                  <div><p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest">Account Name</p><p className="font-bold text-zinc-900 mt-1 text-lg">{selectedCustomer.name}</p></div>
-                  <div><p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest">Account ID</p><p className="font-bold text-zinc-900 mt-1 text-lg font-mono">ACC-{String(selectedCustomer.id).padStart(4, "0")}</p></div>
-                  <div><p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest">Primary Contact</p><p className="font-bold text-zinc-900 mt-1 text-lg">{selectedCustomer.phone || selectedCustomer.email || "—"}</p></div>
+                <div className="p-6 bg-[#0052cc]/5 border border-[#0052cc]/10 rounded-2xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 text-sm">
+                  <div>
+                    <p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest font-bold">Account Name</p>
+                    <p className="font-bold text-zinc-900 mt-1 text-lg leading-tight">{selectedCustomer.name}</p>
+                    <p className="font-bold text-zinc-400 text-xs font-mono">ACC-{String(selectedCustomer.id).padStart(4, "0")}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest font-bold">Loyalty Status</p>
+                    {selectedCustomerRank && (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <span className="text-xl">{selectedCustomerRank.icon}</span>
+                        <span className={cn("text-[10px] font-black px-2.5 py-0.5 rounded-full border tracking-wide uppercase", selectedCustomerRank.badgeCls)}>
+                          {selectedCustomerRank.name}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest font-bold">Lifetime Value (LTV)</p>
+                    <p className="font-black text-zinc-950 mt-1.5 text-lg">Ksh {selectedCustomerLtv.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest font-bold">KRA Tax ID / PIN</p>
+                    <p className="font-extrabold text-zinc-900 mt-1.5 text-base font-mono uppercase tracking-wider">{selectedCustomer.tax_id || "N/A"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-[#0052cc] uppercase tracking-widest font-bold">Primary Contact</p>
+                    <p className="font-semibold text-zinc-800 mt-1 text-xs">{selectedCustomer.phone || "No Phone"}</p>
+                    <p className="font-semibold text-zinc-500 text-xs truncate">{selectedCustomer.email || "No Email"}</p>
+                  </div>
                 </div>
               )}
 
@@ -857,7 +947,7 @@ export default function AdminReportsPage() {
                   </TableBody>
                 </Table>
               </div>
-
+ 
               <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-xs font-semibold text-zinc-500">
                 ⚠️ Legal Note: VAT is calculated at the standard rate of 16% strictly following Kenya Revenue Authority (KRA) guidelines. This system-generated report serves as preliminary supporting documentation for iTax filings.
               </div>

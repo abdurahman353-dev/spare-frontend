@@ -450,37 +450,28 @@ export default function AdminLogisticsPage() {
 
 
   const fetchShipments = async () => {
-    setLoading(true);
     try {
       const res = await api.get("/shipments");
       setShipments(res.data);
     } catch (err) {
       toast.error("Failed to fetch shipments");
-    } finally {
-      setLoading(false);
     }
   };
 
   const fetchUnassignedOrders = async () => {
-    setLoading(true);
     try {
       const res = await api.get("/shipments/unassigned-orders");
       setUnassignedOrders(res.data);
     } catch (err) {
       toast.error("Failed to fetch unassigned orders");
-    } finally {
-      setLoading(false);
     }
   };
   const fetchDestinations = async () => {
-    setLoading(true);
     try {
       const res = await api.get("/shipping-destinations");
       setDestinations(res.data);
     } catch (err) {
       toast.error("Failed to fetch shipping zones");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -513,14 +504,11 @@ export default function AdminLogisticsPage() {
   };
 
   const fetchCountriesData = async () => {
-    setLoading(true);
     try {
       const res = await api.get("/locations/countries");
       setCountriesData(res.data);
     } catch (err) {
       toast.error("Failed to fetch shipping zones");
-    } finally {
-      setLoading(false);
     }
   };
 

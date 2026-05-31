@@ -79,6 +79,13 @@ export default function AdminSettingsPage() {
     notify_daily_report: "false",
     map_hubs: "[]",
     store_country: "Kenya",
+    store_address: "",
+    store_phone: "",
+    store_email: "",
+    store_website: "",
+    store_kra_pin: "",
+    store_reg_number: "",
+    store_branch: "",
   });
 
   useEffect(() => {
@@ -632,6 +639,41 @@ export default function AdminSettingsPage() {
                 <div className="space-y-1.5 md:col-span-2">
                   <Label className={labelCls}>Working Hours</Label>
                   <Textarea name="working_hours" value={settings.working_hours || ""} onChange={handleChange} placeholder="Mon - Fri: 8:00 AM - 5:00 PM&#10;Sat: 9:00 AM - 2:00 PM" className="border-zinc-200 rounded-lg bg-white min-h-[80px]" />
+                </div>
+
+                {/* ── Official Company Header & Compliance (For PDF Reports) ── */}
+                <div className="md:col-span-2 pt-6 border-t border-zinc-150">
+                  <h3 className="text-sm font-bold text-zinc-900 mb-4">Official Company Header & Compliance Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-1.5">
+                      <Label className={labelCls}>Legal Company Address (PDF Header)</Label>
+                      <Input name="store_address" value={settings.store_address || ""} onChange={handleChange} placeholder="Mombasa Road, Nairobi Central Hub, Suite 4B" className={inputCls} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className={labelCls}>Official Phone Number (PDF Header)</Label>
+                      <Input name="store_phone" value={settings.store_phone || ""} onChange={handleChange} placeholder="+254 711 223 344" className={inputCls} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className={labelCls}>Official Email Address (PDF Header)</Label>
+                      <Input name="store_email" value={settings.store_email || ""} onChange={handleChange} placeholder="billing@autospare.com" className={inputCls} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className={labelCls}>Official Website Url</Label>
+                      <Input name="store_website" value={settings.store_website || ""} onChange={handleChange} placeholder="www.autospare.com" className={inputCls} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className={labelCls}>Tax Registration / KRA PIN</Label>
+                      <Input name="store_kra_pin" value={settings.store_kra_pin || ""} onChange={handleChange} placeholder="A001234567Z" className={inputCls} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className={labelCls}>Business Registration Number</Label>
+                      <Input name="store_reg_number" value={settings.store_reg_number || ""} onChange={handleChange} placeholder="PVT-79A8B6C" className={inputCls} />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label className={labelCls}>Default Primary Warehouse / Branch Name</Label>
+                      <Input name="store_branch" value={settings.store_branch || ""} onChange={handleChange} placeholder="Nairobi Main Warehouse" className={inputCls} />
+                    </div>
+                  </div>
                 </div>
               </div>
             </TabsContent>

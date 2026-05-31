@@ -95,21 +95,24 @@ export default function AdminOrdersPage() {
   const { settings } = useSettings();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [secondsSinceSync, setSecondsSinceSync] = useState(0);
-  
-  // Advanced Filters — Shipment Orders
+
+  // Advanced Filters — Shipment Orders (completely isolated from Walk-In)
+  const [shipmentSearchQuery, setShipmentSearchQuery] = useState("");
   const [warehouseFilter, setWarehouseFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [shipmentDateFrom, setShipmentDateFrom] = useState("");
+  const [shipmentDateTo, setShipmentDateTo] = useState("");
 
-  // Advanced Filters — Walk-In Orders
+  // Advanced Filters — Walk-In Orders (completely isolated from Shipment)
+  const [walkInSearchQuery, setWalkInSearchQuery] = useState("");
   const [walkInWarehouseFilter, setWalkInWarehouseFilter] = useState("all");
   const [walkInDestFilter, setWalkInDestFilter] = useState("all");
+  const [walkInDateFrom, setWalkInDateFrom] = useState("");
+  const [walkInDateTo, setWalkInDateTo] = useState("");
   
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [activeCities, setActiveCities] = useState<any[]>([]);
@@ -482,14 +485,9 @@ export default function AdminOrdersPage() {
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter !== "All Status") params.append("status", statusFilter);
-      if (warehouseFilter !== "all") params.append("warehouse_id", warehouseFilter);
-      if (cityFilter !== "all") params.append("city", cityFilter);
-      if (dateFrom) params.append("date_from", dateFrom);
-      if (dateTo) params.append("date_to", dateTo);
-
-      const res = await api.get(`/orders?${params.toString()}`);
+      // Always fetch ALL orders with no filters — filtering is done 100% client-side
+      // so that shipment filters never affect the Walk-In data pool and vice versa.
+      const res = await api.get("/orders");
       setOrders(res.data);
     } catch (err) {
       console.error("Failed to fetch orders:", err);
@@ -499,7 +497,7 @@ export default function AdminOrdersPage() {
     }
     setLastSyncedAt(new Date());
     setSecondsSinceSync(0);
-  }, [statusFilter, warehouseFilter, cityFilter, dateFrom, dateTo]);
+  }, []);
 
   const fetchMetadata = async () => {
     try {
@@ -658,7 +656,24 @@ export default function AdminOrdersPage() {
       toast.error("No orders available to export");
       return;
     }
-    exportOrdersPDF(filteredOrders, settings.currency || "Ksh", settings.store_logo || undefined, settings.store_name || undefined);
+    const isWalkIn = activeOrdersTab === "WalkIn";
+    exportOrdersPDF(
+      filteredOrders,
+      settings.currency || "Ksh",
+      settings.store_logo || undefined,
+      settings.store_name || undefined,
+      isWalkIn,
+      {
+        tagline:   settings.store_tagline   || undefined,
+        address:   settings.physical_address || settings.store_address || undefined,
+        phone:     settings.contact_phone   || settings.store_phone   || undefined,
+        email:     settings.contact_email   || settings.store_email   || undefined,
+        website:   settings.store_website   || undefined,
+        kraPin:    settings.store_kra_pin   || undefined,
+        regNumber: settings.store_reg_number || undefined,
+        branch:    settings.store_branch    || undefined,
+      }
+    );
     toast.success("PDF generated successfully");
   };
 
@@ -667,18 +682,18 @@ export default function AdminOrdersPage() {
     setWarehouseFilter("all");
     setCountryFilter("all");
     setCityFilter("all");
-    setDateFrom("");
-    setDateTo("");
-    setSearchQuery("");
+    setShipmentDateFrom("");
+    setShipmentDateTo("");
+    setShipmentSearchQuery("");
   };
 
   const handleClearWalkInFilters = () => {
-    setSearchQuery("");
+    setWalkInSearchQuery("");
     setWalkInPayStatusFilter("All");
     setWalkInWarehouseFilter("all");
     setWalkInDestFilter("all");
-    setDateFrom("");
-    setDateTo("");
+    setWalkInDateFrom("");
+    setWalkInDateTo("");
   };
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -689,54 +704,68 @@ export default function AdminOrdersPage() {
   const walkInOrders = useMemo(() => orders.filter(o => (o.tracking_number || "").startsWith("WK-")), [orders]);
 
   const filteredOrders = useMemo(() => {
-    const base = activeOrdersTab === "WalkIn" ? walkInOrders : shipmentOrders;
-    return base.filter(order => {
-      const trackingNumber = order.tracking_number || "";
-      const customerName = order.customer?.name || "";
-      const customerEmail = order.customer?.email || "";
-      const warehouseName = order.items?.[0]?.warehouse?.name || "";
-      const destinationCity = order.shipping_city || "";
-      const destinationAddress = order.shipping_address || "";
-      const walkInDestLabel = getWalkInDestinationLabel(order);
-      const matchesSearch = (
-        trackingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        customerEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        warehouseName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        destinationCity.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        destinationAddress.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        walkInDestLabel.toLowerCase().includes(searchQuery.toLowerCase())
+    if (activeOrdersTab === "WalkIn") {
+      // ── Walk-In filters — completely isolated ──────────────────────────────
+      const sq = walkInSearchQuery.toLowerCase();
+      return walkInOrders.filter(order => {
+        const matchesSearch = !sq || (
+          (order.tracking_number || "").toLowerCase().includes(sq) ||
+          (order.customer?.name || "").toLowerCase().includes(sq) ||
+          (order.customer?.email || "").toLowerCase().includes(sq) ||
+          (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
+          getWalkInDestinationLabel(order).toLowerCase().includes(sq)
+        );
+        const matchesPayStatus = walkInPayStatusFilter === "All" ||
+          (walkInPayStatusFilter === "Cancelled / Refunded"
+            ? isOrderVoided(order)
+            : order.payment_status === walkInPayStatusFilter);
+        const matchesWarehouse = walkInWarehouseFilter === "all" ||
+          order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
+        const matchesDest = walkInDestFilter === "all" ||
+          getWalkInDestinationLabel(order) === walkInDestFilter;
+        const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
+        const matchesDateFrom = !walkInDateFrom || orderDate >= new Date(walkInDateFrom).setHours(0, 0, 0, 0);
+        const matchesDateTo   = !walkInDateTo   || orderDate <= new Date(walkInDateTo).setHours(0, 0, 0, 0);
+        return matchesSearch && matchesPayStatus && matchesWarehouse && matchesDest && matchesDateFrom && matchesDateTo;
+      });
+    }
+
+    // ── Shipment filters — completely isolated ─────────────────────────────
+    const sq = shipmentSearchQuery.toLowerCase();
+    return shipmentOrders.filter(order => {
+      const matchesSearch = !sq || (
+        (order.tracking_number || "").toLowerCase().includes(sq) ||
+        (order.customer?.name || "").toLowerCase().includes(sq) ||
+        (order.customer?.email || "").toLowerCase().includes(sq) ||
+        (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
+        (order.shipping_city || "").toLowerCase().includes(sq) ||
+        (order.shipping_address || "").toLowerCase().includes(sq)
       );
-      // Walk-In tab: filter by payment status
-      const matchesPayStatus = activeOrdersTab !== "WalkIn" || walkInPayStatusFilter === "All" ||
-        (walkInPayStatusFilter === "Cancelled / Refunded"
-          ? isOrderVoided(order)
-          : order.payment_status === walkInPayStatusFilter);
-      // Walk-In tab: filter by source warehouse
-      const matchesWalkInWarehouse = activeOrdersTab !== "WalkIn" || walkInWarehouseFilter === "all" ||
-        order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
-      // Walk-In tab: filter by destination city + address label
-      const matchesWalkInDest = activeOrdersTab !== "WalkIn" || walkInDestFilter === "all" ||
-        getWalkInDestinationLabel(order) === walkInDestFilter;
-      // Shipment tab: origin, destination country/city, status, date
-      const matchesWarehouse = activeOrdersTab !== "Shipment" || warehouseFilter === "all" ||
+      const matchesWarehouse = warehouseFilter === "all" ||
         order.items?.some((i: any) => i.warehouse_id?.toString() === warehouseFilter);
-      const matchesCountry = activeOrdersTab !== "Shipment" || countryFilter === "all" ||
+      const matchesCountry = countryFilter === "all" ||
         order.shipping_country?.toLowerCase() === countryFilter.toLowerCase();
-      const matchesCity = activeOrdersTab !== "Shipment" || cityFilter === "all" ||
+      const matchesCity = cityFilter === "all" ||
         order.shipping_city?.toLowerCase() === cityFilter.toLowerCase();
-      const matchesStatus = activeOrdersTab !== "Shipment" || statusFilter === "All Status" || order.status === statusFilter;
+      const matchesStatus = statusFilter === "All Status" || order.status === statusFilter;
       const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
-      const matchesDateFrom = activeOrdersTab !== "Shipment" || !dateFrom || orderDate >= new Date(dateFrom).setHours(0, 0, 0, 0);
-      const matchesDateTo = activeOrdersTab !== "Shipment" || !dateTo || orderDate <= new Date(dateTo).setHours(0, 0, 0, 0);
-      return matchesSearch && matchesPayStatus && matchesWalkInWarehouse && matchesWalkInDest &&
-        matchesWarehouse && matchesCountry && matchesCity && matchesStatus && matchesDateFrom && matchesDateTo;
+      const matchesDateFrom = !shipmentDateFrom || orderDate >= new Date(shipmentDateFrom).setHours(0, 0, 0, 0);
+      const matchesDateTo   = !shipmentDateTo   || orderDate <= new Date(shipmentDateTo).setHours(0, 0, 0, 0);
+      return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesStatus && matchesDateFrom && matchesDateTo;
     });
-  }, [orders, searchQuery, activeOrdersTab, shipmentOrders, walkInOrders, walkInPayStatusFilter, walkInWarehouseFilter, walkInDestFilter, warehouseFilter, countryFilter, cityFilter, statusFilter, dateFrom, dateTo]);
+  }, [
+    activeOrdersTab,
+    shipmentOrders, shipmentSearchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
+    walkInOrders, walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInDateFrom, walkInDateTo,
+  ]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, dateFrom, dateTo, activeOrdersTab, walkInPayStatusFilter, walkInWarehouseFilter, walkInDestFilter]);
+  }, [
+    activeOrdersTab,
+    shipmentSearchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
+    walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInDateFrom, walkInDateTo,
+  ]);
 
   const totalPages = Math.ceil(filteredOrders.length / pageSize);
   const paginatedOrders = useMemo(() => {
@@ -827,7 +856,7 @@ export default function AdminOrdersPage() {
         <div className="relative lg:col-span-2">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
           <Input placeholder="Search Ref, Customer, Route..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
-            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            value={shipmentSearchQuery} onChange={(e) => setShipmentSearchQuery(e.target.value)} />
         </div>
         {/* Origin Warehouse */}
         <div className="flex flex-col justify-center">
@@ -870,9 +899,9 @@ export default function AdminOrdersPage() {
         {/* Date Range */}
         <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
           <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            value={shipmentDateFrom} onChange={(e) => setShipmentDateFrom(e.target.value)} />
           <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            value={shipmentDateTo} onChange={(e) => setShipmentDateTo(e.target.value)} />
         </div>
       </div>
       )}
@@ -884,7 +913,7 @@ export default function AdminOrdersPage() {
         <div className="relative lg:col-span-2">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
           <Input placeholder="Search WK-Ref, Customer Name..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
-            value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            value={walkInSearchQuery} onChange={(e) => setWalkInSearchQuery(e.target.value)} />
         </div>
         {/* Source Warehouse */}
         <div className="flex flex-col justify-center">
@@ -925,9 +954,9 @@ export default function AdminOrdersPage() {
         {/* Date Range */}
         <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
           <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            value={walkInDateFrom} onChange={(e) => setWalkInDateFrom(e.target.value)} />
           <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            value={walkInDateTo} onChange={(e) => setWalkInDateTo(e.target.value)} />
         </div>
       </div>
       )}

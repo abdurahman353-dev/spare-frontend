@@ -280,7 +280,18 @@ export const exportOrdersPDF = async (
   orders: any[],
   currency: string = "Ksh",
   logoBase64?: string,
-  storeName?: string
+  storeName?: string,
+  isWalkIn: boolean = false,
+  companySettings?: {
+    tagline?: string;
+    address?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+    kraPin?: string;
+    regNumber?: string;
+    branch?: string;
+  }
 ) => {
   const { default: jsPDFClass } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
@@ -290,43 +301,226 @@ export const exportOrdersPDF = async (
     format: "a4",
   });
 
-  const name = storeName || "AUTOSPARE EAST AFRICA";
-  addHeader(doc, name, "Customer & POS Dispatch Transactions Report", name, logoBase64);
+  const pageWidth  = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+  const marginL = 14;
+  const marginR = 14;
 
-  const tableColumn = ["Order Ref", "Customer", "Origin Warehouse", "Destination", "Order Date", "Items", "Subtotal", "Shipping", "Grand Total", "Status"];
-  const tableRows = orders.map((o) => [
-    o.tracking_number || `ORD-${o.id}`,
-    o.customer?.name || "Walk-In Guest",
-    o.items?.[0]?.warehouse?.name || "N/A",
-    o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}` : "In-Store Collection",
-    new Date(o.created_at).toLocaleDateString(),
-    `${o.items?.length || 0} items`,
-    `${currency} ${Math.max(0, (parseFloat(o.total_amount || 0) - parseFloat(o.shipping_fee || 0))).toLocaleString()}`,
-    `${currency} ${parseFloat(o.shipping_fee || 0).toLocaleString()}`,
-    `${currency} ${parseFloat(o.total_amount || 0).toLocaleString()}`,
-    o.status || "Pending",
+  const legalName    = storeName || "AUTOSPARE EAST AFRICA";
+  const tagline      = companySettings?.tagline  || "Premium Automotive Parts & Logistics";
+  const addressLine  = companySettings?.address  || "Mombasa Road, Nairobi Central Hub";
+  const telNo        = companySettings?.phone    || "+254 711 223 344";
+  const emailAddr    = companySettings?.email    || "billing@autospare.com";
+  const websiteUrl   = companySettings?.website  || "www.autospare.com";
+  const kraPin       = companySettings?.kraPin   || "";
+  const businessReg  = companySettings?.regNumber || "";
+  const activeBranch = companySettings?.branch   || "Main Warehouse";
+  const reportType   = isWalkIn ? "WALK-IN POS" : "SHIPMENT";
+  const today        = new Date().toISOString().split("T")[0];
+
+  // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
+  // Left blue accent bar
+  doc.setFillColor(0, 82, 204);
+  doc.rect(marginL, 8, 3, 22, "F");
+
+  // Abstract logo block
+  doc.setFillColor(0, 82, 204);
+  doc.roundedRect(21, 8, 12, 12, 2, 2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.triangle(27, 10, 25, 14, 29, 14, "F");
+  doc.triangle(27, 18, 25, 14, 29, 14, "F");
+
+  // Company name & tagline
+  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
+  doc.text(legalName, 37, 15);
+  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
+  doc.text(tagline, 37, 20);
+
+  // Right-aligned contact strip
+  const rightEdge = pageWidth - marginR;
+  doc.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(100, 100, 100);
+  doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightEdge, 12, { align: "right" });
+  if (websiteUrl || kraPin) {
+    doc.text(`${websiteUrl ? `Web: ${websiteUrl}` : ""}${kraPin ? `  |  PIN: ${kraPin}` : ""}`, rightEdge, 17, { align: "right" });
+  }
+  if (businessReg || addressLine) {
+    doc.text(`${businessReg ? `Reg: ${businessReg}  |  ` : ""}Addr: ${addressLine}`, rightEdge, 22, { align: "right" });
+  }
+
+  // Header separator
+  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
+  doc.line(marginL, 32, pageWidth - marginR, 32);
+
+  // ── 2. REPORT INFO BLOCK ───────────────────────────────────────────────────
+  const infoY = 36;
+  const infoW = pageWidth - marginL - marginR;
+  const dateStamp = new Date().toISOString().slice(0, 7).replace("-", "");
+  const randomSeq = Math.floor(100 + Math.random() * 900);
+  const docId = `${reportType.replace(/\s+/g, "-")}-${dateStamp}-${randomSeq}`;
+
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(marginL, infoY, infoW, 22, 2, 2, "F");
+
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text("Report ID:",       marginL + 6, infoY + 7);
+  doc.text("Generated On:",    marginL + 6, infoY + 13);
+  doc.text("Report Type:",     marginL + 6, infoY + 19);
+
+  doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text(docId,                                         marginL + 32, infoY + 7);
+  doc.text(new Date().toLocaleString("en-KE", { hour12: false }), marginL + 32, infoY + 13);
+  doc.text(`${reportType} ORDERS REPORT`,                 marginL + 32, infoY + 19);
+
+  // Right column of info block
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text("Branch:",   marginL + infoW * 0.55, infoY + 7);
+  doc.text("Currency:", marginL + infoW * 0.55, infoY + 13);
+  doc.text("Records:",  marginL + infoW * 0.55, infoY + 19);
+
+  doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text(activeBranch,       marginL + infoW * 0.55 + 22, infoY + 7);
+  doc.text(`${currency} (Kenyan Shilling)`, marginL + infoW * 0.55 + 22, infoY + 13);
+  doc.text(`${orders.length} order(s)`,     marginL + infoW * 0.55 + 22, infoY + 19);
+
+  // ── 3. SUMMARY STATS CARD ──────────────────────────────────────────────────
+  const statsY = infoY + 26;
+  const totalGross = orders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  const totalFees  = orders.reduce((s, o) => s + Number(o.shipping_fee  || 0), 0);
+  const totalItems = orders.reduce((s, o) => s + (o.items?.length || 0), 0);
+
+  doc.setFillColor(239, 246, 255);
+  doc.roundedRect(marginL, statsY, infoW, 14, 2, 2, "F");
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text(`Total Orders: ${orders.length}`,                                    marginL + 6,            statsY + 9);
+  doc.text(`Total Items: ${totalItems}`,                                         marginL + infoW * 0.25, statsY + 9);
+  doc.text(`Shipping Fees: ${currency} ${totalFees.toLocaleString()}`,           marginL + infoW * 0.50, statsY + 9);
+  doc.text(`Gross Revenue: ${currency} ${totalGross.toLocaleString()}`,          marginL + infoW * 0.75, statsY + 9);
+
+  // ── 4. ORDERS TABLE ────────────────────────────────────────────────────────
+  const tableStartY = statsY + 18;
+
+  const tableColumn = [
+    "Order Ref",
+    "Customer / Phone",
+    "Products",
+    "Origin Warehouse",
+    "Destination",
+    "Date",
+    "Subtotal",
+    "Shipping",
+    "Grand Total",
+    "Status",
+  ];
+
+  const tableRows = orders.map((o) => {
+    const productNames = (o.items || [])
+      .map((item: any) => item.product?.name || "—")
+      .filter(Boolean)
+      .join(", ") || "—";
+
+    const customerPhone = o.customer?.phone || "";
+    const customerDisplay = customerPhone
+      ? `${o.customer?.name || "Walk-In Guest"}\n${customerPhone}`
+      : (o.customer?.name || "Walk-In Guest");
+
+    return [
+      o.tracking_number || `ORD-${o.id}`,
+      customerDisplay,
+      productNames,
+      o.items?.[0]?.warehouse?.name || "N/A",
+      o.shipping_city
+        ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}`
+        : "In-Store Collection",
+      new Date(o.created_at).toLocaleDateString("en-KE"),
+      `${currency} ${Math.max(0, parseFloat(o.total_amount || 0) - parseFloat(o.shipping_fee || 0)).toLocaleString()}`,
+      `${currency} ${parseFloat(o.shipping_fee || 0).toLocaleString()}`,
+      `${currency} ${parseFloat(o.total_amount || 0).toLocaleString()}`,
+      o.status || "Pending",
+    ];
+  });
+
+  // Totals footer row
+  tableRows.push([
+    "TOTALS",
+    `${orders.length} order(s)`,
+    `${totalItems} item(s)`,
+    "",
+    "",
+    "",
+    `${currency} ${Math.max(0, totalGross - totalFees).toLocaleString()}`,
+    `${currency} ${totalFees.toLocaleString()}`,
+    `${currency} ${totalGross.toLocaleString()}`,
+    "",
   ]);
+
+  const w = pageWidth - marginL - marginR;
 
   autoTable(doc, {
     head: [tableColumn],
     body: tableRows,
-    startY: 37,
-    theme: "striped",
+    startY: tableStartY,
+    theme: "grid",
     headStyles: {
-      fillColor: [30, 41, 59], // Slate/Zinc Dark Theme
+      fillColor: [0, 82, 204],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 9,
+      fontSize: 7.5,
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7,
       textColor: [51, 65, 85],
+      overflow: "linebreak",
     },
-    margin: { top: 37, left: 14, right: 14 },
-    didDrawPage: (data: any) => addFooter(doc, data, name),
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: {
+      0: { cellWidth: w * 0.10, fontStyle: "bold" },
+      1: { cellWidth: w * 0.11, overflow: "linebreak" },
+      2: { cellWidth: w * 0.18, overflow: "linebreak" },
+      3: { cellWidth: w * 0.10, overflow: "linebreak" },
+      4: { cellWidth: w * 0.10, overflow: "linebreak" },
+      5: { cellWidth: w * 0.08, halign: "center" },
+      6: { cellWidth: w * 0.09, halign: "right" },
+      7: { cellWidth: w * 0.08, halign: "right" },
+      8: { cellWidth: w * 0.10, halign: "right", fontStyle: "bold" },
+      9: { cellWidth: w * 0.06, halign: "center" },
+    },
+    margin: { top: 37, left: marginL, right: marginR },
+    didParseCell: (data: any) => {
+      // Bold + highlight totals row
+      if (data.row.index === tableRows.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [241, 245, 249];
+        data.cell.styles.textColor = [15, 23, 42];
+      }
+    },
+    didDrawPage: (data: any) => {
+      // Page footer
+      const pageStr = `Page ${doc.getNumberOfPages()}`;
+      doc.setFontSize(7.5).setFont("helvetica", "bold").setTextColor(148, 163, 184);
+      doc.text("This report is system-generated and confidential.", marginL, pageHeight - 8);
+      doc.setFont("helvetica", "normal");
+      doc.text(pageStr, pageWidth - marginR, pageHeight - 8, { align: "right" });
+
+      // Bottom rule
+      doc.setDrawColor(220, 220, 220).setLineWidth(0.3);
+      doc.line(marginL, pageHeight - 12, pageWidth - marginR, pageHeight - 12);
+    },
   });
 
-  doc.save(`orders_report_${new Date().toISOString().split("T")[0]}.pdf`);
+  // ── 5. SIGNATURE BLOCK ─────────────────────────────────────────────────────
+  const finalY: number = (doc as any).lastAutoTable?.finalY ?? tableStartY + 40;
+  let sigY = finalY + 14;
+  if (sigY + 30 > pageHeight - 20) {
+    doc.addPage();
+    sigY = 25;
+  }
+
+  doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text("Prepared By: __________________", marginL, sigY);
+  doc.text("Reviewed By: __________________", pageWidth / 3 + 8, sigY);
+  doc.text("Approved By: __________________", (pageWidth / 3) * 2 + 2, sigY);
+
+  doc.save(`${isWalkIn ? "walkin" : "shipment"}_orders_report_${today}.pdf`);
 };
 
 // 4. Export Waybill / Shipment Products Manifest PDF

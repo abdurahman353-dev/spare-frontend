@@ -16,7 +16,7 @@ const navLinks = [
   { name: "Contact", href: "/contact" },
 ];
 
-import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, CreditCard, ChevronDown, LayoutDashboard } from "lucide-react";
+import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, CreditCard, ChevronDown, LayoutDashboard, MapPin } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/components/providers/SettingsProvider";
@@ -162,8 +162,8 @@ export function Navbar() {
                         <DropdownMenuItem onClick={() => router.push("/account?tab=orders")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
                           <Package className="h-4 w-4" /> My Orders
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => router.push("/account?tab=payment")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
-                          <CreditCard className="h-4 w-4" /> Payment Methods
+                        <DropdownMenuItem onClick={() => router.push("/account?tab=address")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <MapPin className="h-4 w-4" /> Delivery Addresses
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push("/account?tab=settings")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
                           <SettingsIcon className="h-4 w-4" /> Account Settings

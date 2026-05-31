@@ -108,9 +108,10 @@ function AccountPortalInner() {
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab === "orders") setActiveTab("My Orders");
-    if (tab === "settings") setActiveTab("Account Settings");
-    if (tab === "address") setActiveTab("Delivery Addresses");
-    if (tab === "payment") setActiveTab("Payment Methods");
+    else if (tab === "settings") setActiveTab("Account Settings");
+    else if (tab === "address") setActiveTab("Delivery Addresses");
+    else if (tab === "payment") setActiveTab("Payment Methods");
+    else setActiveTab("Dashboard");
   }, [searchParams]);
 
   useEffect(() => {
@@ -188,23 +189,27 @@ function AccountPortalInner() {
               </h1>
               <p className="text-[#64748b] text-[15px] mt-1">Manage your orders and account preferences.</p>
             </div>
-            <div className="flex items-center gap-3">
-               {(() => {
-                const ltv = totalSpent;
-                const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
-                const goldThresh  = parseFloat(settings.rank_gold_threshold    || "50000");
-                const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
-                let label = "Bronze Member",   bgClass = "bg-amber-700";
-                if (ltv >= platThresh) { label = "Platinum Customer"; bgClass = "bg-[#0052cc]"; }
-                else if (ltv >= goldThresh)  { label = "Gold Member";     bgClass = "bg-yellow-500"; }
-                else if (ltv >= silverThresh) { label = "Silver Member";   bgClass = "bg-slate-400"; }
-                return (
-                  <div className={cn("text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm", bgClass)}>
-                    <Star className="h-3 w-3 fill-white" /> {label}
-                  </div>
-                );
-              })()}
-            </div>
+             <div className="flex items-center gap-3">
+               {loading ? (
+                 <div className="animate-pulse bg-slate-200 h-8 w-32 rounded-md" />
+               ) : (
+                 (() => {
+                   const ltv = totalSpent;
+                   const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+                   const goldThresh  = parseFloat(settings.rank_gold_threshold    || "50000");
+                   const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+                   let label = "Bronze Member",   bgClass = "bg-amber-700";
+                   if (ltv >= platThresh) { label = "Platinum Customer"; bgClass = "bg-[#0052cc]"; }
+                   else if (ltv >= goldThresh)  { label = "Gold Member";     bgClass = "bg-yellow-500"; }
+                   else if (ltv >= silverThresh) { label = "Silver Member";   bgClass = "bg-slate-400"; }
+                   return (
+                     <div className={cn("text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm", bgClass)}>
+                       <Star className="h-3 w-3 fill-white" /> {label}
+                     </div>
+                   );
+                 })()
+               )}
+             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -255,18 +260,29 @@ function AccountPortalInner() {
                     className="space-y-8"
                   >
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {[
-                        { label: "Active Orders", value: activeOrders.toString(), color: "text-blue-600" },
-                        { label: "Total Spent", value: `Ksh ${totalSpent.toLocaleString()}`, color: "text-slate-900" },
-                        { label: "Parts Purchased", value: orders.length.toString(), color: "text-slate-900" },
-                      ].map((stat, idx) => (
-                        <div key={idx} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm">
-                          <p className="text-[12px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">{stat.label}</p>
-                          <p className={cn("text-2xl font-bold", stat.color)}>{stat.value}</p>
-                        </div>
-                      ))}
-                    </div>
+                    {loading ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm space-y-3 animate-pulse">
+                            <div className="h-3.5 bg-slate-200 rounded w-24"></div>
+                            <div className="h-7 bg-slate-200 rounded w-32"></div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {[
+                          { label: "Active Orders", value: activeOrders.toString(), color: "text-blue-600" },
+                          { label: "Total Spent", value: `Ksh ${totalSpent.toLocaleString()}`, color: "text-slate-900" },
+                          { label: "Parts Purchased", value: orders.length.toString(), color: "text-slate-900" },
+                        ].map((stat, idx) => (
+                          <div key={idx} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm">
+                            <p className="text-[12px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">{stat.label}</p>
+                            <p className={cn("text-2xl font-bold", stat.color)}>{stat.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Logistics Lifecycle Stepper Guide */}
                     <div className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
@@ -772,7 +788,7 @@ function AccountPortalInner() {
                       <p className="font-semibold text-[#1e293b] text-[14px]">{item.product?.name || `Product ID: ${item.product_id}`}</p>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
-                        <span className="text-[10px] text-[#94a3b8]">Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                        <span className="text-[11px] font-semibold text-slate-700">Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
                       </div>
                     </div>
                     <p className="font-bold text-[#1e293b] text-[14px]">Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>

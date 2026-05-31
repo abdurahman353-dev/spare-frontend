@@ -309,6 +309,9 @@ export default function AdminLogisticsPage() {
       // Exclude Walk-In POS orders (WK- prefix) from shipment grouping
       if (order.tracking_number && order.tracking_number.startsWith("WK-")) return false;
 
+      // Only include orders that are in "Shipped" status
+      if (order.status !== "Shipped") return false;
+
       const matchesSearch = !searchQuery || 
         (order.tracking_number?.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (order.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||

@@ -161,7 +161,7 @@ function AccountPortalInner() {
   };
 
   const downloadInvoice = (order: any) => {
-    exportSingleOrderInvoicePDF(order, settings).catch(() => toast.error("Failed to generate invoice PDF"));
+    exportSingleOrderInvoicePDF(order, settings, user).catch(() => toast.error("Failed to generate invoice PDF"));
   };
 
   const totalSpent = orders.reduce((sum: number, order: any) => sum + Number(order.total_amount), 0);

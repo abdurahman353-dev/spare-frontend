@@ -387,12 +387,13 @@ export const exportOrdersPDF = async (
   const totalGross = orders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
   const totalFees  = orders.reduce((s, o) => s + Number(o.shipping_fee  || 0), 0);
   const totalItems = orders.reduce((s, o) => s + (o.items?.length || 0), 0);
+  const totalUnits = orders.reduce((s, o) => s + (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0), 0);
 
   doc.setFillColor(239, 246, 255);
   doc.roundedRect(marginL, statsY, infoW, 14, 2, 2, "F");
   doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(30, 41, 59);
   doc.text(`Total Orders: ${orders.length}`,                                    marginL + 6,            statsY + 9);
-  doc.text(`Total Items: ${totalItems}`,                                         marginL + infoW * 0.25, statsY + 9);
+  doc.text(`Total Items: ${totalItems} (${totalUnits} Unit${totalUnits !== 1 ? 's' : ''})`, marginL + infoW * 0.25, statsY + 9);
   doc.text(`Shipping Fees: ${currency} ${totalFees.toLocaleString()}`,           marginL + infoW * 0.50, statsY + 9);
   doc.text(`Gross Revenue: ${currency} ${totalGross.toLocaleString()}`,          marginL + infoW * 0.75, statsY + 9);
 
@@ -403,6 +404,7 @@ export const exportOrdersPDF = async (
     "Order Ref",
     "Customer / Phone",
     "Products",
+    "Items / Units",
     "Origin Warehouse",
     "Destination",
     "Date",
@@ -414,9 +416,16 @@ export const exportOrdersPDF = async (
 
   const tableRows = orders.map((o) => {
     const productNames = (o.items || [])
-      .map((item: any) => item.product?.name || "—")
+      .map((item: any) => {
+        const qty = item.quantity || 1;
+        return `${item.product?.name || "—"} (Qty: ${qty})`;
+      })
       .filter(Boolean)
       .join(", ") || "—";
+
+    const itemsCount = o.items?.length || 0;
+    const unitsCount = (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+    const itemsUnitsDisplay = `${itemsCount} Item${itemsCount !== 1 ? 's' : ''} (${unitsCount} Unit${unitsCount !== 1 ? 's' : ''})`;
 
     const customerPhone = o.customer?.phone || "";
     const customerDisplay = customerPhone
@@ -427,6 +436,7 @@ export const exportOrdersPDF = async (
       o.tracking_number || `ORD-${o.id}`,
       customerDisplay,
       productNames,
+      itemsUnitsDisplay,
       o.items?.[0]?.warehouse?.name || "N/A",
       o.shipping_city
         ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}`
@@ -443,7 +453,8 @@ export const exportOrdersPDF = async (
   tableRows.push([
     "TOTALS",
     `${orders.length} order(s)`,
-    `${totalItems} item(s)`,
+    "",
+    `${totalItems} item(s) (${totalUnits} unit${totalUnits !== 1 ? 's' : ''})`,
     "",
     "",
     "",
@@ -473,16 +484,17 @@ export const exportOrdersPDF = async (
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: w * 0.10, fontStyle: "bold" },
-      1: { cellWidth: w * 0.11, overflow: "linebreak" },
+      0: { cellWidth: w * 0.09, fontStyle: "bold" },
+      1: { cellWidth: w * 0.10, overflow: "linebreak" },
       2: { cellWidth: w * 0.18, overflow: "linebreak" },
-      3: { cellWidth: w * 0.10, overflow: "linebreak" },
-      4: { cellWidth: w * 0.10, overflow: "linebreak" },
-      5: { cellWidth: w * 0.08, halign: "center" },
-      6: { cellWidth: w * 0.09, halign: "right" },
+      3: { cellWidth: w * 0.09, overflow: "linebreak" },
+      4: { cellWidth: w * 0.08, overflow: "linebreak" },
+      5: { cellWidth: w * 0.08, overflow: "linebreak" },
+      6: { cellWidth: w * 0.07, halign: "center" },
       7: { cellWidth: w * 0.08, halign: "right" },
-      8: { cellWidth: w * 0.10, halign: "right", fontStyle: "bold" },
-      9: { cellWidth: w * 0.06, halign: "center" },
+      8: { cellWidth: w * 0.07, halign: "right" },
+      9: { cellWidth: w * 0.09, halign: "right", fontStyle: "bold" },
+      10: { cellWidth: w * 0.07, halign: "center" },
     },
     margin: { top: 37, left: marginL, right: marginR },
     didParseCell: (data: any) => {
@@ -824,153 +836,109 @@ export const exportCustomerStatementPDF = async (
 
   const currency = company.currency || "Ksh";
   const storeName = company.storeName || "AUTOSPARE EAST AFRICA";
+  const tagline = company.storeTagline || "Premium Automotive Parts & Logistics";
+  const addressLine = company.physicalAddress || "Mombasa Road, Nairobi Central Hub";
+  const telNo = company.contactPhone || "+254 711 223 344";
+  const emailAddr = company.contactEmail || "billing@autospare.com";
+  const websiteUrl = "www.autospare.com";
+
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
-  const margins = { top: 12, right: 10, bottom: 14, left: 10 };
-  const printableWidth = pageWidth - margins.left - margins.right;
+  const marginL = 14;
+  const marginR = 14;
+  const rightEdge = pageWidth - marginR;
+  const printableWidth = pageWidth - marginL - marginR;
 
-  // 1. Draw Company Header
-  let leftX = margins.left;
-  if (company.storeLogo) {
-    try {
-      const logoSize = 18;
-      doc.addImage(
-        company.storeLogo,
-        getImageFormat(company.storeLogo),
-        margins.left,
-        margins.top,
-        logoSize,
-        logoSize
-      );
-      leftX = margins.left + logoSize + 4;
-    } catch {
-      leftX = margins.left;
-    }
-  }
+  // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
+  // Left blue accent bar
+  doc.setFillColor(0, 82, 204);
+  doc.rect(marginL, 8, 3, 20, "F");
 
-  // Company Name
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(30, 41, 59); // Slate-800
-  doc.text(storeName.toUpperCase(), leftX, margins.top + 4);
+  // Abstract logo block
+  doc.setFillColor(0, 82, 204);
+  doc.roundedRect(21, 8, 10, 10, 2, 2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.triangle(26, 10, 24, 13, 28, 13, "F");
+  doc.triangle(26, 16, 24, 13, 28, 13, "F");
 
-  // Tagline
-  if (company.storeTagline) {
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(100, 116, 139); // Slate-500
-    doc.text(company.storeTagline, leftX, margins.top + 8);
-  }
+  // Company name & tagline
+  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
+  doc.text(storeName.toUpperCase(), 35, 14);
+  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
+  doc.text(tagline, 35, 18);
 
-  // Corporate Address & Details (Right Aligned)
-  const companyDetails = [
-    company.physicalAddress || "Automated Logistics Hub, Nairobi, Kenya",
-    company.contactPhone ? `Tel: ${company.contactPhone}` : "Tel: +254 745 621 159",
-    company.contactEmail ? `Email: ${company.contactEmail}` : "Email: sales@autospare.co.ke",
-  ];
+  // Right-aligned contact strip
+  doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
+  doc.text(`Tel: ${telNo}`, rightEdge, 11, { align: "right" });
+  doc.text(`Email: ${emailAddr}`, rightEdge, 15, { align: "right" });
+  doc.text(`Addr: ${addressLine}`, rightEdge, 19, { align: "right" });
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(71, 85, 105); // Slate-600
-  companyDetails.forEach((line, index) => {
-    doc.text(line, pageWidth - margins.right, margins.top + 3 + (index * 3.8), { align: "right" });
-  });
+  // Header separator
+  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
+  doc.line(marginL, 30, rightEdge, 30);
 
-  // Main Header separator line
-  doc.setDrawColor(226, 232, 240); // Slate-200
-  doc.setLineWidth(0.4);
-  doc.line(margins.left, margins.top + 22, pageWidth - margins.right, margins.top + 22);
+  let currentY = 34;
 
-  let currentY = margins.top + 28;
+  // ── 2. DOCUMENT TITLE ──────────────────────────────────────────────────────
+  doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0, 82, 204);
+  doc.text("OFFICIAL B2B ACCOUNT STATEMENT", marginL, currentY);
+  
+  doc.setFont("helvetica", "normal").setFontSize(7.5).setTextColor(100, 100, 100);
+  doc.text(`Statement Period: All-Time History`, marginL, currentY + 4.5);
+  doc.text(`Generated On: ${new Date().toLocaleString("en-KE", { hour12: false })}`, marginL, currentY + 8);
 
-  // Title: "B2B ACCOUNT STATEMENT"
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(0, 82, 204); // Primary Blue
-  doc.text("OFFICIAL B2B ACCOUNT STATEMENT", margins.left, currentY);
-
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(100, 116, 139);
-  doc.text(`Statement Period: All-Time History`, margins.left, currentY + 4.5);
-  doc.text(`Generated On: ${new Date().toLocaleString()}`, margins.left, currentY + 8.5);
-
-  // Customer billing & rank info boxes side by side
   currentY += 12;
-  
-  // Draw light grey container for Statement Info
-  doc.setFillColor(248, 250, 252); // Slate-50
-  doc.setDrawColor(241, 245, 249); // Slate-100
-  doc.setLineWidth(0.3);
-  doc.rect(margins.left, currentY, printableWidth, 30, "DF");
 
-  // Customer details (Left side of container)
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(15, 23, 42); // Slate-900
-  doc.text("CUSTOMER PROFILE / STATEMENT TO:", margins.left + 5, currentY + 6);
+  // ── 3. CUSTOMER DETAILS & MEMBERSHIP BOX (Side by Side) ────────────────────
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(marginL, currentY, printableWidth, 28, 2, 2, "F");
+  doc.setDrawColor(241, 245, 249).setLineWidth(0.3);
+  doc.roundedRect(marginL, currentY, printableWidth, 28, 2, 2, "S");
 
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Name: ${customer.name || "Guest Walk-In"}`, margins.left + 5, currentY + 12);
-  doc.text(`Company: ${customer.company_name || "N/A"}`, margins.left + 5, currentY + 17);
-  doc.text(`Tax PIN: ${customer.tax_id || "N/A"}`, margins.left + 5, currentY + 22);
-  doc.text(`Address: ${customer.address || "No address on file"}`, margins.left + 5, currentY + 27);
+  // Left column: Profile details
+  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(15, 23, 42);
+  doc.text("CUSTOMER PROFILE / STATEMENT TO:", marginL + 5, currentY + 6);
+  doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(51, 65, 85);
+  doc.text(`Name: ${customer.name || "Guest Walk-In"}`, marginL + 5, currentY + 11);
+  doc.text(`Company: ${customer.company_name || "N/A"}`, marginL + 5, currentY + 16);
+  doc.text(`Tax PIN: ${customer.tax_id || "N/A"}`, marginL + 5, currentY + 21);
+  doc.text(`Address: ${customer.address || "No address on file"}`, marginL + 5, currentY + 26);
 
-  // B2B Rank details (Right side of container)
+  // Right column: Rank / Status details
   const ltv = parseFloat(customer.orders_sum_total_amount || "0");
-  
-  // Rank threshold mapping
   let rankName = "Bronze";
   if (ltv >= 150000) rankName = "Platinum";
   else if (ltv >= 50000) rankName = "Gold";
   else if (ltv >= 10000) rankName = "Silver";
 
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "bold");
-  doc.text("B2B MEMBERSHIP STATUS:", margins.left + 110, currentY + 6);
+  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(15, 23, 42);
+  doc.text("B2B MEMBERSHIP STATUS:", marginL + printableWidth * 0.55, currentY + 6);
+  doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(51, 65, 85);
+  doc.text(`Customer Type: ${customer.type || "Retail"}`, marginL + printableWidth * 0.55, currentY + 11);
+  doc.text(`Current Tier: ${rankName}`, marginL + printableWidth * 0.55, currentY + 16);
+  doc.text(`Lifetime Value (LTV): ${currency} ${ltv.toLocaleString()}`, marginL + printableWidth * 0.55, currentY + 21);
+  doc.text(`Member Since: ${customer.created_at ? new Date(customer.created_at).toLocaleDateString("en-KE") : "N/A"}`, marginL + printableWidth * 0.55, currentY + 26);
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Customer Type: ${customer.type || "Retail"}`, margins.left + 110, currentY + 12);
-  doc.text(`Current Tier: ${rankName}`, margins.left + 110, currentY + 17);
-  doc.text(`Member Since: ${customer.created_at ? new Date(customer.created_at).toLocaleDateString() : "2026"}`, margins.left + 110, currentY + 22);
-  doc.text(`Lifetime Value (LTV): ${currency} ${ltv.toLocaleString()}`, margins.left + 110, currentY + 27);
+  currentY += 34;
 
-  currentY += 36;
-
-  // Let's calculate totals for Statement summary stats cards
+  // ── 4. SUMMARY STATS CARD ──────────────────────────────────────────────────
   const orders = customer.orders || [];
   const totalOrdersCount = orders.length;
   const totalFulfillmentFeesPaid = orders.reduce((sum: number, o: any) => sum + parseFloat(o.shipping_fee || 0), 0);
+
+  doc.setFillColor(239, 246, 255);
+  doc.roundedRect(marginL, currentY, printableWidth, 14, 2, 2, "F");
   
-  // Draw summary cards
-  doc.setFillColor(241, 245, 249); // Slate-100
-  doc.rect(margins.left, currentY, printableWidth * 0.3, 14, "F");
-  doc.rect(margins.left + (printableWidth * 0.35), currentY, printableWidth * 0.3, 14, "F");
-  doc.rect(margins.left + (printableWidth * 0.7), currentY, printableWidth * 0.3, 14, "F");
-
-  doc.setFontSize(7.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(71, 85, 105);
-  doc.text("TOTAL TRANSACTIONS", margins.left + 2, currentY + 5);
-  doc.text("TOTAL LOGISTICS FEES", margins.left + (printableWidth * 0.35) + 2, currentY + 5);
-  doc.text("NET ACCUMULATED LTV", margins.left + (printableWidth * 0.7) + 2, currentY + 5);
-
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(15, 23, 42);
-  doc.text(`${totalOrdersCount} Orders`, margins.left + 2, currentY + 11);
-  doc.text(`${currency} ${totalFulfillmentFeesPaid.toLocaleString()}`, margins.left + (printableWidth * 0.35) + 2, currentY + 11);
-  doc.text(`${currency} ${ltv.toLocaleString()}`, margins.left + (printableWidth * 0.7) + 2, currentY + 11);
+  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(30, 41, 59);
+  doc.text(`Total Transactions: ${totalOrdersCount} Orders`, marginL + 5, currentY + 9);
+  doc.text(`Total Logistics Fees: ${currency} ${totalFulfillmentFeesPaid.toLocaleString()}`, marginL + printableWidth * 0.36, currentY + 9);
+  doc.text(`Lifetime Value (LTV): ${currency} ${ltv.toLocaleString()}`, marginL + printableWidth * 0.70, currentY + 9);
 
   currentY += 20;
 
-  // Detailed Transaction Table using autoTable
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(15, 23, 42);
-  doc.text("DETAILED TRANSACTION HISTORY", margins.left, currentY);
+  // ── 5. DETAILED TRANSACTION HISTORY TABLE ──────────────────────────────────
+  doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(30, 41, 59);
+  doc.text("DETAILED TRANSACTION HISTORY", marginL, currentY);
 
   currentY += 4;
 
@@ -989,17 +957,15 @@ export const exportCustomerStatementPDF = async (
     const formattedDate = new Date(order.created_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
     const trackingRef = order.tracking_number || `#ORD-${order.id}`;
     
-    // Summary of items
     const items = order.items || [];
     const itemsSummary = items.map((i: any) => `${i.product?.name || "Part"} (Qty: ${i.quantity})`).join(", ") || "No parts listed";
 
-    // Fulfillment path
     const isPickup = order.shipping_method === "Pickup";
     const route = isPickup 
       ? "In-Store counter"
       : `${items?.[0]?.warehouse?.name || "Main Warehouse"} -> ${order.shipping_city || "Destination"}`;
 
-    const pay = `${order.payment_method || "M-Pesa"}${order.payment_ref_code ? ` (Ref: ${order.payment_ref_code})` : ""}`;
+    const pay = `${order.payment_method || "M-Pesa"}${order.payment_ref_code ? ` (${order.payment_ref_code})` : ""}`;
     const fee = `${currency} ${parseFloat(order.shipping_fee || 0).toLocaleString()}`;
     const total = `${currency} ${parseFloat(order.total_amount || 0).toLocaleString()}`;
     const status = order.status || "Pending";
@@ -1020,60 +986,77 @@ export const exportCustomerStatementPDF = async (
     tableRows.push(["—", "—", "No recorded transactions for this customer", "—", "—", `${currency} 0`, `${currency} 0`, "—"]);
   }
 
+  // Grand totals row
+  tableRows.push([
+    "TOTALS",
+    `${totalOrdersCount} order(s)`,
+    "",
+    "",
+    "",
+    `${currency} ${totalFulfillmentFeesPaid.toLocaleString()}`,
+    `${currency} ${ltv.toLocaleString()}`,
+    ""
+  ]);
+
   autoTable(doc, {
     head: [tableHeaders],
     body: tableRows,
     startY: currentY,
     tableWidth: printableWidth,
     showHead: "everyPage",
-    theme: "striped",
+    theme: "grid",
     headStyles: {
       fillColor: [0, 82, 204],
       textColor: [255, 255, 255],
       fontStyle: "bold",
       fontSize: 7.5,
-      halign: "left"
     },
-    styles: {
+    bodyStyles: {
       fontSize: 7,
-      cellPadding: 2,
+      textColor: [51, 65, 85],
       overflow: "linebreak",
-      valign: "middle"
     },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: printableWidth * 0.10 },
-      1: { cellWidth: printableWidth * 0.13, fontStyle: "bold" },
-      2: { cellWidth: printableWidth * 0.27, overflow: "linebreak" },
+      1: { cellWidth: printableWidth * 0.12, fontStyle: "bold" },
+      2: { cellWidth: printableWidth * 0.28, overflow: "linebreak" },
       3: { cellWidth: printableWidth * 0.17, overflow: "linebreak" },
-      4: { cellWidth: printableWidth * 0.12, overflow: "linebreak" },
-      5: { cellWidth: printableWidth * 0.09, halign: "right" },
-      6: { cellWidth: printableWidth * 0.08, halign: "right", fontStyle: "bold" },
+      4: { cellWidth: printableWidth * 0.14, overflow: "linebreak" },
+      5: { cellWidth: printableWidth * 0.08, halign: "right" },
+      6: { cellWidth: printableWidth * 0.07, halign: "right", fontStyle: "bold" },
       7: { cellWidth: printableWidth * 0.04, halign: "center" }
     },
-    margin: { top: margins.top, right: margins.right, bottom: margins.bottom, left: margins.left },
+    margin: { top: 32, right: marginR, bottom: 18, left: marginL },
+    didParseCell: (data: any) => {
+      // Bold + highlight totals row
+      if (data.row.index === tableRows.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [241, 245, 249];
+        data.cell.styles.textColor = [15, 23, 42];
+      }
+    },
     didDrawPage: (data: any) => {
-      // Add Footer on each page
+      // Footer block
       const pageStr = `Page ${doc.getNumberOfPages()}`;
-      doc.setFontSize(8);
+      doc.setFontSize(7.5).setFont("helvetica", "bold").setTextColor(148, 163, 184);
+      doc.text("This statement is system-generated and confidential.", marginL, pageHeight - 8);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(148, 163, 184); // Slate-400
-      doc.text(pageStr, margins.left, pageHeight - margins.bottom + 5);
-      doc.text(
-        `© ${new Date().getFullYear()} ${storeName}. Secure B2B Logistics Platform.`,
-        pageWidth - margins.right - 90,
-        pageHeight - margins.bottom + 5
-      );
+      doc.text(pageStr, rightEdge, pageHeight - 8, { align: "right" });
+
+      doc.setDrawColor(220, 220, 220).setLineWidth(0.3);
+      doc.line(marginL, pageHeight - 12, rightEdge, pageHeight - 12);
     }
   });
 
-  // Save the statement PDF
   doc.save(`b2b-statement-${customer.name?.toLowerCase().replace(/\s+/g, "-") || "customer"}.pdf`);
 };
 
 // ─── 6. Single Order Invoice PDF ─────────────────────────────────────────────
 export const exportSingleOrderInvoicePDF = async (
   order: any,
-  settings: Record<string, string> = {}
+  settings: Record<string, string> = {},
+  customerObj?: any
 ) => {
   const { default: jsPDFClass } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
@@ -1082,72 +1065,75 @@ export const exportSingleOrderInvoicePDF = async (
   const storeName   = settings.store_name    || "AUTOSPARE EAST AFRICA";
   const storeEmail  = settings.contact_email || "support@autospare.co.ke";
   const storePhone  = settings.contact_phone || "+254 700 000 000";
-  const storeAddr   = settings.physical_address || "Nairobi, Kenya";
+  const storeAddr   = settings.physical_address || "Mombasa Road, Nairobi Central Hub";
   const storeTag    = settings.store_tagline || "Premium OEM Spare Parts & Logistics";
   const currency    = settings.currency      || "Ksh";
-  const logoBase64  = settings.store_logo    || undefined;
 
   const pageWidth  = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
   const marginL = 14;
   const marginR = 14;
+  const rightEdge = pageWidth - marginR;
   const w = pageWidth - marginL - marginR;
 
-  // ── HEADER BLOCK ────────────────────────────────────────────────────────────
-  // Left: Logo + Company name
-  let logoEndX = marginL;
-  if (logoBase64) {
-    try {
-      const fmt = logoBase64.startsWith("data:image/png") ? "PNG" : logoBase64.startsWith("data:image/webp") ? "WEBP" : "JPEG";
-      doc.addImage(logoBase64, fmt, marginL, 8, 22, 22);
-      logoEndX = marginL + 22 + 4;
-    } catch { logoEndX = marginL; }
-  }
-
-  doc.setFontSize(16).setFont("helvetica", "bold").setTextColor(30, 41, 59);
-  doc.text(storeName.toUpperCase(), logoEndX, 16);
-  doc.setFontSize(8).setFont("helvetica", "normal").setTextColor(100, 116, 139);
-  doc.text(storeTag, logoEndX, 21);
-
-  // Right: Contact info
-  const contactLines = [storeAddr, `Tel: ${storePhone}`, storeEmail];
-  contactLines.forEach((line, i) => {
-    doc.setFontSize(8).setFont("helvetica", "normal").setTextColor(100, 116, 139);
-    doc.text(line, pageWidth - marginR, 10 + i * 4.5, { align: "right" });
-  });
-
-  // Thin blue banner bar
+  // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
+  // Left blue accent bar
   doc.setFillColor(0, 82, 204);
-  doc.rect(marginL, 32, w, 8, "F");
-  doc.setFontSize(11).setFont("helvetica", "bold").setTextColor(255, 255, 255);
-  doc.text("LOGISTICS INVOICE", marginL + 4, 37.5);
+  doc.rect(marginL, 8, 3, 20, "F");
+
+  // Abstract logo block
+  doc.setFillColor(0, 82, 204);
+  doc.roundedRect(21, 8, 10, 10, 2, 2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.triangle(26, 10, 24, 13, 28, 13, "F");
+  doc.triangle(26, 16, 24, 13, 28, 13, "F");
+
+  // Company name & tagline
+  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
+  doc.text(storeName.toUpperCase(), 35, 14);
+  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
+  doc.text(storeTag, 35, 18);
+
+  // Right-aligned contact strip
+  doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
+  doc.text(`Tel: ${storePhone}`, rightEdge, 11, { align: "right" });
+  doc.text(`Email: ${storeEmail}`, rightEdge, 15, { align: "right" });
+  doc.text(`Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
+
+  // Header separator
+  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
+  doc.line(marginL, 30, rightEdge, 30);
+
+  // ── 2. DOCUMENT TITLE / BLUE BANNER ─────────────────────────────────────────
+  doc.setFillColor(0, 82, 204);
+  doc.rect(marginL, 34, w, 8, "F");
+  doc.setFontSize(10).setFont("helvetica", "bold").setTextColor(255, 255, 255);
+  doc.text("TAX INVOICE", marginL + 4, 39.5);
 
   const invoiceDate = new Date().toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" });
   const orderDate   = order?.created_at ? new Date(order.created_at).toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" }) : "N/A";
   const orderRef    = order?.tracking_number || `ORD-${order?.id || "N/A"}`;
 
   doc.setFontSize(8).setFont("helvetica", "normal").setTextColor(220, 232, 255);
-  doc.text(`Invoice Date: ${invoiceDate}`, pageWidth - marginR, 37.5, { align: "right" });
+  doc.text(`Invoice Date: ${invoiceDate}`, rightEdge - 4, 39.5, { align: "right" });
 
-  // ── ORDER META BLOCK ────────────────────────────────────────────────────────
-  let y = 46;
-
-  // Two columns: Order Info (left) | Bill-To (right)
+  // ── 3. ORDER META & BILL-TO DETAILS (Side-by-Side) ────────────────────────
+  let y = 47;
   const col1X = marginL;
   const col2X = pageWidth / 2 + 4;
   const colW  = w / 2 - 6;
 
   // Col1: Order details
   const orderMeta: [string, string][] = [
-    ["Order Reference", orderRef],
+    ["Invoice Reference", orderRef],
     ["Order Date",      orderDate],
     ["Payment Method",  order?.payment_method || "N/A"],
     ["Payment Status",  order?.payment_status || "N/A"],
-    ["Order Status",    order?.status || "N/A"],
+    ["Fulfillment Status", order?.status || "N/A"],
   ];
 
   doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 82, 204);
-  doc.text("ORDER DETAILS", col1X, y + 2);
+  doc.text("INVOICE SUMMARY", col1X, y + 2);
   doc.setDrawColor(0, 82, 204).setLineWidth(0.3).line(col1X, y + 4, col1X + colW, y + 4);
   y += 7;
   orderMeta.forEach(([label, value]) => {
@@ -1155,77 +1141,99 @@ export const exportSingleOrderInvoicePDF = async (
     doc.text(label, col1X, y);
     doc.setFont("helvetica", "normal").setTextColor(30, 41, 59);
     doc.text(String(value), col1X + 34, y);
-    y += 5;
+    y += 4.8;
   });
 
   // Col2: Bill-To
-  let y2 = 46;
+  let y2 = 47;
   doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 82, 204);
-  doc.text("BILL TO", col2X, y2 + 2);
+  doc.text("BILL TO (CUSTOMER DETAILS)", col2X, y2 + 2);
   doc.setDrawColor(0, 82, 204).setLineWidth(0.3).line(col2X, y2 + 4, col2X + colW, y2 + 4);
   y2 += 7;
+
+  const custName = customerObj?.name || order?.customer?.name || "Guest Walk-In";
+  const custEmail = customerObj?.email || order?.customer?.email || "N/A";
+  const custPhone = customerObj?.phone || order?.customer?.phone || "N/A";
+  const custCompany = customerObj?.company_name || order?.customer?.company_name || "N/A";
+  const custTax = customerObj?.tax_id || order?.customer?.tax_id || "N/A";
+
   const billLines: [string, string][] = [
-    ["Customer",  order?.customer?.name  || "N/A"],
-    ["Email",     order?.customer?.email || "N/A"],
-    ["Company",   order?.customer?.company_name || "N/A"],
-    ["Tax ID",    order?.customer?.tax_id || "N/A"],
+    ["Customer Name",  custName],
+    ["Email Address",  custEmail],
+    ["Phone Number",   custPhone],
+    ["Company Name",   custCompany],
+    ["Tax PIN / ID",   custTax],
   ];
   billLines.forEach(([label, value]) => {
     doc.setFont("helvetica", "bold").setFontSize(7.5).setTextColor(100, 116, 139);
     doc.text(label, col2X, y2);
     doc.setFont("helvetica", "normal").setTextColor(30, 41, 59);
-    doc.text(String(value), col2X + 22, y2);
-    y2 += 5;
+    doc.text(String(value), col2X + 26, y2);
+    y2 += 4.8;
   });
 
   y = Math.max(y, y2) + 4;
 
-  // ── LOGISTICS INTELLIGENCE BLOCK ────────────────────────────────────────────
-  doc.setFillColor(241, 245, 249); // slate-100
-  doc.roundedRect(marginL, y, w, 14, 2, 2, "F");
-  doc.setDrawColor(203, 213, 225).setLineWidth(0.3);
-  doc.roundedRect(marginL, y, w, 14, 2, 2, "S");
+  // ── 4. LOGISTICS INTELLIGENCE BLOCK ────────────────────────────────────────
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(marginL, y, w, 22, 2, 2, "F");
+  doc.setDrawColor(226, 232, 240).setLineWidth(0.3);
+  doc.roundedRect(marginL, y, w, 22, 2, 2, "S");
 
-  doc.setFontSize(7).setFont("helvetica", "bold").setTextColor(100, 116, 139);
-  doc.text("LOGISTICS INTELLIGENCE", marginL + 3, y + 4.5);
+  doc.setFontSize(7).setFont("helvetica", "bold").setTextColor(0, 82, 204);
+  doc.text("AUTOMATED LOGISTICS ROUTING INTEL", marginL + 5, y + 4.5);
 
-  const origin = order?.items?.[0]?.warehouse?.name || "Origin Warehouse";
+  const origin = order?.items?.[0]?.warehouse?.name || "Main Warehouse Hub";
   const destCity    = order?.shipping_city    || "N/A";
   const destCountry = order?.shipping_country || "Kenya";
   const destAddr    = order?.shipping_address || "";
   const destFull = destAddr ? `${destCountry}, ${destCity}, ${destAddr}` : `${destCountry}, ${destCity}`;
 
+  // Draw progress track line
+  const trackY = y + 12;
+  doc.setDrawColor(191, 219, 254).setLineWidth(0.8).line(marginL + 25, trackY, rightEdge - 25, trackY);
+  // Draw Nodes
+  doc.setFillColor(0, 82, 204);
+  doc.circle(marginL + 25, trackY, 1.8, "FD");
+  doc.circle(rightEdge - 25, trackY, 1.8, "FD");
+
+  // Draw central arrow
   const midX = pageWidth / 2;
-  doc.setFontSize(7).setFont("helvetica", "bold").setTextColor(100, 116, 139);
-  doc.text("ORIGIN NODE", marginL + 3, y + 9);
-  doc.setFont("helvetica", "bold").setTextColor(30, 41, 59).setFontSize(8.5);
-  doc.text(origin, marginL + 3, y + 13.5);
+  doc.triangle(midX - 2.5, trackY - 1.5, midX + 2.5, trackY, midX - 2.5, trackY + 1.5, "F");
 
-  doc.setFontSize(8).setFont("helvetica", "bold").setTextColor(0, 82, 204);
-  doc.text("- - - - - - - - - - - - -\u27A4", midX - 20, y + 9.5, { align: "center" });
+  // Left label
+  doc.setFontSize(6.5).setFont("helvetica", "bold").setTextColor(148, 163, 184);
+  doc.text("ORIGIN HUB", marginL + 5, y + 10);
+  doc.setFont("helvetica", "bold").setTextColor(30, 41, 59).setFontSize(8);
+  doc.text(origin, marginL + 5, y + 16);
 
-  doc.setFontSize(7).setFont("helvetica", "bold").setTextColor(100, 116, 139);
-  doc.text("FINAL DESTINATION", pageWidth - marginR - 3, y + 9, { align: "right" });
-  doc.setFont("helvetica", "bold").setTextColor(30, 41, 59).setFontSize(8.5);
-  doc.text(destFull.substring(0, 40), pageWidth - marginR - 3, y + 13.5, { align: "right" });
+  // Right label
+  doc.setFontSize(6.5).setFont("helvetica", "bold").setTextColor(148, 163, 184);
+  doc.text("DELIVERY NODE", rightEdge - 5, y + 10, { align: "right" });
+  doc.setFont("helvetica", "bold").setTextColor(30, 41, 59).setFontSize(8);
 
-  y += 18;
+  const destLines = doc.splitTextToSize(destFull, 65);
+  destLines.forEach((line: string, i: number) => {
+    doc.text(line, rightEdge - 5, y + 16 + (i * 3.5), { align: "right" });
+  });
 
-  // ── LIVE CONTAINER TRACKING (if shipment) ────────────────────────────────────
+  y += 26;
+
+  // ── 5. LIVE CONTAINER TRACKING (if shipment) ────────────────────────────────
   if (order?.shipment) {
     const s = order.shipment;
-    doc.setFillColor(239, 246, 255); // blue-50
+    doc.setFillColor(239, 246, 255);
     doc.roundedRect(marginL, y, w, 14, 2, 2, "F");
     doc.setDrawColor(191, 219, 254).setLineWidth(0.3).roundedRect(marginL, y, w, 14, 2, 2, "S");
     doc.setFontSize(7).setFont("helvetica", "bold").setTextColor(29, 78, 216);
-    doc.text("LIVE CONTAINER TRACKING", marginL + 3, y + 4.5);
+    doc.text("LIVE CARRIER WAYBILL TRACKING", marginL + 3, y + 4.5);
 
     const trackCols = w / 4;
     const trackItems: [string, string][] = [
-      ["Waybill / Container", s.waybill || "N/A"],
-      ["Carrier",             s.carrier  || "N/A"],
-      ["Container Status",    s.status   || "N/A"],
-      ["ETA",                 s.eta      || "Pending"],
+      ["Waybill / Tracking", s.waybill || "N/A"],
+      ["Carrier Partner",   s.carrier  || "N/A"],
+      ["Transit Status",    s.status   || "N/A"],
+      ["Est. Arrival (ETA)", s.eta      || "Pending"],
     ];
     trackItems.forEach(([label, value], i) => {
       const tx = marginL + 3 + i * trackCols;
@@ -1237,13 +1245,13 @@ export const exportSingleOrderInvoicePDF = async (
     y += 18;
   }
 
-  // ── ITEM MANIFEST TABLE ──────────────────────────────────────────────────────
+  // ── 6. ITEM MANIFEST TABLE ──────────────────────────────────────────────────
   const items = order?.items || [];
-  const tableHead = [["#", "Product / Part Name", "Origin Warehouse", "SKU", "Qty", `Unit Price (${currency})`, `Line Total (${currency})`]];
+  const tableHead = [["#", "Product Description", "Origin Warehouse", "SKU / Part Code", "Qty", `Unit Price (${currency})`, `Line Total (${currency})`]];
   const tableBody = items.map((item: any, idx: number) => [
     idx + 1,
     item.product?.name || `Product ID: ${item.product_id}`,
-    item.warehouse?.name || "N/A",
+    item.warehouse?.name || "Main Warehouse",
     item.product?.sku   || "N/A",
     item.quantity,
     `${currency} ${Number(item.price).toLocaleString()}`,
@@ -1254,33 +1262,53 @@ export const exportSingleOrderInvoicePDF = async (
     head: tableHead,
     body: tableBody,
     startY: y + 2,
-    theme: "striped",
-    headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
-    bodyStyles: { fontSize: 8, textColor: [51, 65, 85] },
-    columnStyles: { 0: { cellWidth: 8 }, 4: { cellWidth: 10, halign: "center" } },
+    theme: "grid",
+    headStyles: { 
+      fillColor: [0, 82, 204], 
+      textColor: [255, 255, 255], 
+      fontStyle: "bold", 
+      fontSize: 8 
+    },
+    bodyStyles: { 
+      fontSize: 7.8, 
+      textColor: [51, 65, 85] 
+    },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    columnStyles: { 
+      0: { cellWidth: 8, halign: "center" }, 
+      4: { cellWidth: 10, halign: "center" },
+      5: { halign: "right" },
+      6: { halign: "right", fontStyle: "bold" }
+    },
     margin: { left: marginL, right: marginR },
     didDrawPage: () => {
-      doc.setFontSize(7).setFont("helvetica", "normal").setTextColor(148, 163, 184);
-      doc.text(`${storeName} | ${storeEmail} | ${storePhone}`, marginL, pageHeight - 8);
-      doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - marginR, pageHeight - 8, { align: "right" });
+      // Clean footer
+      const pageStr = `Page ${doc.getNumberOfPages()}`;
+      doc.setFontSize(7.5).setFont("helvetica", "bold").setTextColor(148, 163, 184);
+      doc.text("This invoice is system-generated and legally valid without physical signature.", marginL, pageHeight - 8);
+      doc.setFont("helvetica", "normal");
+      doc.text(pageStr, rightEdge, pageHeight - 8, { align: "right" });
+
+      doc.setDrawColor(220, 220, 220).setLineWidth(0.3);
+      doc.line(marginL, pageHeight - 12, rightEdge, pageHeight - 12);
     }
   });
 
-  // ── TOTALS ────────────────────────────────────────────────────────────────────
+  // ── 7. TOTALS CARD ─────────────────────────────────────────────────────────
   const finalY = (doc as any).lastAutoTable?.finalY ?? y + 40;
   const subtotal = Math.max(0, Number(order?.total_amount || 0) - Number(order?.shipping_fee || 0));
   const shippingFee = Number(order?.shipping_fee || 0);
   const grandTotal  = Number(order?.total_amount || 0);
 
-  const totalsX = pageWidth - marginR - 70;
-  const totalsW = 70;
+  const totalsX = pageWidth - marginR - 75;
+  const totalsW = 75;
 
   let ty = finalY + 6;
   doc.setFillColor(248, 250, 252).rect(totalsX, ty - 4, totalsW, 26, "F");
   doc.setDrawColor(226, 232, 240).setLineWidth(0.3).rect(totalsX, ty - 4, totalsW, 26, "S");
 
   const totalsRows: [string, string][] = [
-    ["Product Subtotal",    `${currency} ${subtotal.toLocaleString()}`],
+    ["Items Subtotal",    `${currency} ${subtotal.toLocaleString()}`],
     [`Logistics Fee (${order?.shipping_method || "Standard"})`, `${currency} ${shippingFee.toLocaleString()}`],
   ];
   totalsRows.forEach(([label, value]) => {
@@ -1290,20 +1318,14 @@ export const exportSingleOrderInvoicePDF = async (
     ty += 5;
   });
 
-  // Divider
+  // Divider line
   doc.setDrawColor(203, 213, 225).line(totalsX + 3, ty, totalsX + totalsW - 3, ty);
   ty += 4;
 
-  doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(30, 41, 59);
-  doc.text("GRAND TOTAL", totalsX + 3, ty);
+  doc.setFont("helvetica", "bold").setFontSize(9.5).setTextColor(30, 41, 59);
+  doc.text("TOTAL AMOUNT PAID", totalsX + 3, ty);
   doc.setTextColor(0, 82, 204);
   doc.text(`${currency} ${grandTotal.toLocaleString()}`, totalsX + totalsW - 3, ty, { align: "right" });
-
-  // ── FOOTER NOTE ────────────────────────────────────────────────────────────────
-  ty += 10;
-  doc.setFont("helvetica", "italic").setFontSize(7).setTextColor(148, 163, 184);
-  doc.text("This is a computer-generated invoice and does not require a signature.", marginL, ty);
-  doc.text(`Thank you for your business with ${storeName}.`, marginL, ty + 4);
 
   doc.save(`invoice-${orderRef.replace(/[^a-zA-Z0-9-]/g, "-")}.pdf`);
 };
@@ -1321,138 +1343,192 @@ export const exportCustomerLedgerPDF = async (
   const storeName  = settings.store_name    || "AUTOSPARE EAST AFRICA";
   const storeEmail = settings.contact_email || "support@autospare.co.ke";
   const storePhone = settings.contact_phone || "+254 700 000 000";
-  const storeAddr  = settings.physical_address || "Nairobi, Kenya";
+  const storeAddr  = settings.physical_address || "Mombasa Road, Nairobi Central Hub";
   const storeTag   = settings.store_tagline || "Premium OEM Spare Parts & Logistics";
   const currency   = settings.currency     || "Ksh";
-  const logoBase64 = settings.store_logo   || undefined;
 
   const pageWidth  = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
   const marginL = 14;
   const marginR = 14;
+  const rightEdge = pageWidth - marginR;
   const w = pageWidth - marginL - marginR;
 
-  // ── HEADER ───────────────────────────────────────────────────────────────────
-  let logoEndX = marginL;
-  if (logoBase64) {
-    try {
-      const fmt = logoBase64.startsWith("data:image/png") ? "PNG" : logoBase64.startsWith("data:image/webp") ? "WEBP" : "JPEG";
-      doc.addImage(logoBase64, fmt, marginL, 8, 20, 20);
-      logoEndX = marginL + 20 + 4;
-    } catch { logoEndX = marginL; }
-  }
+  // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
+  // Left blue accent bar
+  doc.setFillColor(0, 82, 204);
+  doc.rect(marginL, 8, 3, 20, "F");
 
-  doc.setFontSize(15).setFont("helvetica", "bold").setTextColor(30, 41, 59);
-  doc.text(storeName.toUpperCase(), logoEndX, 15);
-  doc.setFontSize(8).setFont("helvetica", "normal").setTextColor(100, 116, 139);
-  doc.text(storeTag, logoEndX, 20);
+  // Abstract logo block
+  doc.setFillColor(0, 82, 204);
+  doc.roundedRect(21, 8, 10, 10, 2, 2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.triangle(26, 10, 24, 13, 28, 13, "F");
+  doc.triangle(26, 16, 24, 13, 28, 13, "F");
 
-  const contactLines = [storeAddr, `Tel: ${storePhone}`, storeEmail];
-  contactLines.forEach((line, i) => {
-    doc.setFontSize(8).setFont("helvetica", "normal").setTextColor(100, 116, 139);
-    doc.text(line, pageWidth - marginR, 10 + i * 4.5, { align: "right" });
-  });
+  // Company name & tagline
+  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
+  doc.text(storeName.toUpperCase(), 35, 14);
+  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
+  doc.text(storeTag, 35, 18);
 
-  // Banner
-  doc.setFillColor(30, 41, 59);
-  doc.rect(marginL, 28, w, 8, "F");
-  doc.setFontSize(10).setFont("helvetica", "bold").setTextColor(255, 255, 255);
-  doc.text("CUSTOMER ORDER STATEMENT", marginL + 4, 33.5);
-  doc.setFontSize(8).setFont("helvetica", "normal").setTextColor(200, 210, 220);
-  doc.text(`Generated: ${new Date().toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}`, pageWidth - marginR, 33.5, { align: "right" });
+  // Right-aligned contact strip
+  doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
+  doc.text(`Tel: ${storePhone}`, rightEdge, 11, { align: "right" });
+  doc.text(`Email: ${storeEmail}`, rightEdge, 15, { align: "right" });
+  doc.text(`Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
 
-  let y = 40;
+  // Header separator
+  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
+  doc.line(marginL, 30, rightEdge, 30);
 
-  // Customer info band
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(marginL, y, w, 12, 2, 2, "F");
+  let y = 34;
+
+  // ── 2. DOCUMENT TITLE ──────────────────────────────────────────────────────
+  doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(0, 82, 204);
+  doc.text("CUSTOMER ACCOUNT STATEMENT & LEDGER", marginL, y);
+  doc.setFont("helvetica", "normal").setFontSize(7.5).setTextColor(100, 100, 100);
+  doc.text(`Generated: ${new Date().toLocaleDateString("en-KE", { day: "numeric", month: "long", year: "numeric" })}`, rightEdge, y, { align: "right" });
+
+  y += 5;
+
+  // ── 3. ACCOUNT HOLDER INFORMATION CARD ─────────────────────────────────────
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(marginL, y, w, 14, 2, 2, "F");
+  doc.setDrawColor(241, 245, 249).setLineWidth(0.3);
+  doc.roundedRect(marginL, y, w, 14, 2, 2, "S");
+
   doc.setFontSize(7.5).setFont("helvetica", "bold").setTextColor(100, 116, 139);
-  doc.text("ACCOUNT HOLDER", marginL + 3, y + 4.5);
+  doc.text("ACCOUNT HOLDER PROFILE", marginL + 4, y + 4.5);
   doc.setFont("helvetica", "bold").setFontSize(9).setTextColor(30, 41, 59);
-  doc.text(customer?.name || "N/A", marginL + 3, y + 9.5);
+  doc.text(customer?.name || "N/A", marginL + 4, y + 9.5);
 
   const custItems: string[] = [];
   if (customer?.email) custItems.push(`Email: ${customer.email}`);
   if (customer?.phone) custItems.push(`Tel: ${customer.phone}`);
   if (customer?.company_name) custItems.push(`Company: ${customer.company_name}`);
   doc.setFontSize(7.5).setFont("helvetica", "normal").setTextColor(100, 116, 139);
-  doc.text(custItems.join("   |   "), pageWidth - marginR, y + 9.5, { align: "right" });
+  doc.text(custItems.join("   |   "), rightEdge - 4, y + 9.5, { align: "right" });
 
-  y += 16;
+  y += 18;
 
-  // ── ORDERS TABLE ─────────────────────────────────────────────────────────────
+  // ── 4. SUMMARY STATS CARD ──────────────────────────────────────────────────
+  const grandTotal  = orders.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0);
+  const totalFees   = orders.reduce((sum: number, o: any) => sum + Number(o.shipping_fee || 0), 0);
+  const productsCost = Math.max(0, grandTotal - totalFees);
+
+  doc.setFillColor(239, 246, 255);
+  doc.roundedRect(marginL, y, w, 12, 2, 2, "F");
+
+  doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(30, 41, 59);
+  doc.text(`Total Transactions: ${orders.length} Order(s)`, marginL + 5, y + 7.5);
+  doc.text(`Product Cost: ${currency} ${productsCost.toLocaleString()}`, marginL + w * 0.28, y + 7.5);
+  doc.text(`Logistics Fees: ${currency} ${totalFees.toLocaleString()}`, marginL + w * 0.54, y + 7.5);
+  doc.text(`Total Spent: ${currency} ${grandTotal.toLocaleString()}`, marginL + w * 0.78, y + 7.5);
+
+  y += 18;
+
+  // ── 5. DETAILED ORDERS TABLE ───────────────────────────────────────────────
   const tableHead = [[
     "Order Ref",
     "Order Date",
-    "Main Product",
-    "Items",
+    "Main Product Reference",
+    "Items Count",
     "Origin Warehouse",
-    "Destination",
+    "Fulfillment Destination",
     `Products Cost (${currency})`,
     `Shipping Fee (${currency})`,
-    `Total (${currency})`,
-    "Status",
-    "Payment",
+    `Total Paid (${currency})`,
+    "Order Status",
+    "Payment Mode",
   ]];
+
+  const grandTotalItemsCount = orders.reduce((sum: number, o: any) => sum + (o.items?.length || 0), 0);
+  const grandTotalUnitsCount = orders.reduce((sum: number, o: any) => sum + (o.items || []).reduce((s: number, item: any) => s + (item.quantity || 0), 0), 0);
 
   const tableBody = orders.map((o: any) => {
     const subtotal = Math.max(0, Number(o.total_amount || 0) - Number(o.shipping_fee || 0));
+    const productNames = (o.items || [])
+      .map((item: any) => `${item.product?.name || "Genuine Spare Part"} (Qty: ${item.quantity || 1})`)
+      .filter(Boolean)
+      .join(", ") || "Genuine Spare Part";
+    const totalQty = (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
     return [
       o.tracking_number || `ORD-${o.id}`,
       new Date(o.created_at).toLocaleDateString("en-KE"),
-      o.items?.[0]?.product?.name || "Genuine Spare Part",
-      o.items?.length || 0,
-      o.items?.[0]?.warehouse?.name || "N/A",
+      productNames,
+      `${o.items?.length || 0} Item(s) (${totalQty} Unit${totalQty !== 1 ? 's' : ''})`,
+      o.items?.[0]?.warehouse?.name || "Main Warehouse Hub",
       o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}` : "In-Store Collection",
       `${currency} ${subtotal.toLocaleString()}`,
       `${currency} ${Number(o.shipping_fee || 0).toLocaleString()}`,
       `${currency} ${Number(o.total_amount || 0).toLocaleString()}`,
       o.status === "In Transit" ? "Shipped" : (o.status || "Pending"),
-      o.payment_method || "Cash",
+      o.payment_method || "M-Pesa",
     ];
   });
+
+  // Grand totals table row
+  tableBody.push([
+    "TOTALS",
+    `${orders.length} order(s)`,
+    "",
+    `${grandTotalItemsCount} item(s) (${grandTotalUnitsCount} unit${grandTotalUnitsCount !== 1 ? 's' : ''})`,
+    "",
+    "",
+    `${currency} ${productsCost.toLocaleString()}`,
+    `${currency} ${totalFees.toLocaleString()}`,
+    `${currency} ${grandTotal.toLocaleString()}`,
+    "",
+    ""
+  ]);
 
   autoTable(doc, {
     head: tableHead,
     body: tableBody,
     startY: y,
-    theme: "striped",
-    headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5 },
-    bodyStyles:  { fontSize: 7.5, textColor: [51, 65, 85] },
+    theme: "grid",
+    headStyles: { 
+      fillColor: [0, 82, 204], 
+      textColor: [255, 255, 255], 
+      fontStyle: "bold", 
+      fontSize: 7.5 
+    },
+    bodyStyles:  { 
+      fontSize: 7.5, 
+      textColor: [51, 65, 85] 
+    },
     alternateRowStyles: { fillColor: [248, 250, 252] },
-    margin: { left: marginL, right: marginR },
+    margin: { left: marginL, right: marginR, top: 32, bottom: 18 },
     columnStyles: {
-      0: { cellWidth: 28 },
-      3: { cellWidth: 10, halign: "center" },
-      9: { cellWidth: 20 },
+      0: { cellWidth: 28, fontStyle: "bold" },
+      3: { cellWidth: 16, halign: "center" },
+      6: { halign: "right" },
+      7: { halign: "right" },
+      8: { halign: "right", fontStyle: "bold" },
+      9: { cellWidth: 20, halign: "center" },
+      10: { cellWidth: 22, halign: "center" },
+    },
+    didParseCell: (data: any) => {
+      // Bold + highlight totals row
+      if (data.row.index === tableBody.length - 1) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [241, 245, 249];
+        data.cell.styles.textColor = [15, 23, 42];
+      }
     },
     didDrawPage: () => {
-      doc.setFontSize(7).setFont("helvetica", "normal").setTextColor(148, 163, 184);
-      doc.text(`${storeName} | ${storeEmail} | ${storePhone}`, marginL, pageHeight - 8);
-      doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - marginR, pageHeight - 8, { align: "right" });
+      // Footer page marking
+      const pageStr = `Page ${doc.getNumberOfPages()}`;
+      doc.setFontSize(7.5).setFont("helvetica", "bold").setTextColor(148, 163, 184);
+      doc.text("This ledger statement is system-generated and confidential.", marginL, pageHeight - 8);
+      doc.setFont("helvetica", "normal");
+      doc.text(pageStr, rightEdge, pageHeight - 8, { align: "right" });
+
+      doc.setDrawColor(220, 220, 220).setLineWidth(0.3);
+      doc.line(marginL, pageHeight - 12, rightEdge, pageHeight - 12);
     }
   });
-
-  // ── SUMMARY TOTALS ────────────────────────────────────────────────────────────
-  const finalY = (doc as any).lastAutoTable?.finalY ?? y + 50;
-  const grandTotal  = orders.reduce((sum: number, o: any) => sum + Number(o.total_amount || 0), 0);
-  const totalFees   = orders.reduce((sum: number, o: any) => sum + Number(o.shipping_fee || 0), 0);
-  const productsCost = Math.max(0, grandTotal - totalFees);
-
-  let sy = finalY + 6;
-  doc.setFillColor(30, 41, 59).rect(pageWidth - marginR - 90, sy - 4, 90, 24, "F");
-  doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(200, 210, 220);
-  doc.text("Total Products Cost:", pageWidth - marginR - 87, sy + 1);
-  doc.text(`${currency} ${productsCost.toLocaleString()}`, pageWidth - marginR, sy + 1, { align: "right" });
-  sy += 5;
-  doc.text("Total Shipping Fees:", pageWidth - marginR - 87, sy + 1);
-  doc.text(`${currency} ${totalFees.toLocaleString()}`, pageWidth - marginR, sy + 1, { align: "right" });
-  sy += 5;
-  doc.setDrawColor(100, 116, 139).line(pageWidth - marginR - 87, sy, pageWidth - marginR, sy);
-  sy += 4;
-  doc.setFont("helvetica", "bold").setFontSize(10).setTextColor(255, 255, 255);
-  doc.text("TOTAL SPENT:", pageWidth - marginR - 87, sy + 1);
-  doc.text(`${currency} ${grandTotal.toLocaleString()}`, pageWidth - marginR, sy + 1, { align: "right" });
 
   doc.save(`statement-${(customer?.name || "customer").toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().split("T")[0]}.pdf`);
 };

@@ -73,6 +73,7 @@ export default function AdminLogisticsPage() {
   const { settings } = useSettings();
   const [activeTab, setActiveTab] = useState("Active Shipments");
   const [loading, setLoading] = useState(true);
+  const [unassignedOrdersLoading, setUnassignedOrdersLoading] = useState(false);
   const [shipments, setShipments] = useState<any[]>([]);
   const [unassignedOrders, setUnassignedOrders] = useState<any[]>([]);
   const [destinations, setDestinations] = useState<any[]>([]);
@@ -529,8 +530,8 @@ export default function AdminLogisticsPage() {
       if (!silent) setLoading(true);
       try { const res = await api.get("/shipments"); setShipments(res.data); } catch { toast.error("Failed to refresh shipments"); } finally { if (!silent) setLoading(false); }
     } else if (activeTab === "Unassigned Orders") {
-      if (!silent) setLoading(true);
-      try { const res = await api.get("/shipments/unassigned-orders"); setUnassignedOrders(res.data); } catch { toast.error("Failed to refresh orders"); } finally { if (!silent) setLoading(false); }
+      if (!silent) setUnassignedOrdersLoading(true);
+      try { const res = await api.get("/shipments/unassigned-orders"); setUnassignedOrders(res.data); } catch { toast.error("Failed to refresh orders"); } finally { if (!silent) setUnassignedOrdersLoading(false); }
     } else if (activeTab === "Shipping Fee") {
       if (!silent) setLoading(true);
       try { const res = await api.get("/shipping-destinations"); setDestinations(res.data); } catch { toast.error("Failed to refresh shipping zones"); } finally { if (!silent) setLoading(false); }
@@ -1386,9 +1387,20 @@ export default function AdminLogisticsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredUnassignedOrders.length === 0 ? (
+                {unassignedOrdersLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="h-48 text-center text-zinc-500 font-medium">No unassigned orders found matching filters.</TableCell>
+                    <TableCell colSpan={10} className="h-48 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-6 w-6 animate-spin text-[#0052cc]" />
+                        <span className="text-xs text-zinc-400 font-medium">Loading orders...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredUnassignedOrders.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="h-48 text-center text-zinc-500 font-medium">
+                      {unassignedOrders.length === 0 ? "All orders are currently assigned to a shipment container." : "No unassigned orders found matching filters."}
+                    </TableCell>
                   </TableRow>
                 ) : (
                   paginatedUnassignedOrders.map((order) => (

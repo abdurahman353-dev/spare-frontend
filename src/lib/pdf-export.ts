@@ -548,11 +548,20 @@ export const exportWaybillManifestPDF = async (
     format: "a4",
   });
 
-  const storeName = company.storeName || "AUTOSPARE EAST AFRICA";
+  const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+  const marginL = 14;
+  const marginR = 14;
+  const rightEdge = pageWidth - marginR;
+  const printableWidth = pageWidth - marginL - marginR;
+
+  const legalName = company.storeName || "AUTOSPARE EAST AFRICA";
+  const tagline = company.storeTagline || "Premium Automotive Parts & Logistics";
+  const addressLine = company.physicalAddress || "Mombasa Road, Nairobi Central Hub";
+  const telNo = company.contactPhone || "+254 711 223 344";
+  const emailAddr = company.contactEmail || "billing@autospare.com";
+  const websiteUrl = "www.autospare.com";
   const currency = company.currency || "Ksh";
-  const startY = addCompanyManifestHeader(doc, "WAYBILL PRODUCTS MANIFEST", company);
-  const printableWidth = getPrintableWidth(doc);
-  const margin = A4_PRINT_MARGINS;
 
   const shippedDate = shipment.shipped_at
     ? new Date(shipment.shipped_at).toLocaleDateString()
@@ -563,23 +572,66 @@ export const exportWaybillManifestPDF = async (
   const orders = shipment.orders || [];
   const orderCount = orders.length;
 
-  // Waybill summary block
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(51, 65, 85);
+  // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
+  // Left blue accent bar
+  doc.setFillColor(0, 82, 204);
+  doc.rect(marginL, 8, 3, 22, "F");
 
-  const summaryLeft: [string, string][] = [
-    ["Waybill ID", shipment.waybill || "N/A"],
-    ["Carrier Partner", shipment.carrier || "N/A"],
-    ["Shipment Status", shipment.status || "N/A"],
-    ["ETA / Lead Time", shipment.eta || "N/A"],
-  ];
-  const summaryRight: [string, string][] = [
-    ["Origin Warehouse", shipment.origin || "N/A"],
-    ["Destination Hub", shipment.destination || "N/A"],
-    ["Total Orders", `${orderCount}`],
-    ["Shipped Date", shippedDate],
-  ];
+  // Abstract logo block
+  doc.setFillColor(0, 82, 204);
+  doc.roundedRect(21, 8, 12, 12, 2, 2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.triangle(27, 10, 25, 14, 29, 14, "F");
+  doc.triangle(27, 18, 25, 14, 29, 14, "F");
+
+  // Company name & tagline
+  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
+  doc.text(legalName.toUpperCase(), 37, 15);
+  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
+  doc.text(tagline, 37, 20);
+
+  // Right-aligned contact strip
+  doc.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(100, 100, 100);
+  doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightEdge, 12, { align: "right" });
+  doc.text(`Web: ${websiteUrl}`, rightEdge, 17, { align: "right" });
+  doc.text(`Addr: ${addressLine}`, rightEdge, 22, { align: "right" });
+
+  // Header separator
+  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
+  doc.line(marginL, 32, rightEdge, 32);
+
+  // ── 2. REPORT INFO BLOCK ───────────────────────────────────────────────────
+  const infoY = 36;
+  const infoW = printableWidth;
+
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(marginL, infoY, infoW, 22, 2, 2, "F");
+
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text("Report ID:",       marginL + 6, infoY + 7);
+  doc.text("Generated On:",    marginL + 6, infoY + 13);
+  doc.text("Report Type:",     marginL + 6, infoY + 19);
+
+  doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text(`WAYBILL-MANIFEST-${shipment.waybill || "N/A"}`, marginL + 32, infoY + 7);
+  doc.text(new Date().toLocaleString("en-KE", { hour12: false }), marginL + 32, infoY + 13);
+  doc.text("WAYBILL PRODUCTS MANIFEST", marginL + 32, infoY + 19);
+
+  // Right column of info block
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text("Origin Warehouse:",   marginL + infoW * 0.52, infoY + 7);
+  doc.text("Destination Hub:",    marginL + infoW * 0.52, infoY + 13);
+  doc.text("Shipped Date:",       marginL + infoW * 0.52, infoY + 19);
+
+  doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text(shipment.origin || "N/A",       marginL + infoW * 0.52 + 32, infoY + 7);
+  doc.text(shipment.destination || "N/A",  marginL + infoW * 0.52 + 32, infoY + 13);
+  doc.text(shippedDate,                    marginL + infoW * 0.52 + 32, infoY + 19);
+
+  // Calculate totals
+  const totalItems = orders.reduce((s: number, o: any) => s + (o.items?.length || 0), 0);
+  const totalUnits = orders.reduce((s: number, o: any) =>
+    s + (o.items || []).reduce((us: number, i: any) => us + (i.quantity || 0), 0), 0);
 
   const shipmentProductSubtotal = orders.reduce((sum: number, order: any) => {
     const itemsTotal = (order.items || []).reduce(
@@ -600,106 +652,28 @@ export const exportWaybillManifestPDF = async (
     0
   );
 
-  let leftY = startY + 4;
-  summaryLeft.forEach(([label, value]) => {
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text(`${label}:`, margin.left, leftY);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 41, 59);
-    const used = drawWrappedValue(doc, margin.left + 34, leftY, value, 58);
-    leftY += Math.max(5.5, used);
-  });
+  // ── 3. SUMMARY STATS CARD ──────────────────────────────────────────────────
+  const statsY = infoY + 26;
+  const fmt = (amount: number) => `${currency} ${amount.toLocaleString()}`;
 
-  let rightY = startY + 4;
-  summaryRight.forEach(([label, value]) => {
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text(`${label}:`, margin.left + printableWidth * 0.48, rightY);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 41, 59);
-    const used = drawWrappedValue(
-      doc,
-      margin.left + printableWidth * 0.48 + 38,
-      rightY,
-      value,
-      printableWidth * 0.48 - 42
-    );
-    rightY += Math.max(5.5, used);
-  });
+  doc.setFillColor(239, 246, 255);
+  doc.roundedRect(marginL, statsY, infoW, 14, 2, 2, "F");
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text(`Total Orders: ${orderCount}`,                                    marginL + 6,            statsY + 9);
+  doc.text(`Total Items: ${totalItems} (${totalUnits} Unit${totalUnits !== 1 ? 's' : ''})`, marginL + infoW * 0.25, statsY + 9);
+  doc.text(`Shipping Fees: ${fmt(shipmentShippingTotal)}`,                   marginL + infoW * 0.50, statsY + 9);
+  doc.text(`Gross Revenue: ${fmt(shipmentGrandTotal)}`,                      marginL + infoW * 0.75, statsY + 9);
 
-  const tableStartY = Math.max(leftY, rightY) + 6;
-
-  // Single unified line-item table: every product row with order reference
-  type ManifestRow = {
-    orderRef: string;
-    customer: string;
-    sku: string;
-    productName: string;
-    qty: number;
-    unitPrice: number;
-    orderSubtotal: number;
-    shippingFee: number;
-    orderGrandTotal: number;
-    shippingMethod: string;
-    orderStatus: string;
-    paymentStatus: string;
-    paymentMethod: string;
-    isFirstLineOfOrder: boolean;
-  };
-
-  const manifestRows: ManifestRow[] = [];
-  orders.forEach((order: any) => {
-    const orderRef = order.tracking_number || `ORD-${order.id}`;
-    const customer = order.customer?.name || "Guest";
-    const orderStatus = order.status || "N/A";
-    const paymentStatus = order.payment_status || "N/A";
-    const paymentMethod = order.payment_method || "N/A";
-    const shippingMethod = order.shipping_method || "N/A";
-    const shippingFee = parseFloat(order.shipping_fee || 0);
-    const orderGrandTotal = parseFloat(order.total_amount || 0);
-
-    const items = order.items || [];
-    const orderSubtotal = items.reduce(
-      (sum: number, item: any) =>
-        sum + (Number(item.quantity) || 0) * parseFloat(item.price ?? item.product?.price ?? 0),
-      0
-    );
-
-    items.forEach((item: any, index: number) => {
-      const unitPrice = parseFloat(item.price ?? item.product?.price ?? 0);
-      const qty = Number(item.quantity) || 0;
-      manifestRows.push({
-        orderRef,
-        customer,
-        sku: item.product?.sku || "N/A",
-        productName: item.product?.name || "Unknown Product",
-        qty,
-        unitPrice,
-        orderSubtotal,
-        shippingFee,
-        orderGrandTotal,
-        shippingMethod,
-        orderStatus,
-        paymentStatus,
-        paymentMethod,
-        isFirstLineOfOrder: index === 0,
-      });
-    });
-  });
-
-  const totalQty = manifestRows.reduce((sum, r) => sum + r.qty, 0);
-  const uniqueProducts = new Set(manifestRows.map((r) => r.sku)).size;
+  // ── 4. TABLE: one row per ORDER ────────────────────────────────────────────
+  const tableStartY = statsY + 18;
 
   const tableColumn = [
     "Order Ref",
-    "Customer",
-    "SKU / Part Ref",
-    "Product Name",
-    "Qty",
-    "Unit Price",
-    "Order Subtotal",
-    "Shipping Fee",
+    "Customer / Phone",
+    "Products",
+    "Items / Units",
+    "Subtotal",
+    "Shipping",
     "Grand Total",
     "Ship Method",
     "Order Status",
@@ -707,38 +681,64 @@ export const exportWaybillManifestPDF = async (
     "Pay Method",
   ];
 
-  const fmt = (amount: number) => `${currency} ${amount.toLocaleString()}`;
+  // Build one row per ORDER (not per item)
+  const tableRows = orders.map((order: any) => {
+    const orderRef = order.tracking_number || `ORD-${order.id}`;
+    const customerName = order.customer?.name || "Guest";
+    const customerPhone = order.customer?.phone || "";
+    const customerDisplay = customerPhone ? `${customerName}\n${customerPhone}` : customerName;
 
-  const tableRows = manifestRows.map((r) => [
-    r.orderRef,
-    r.customer,
-    r.sku,
-    r.productName,
-    `${r.qty}`,
-    fmt(r.unitPrice),
-    r.isFirstLineOfOrder ? fmt(r.orderSubtotal) : "",
-    r.isFirstLineOfOrder ? fmt(r.shippingFee) : "",
-    r.isFirstLineOfOrder ? fmt(r.orderGrandTotal) : "",
-    r.isFirstLineOfOrder ? r.shippingMethod : "",
-    r.isFirstLineOfOrder ? r.orderStatus : "",
-    r.isFirstLineOfOrder ? r.paymentStatus : "",
-    r.isFirstLineOfOrder ? r.paymentMethod : "",
-  ]);
+    const items = order.items || [];
+    const productNames = items
+      .map((item: any) => {
+        const qty = item.quantity || 1;
+        return `${item.product?.name || "—"} (Qty: ${qty})`;
+      })
+      .join(", ") || "—";
+
+    const itemsCount = items.length;
+    const unitsCount = items.reduce((s: number, i: any) => s + (i.quantity || 0), 0);
+    const itemsUnitsDisplay = `${itemsCount} Item${itemsCount !== 1 ? "s" : ""} (${unitsCount} Unit${unitsCount !== 1 ? "s" : ""})`;
+
+    const subtotal = items.reduce(
+      (s: number, i: any) => s + (Number(i.quantity) || 0) * parseFloat(i.price ?? i.product?.price ?? 0),
+      0
+    );
+    const shippingFee = parseFloat(order.shipping_fee || 0);
+    const grandTotal = parseFloat(order.total_amount || 0);
+    const shippingMethod = order.shipping_method || "N/A";
+    const orderStatus = order.status || "N/A";
+    const paymentStatus = order.payment_status || "N/A";
+    const paymentMethod = order.payment_method || "N/A";
+
+    return [
+      orderRef,
+      customerDisplay,
+      productNames,
+      itemsUnitsDisplay,
+      fmt(subtotal),
+      fmt(shippingFee),
+      fmt(grandTotal),
+      shippingMethod,
+      orderStatus,
+      paymentStatus,
+      paymentMethod,
+    ];
+  });
 
   if (tableRows.length === 0) {
     tableRows.push([
-      "—", "—", "—", "No products assigned to this shipment", "0",
-      fmt(0), fmt(0), fmt(0), fmt(0), "—", "—", "—", "—",
+      "—", "—", "No products assigned to this shipment", "—",
+      fmt(0), fmt(0), fmt(0), "—", "—", "—", "—",
     ]);
   }
 
+  // Totals footer row
   tableRows.push([
     "SHIPMENT TOTALS",
     `${orderCount} order(s)`,
-    `${uniqueProducts} SKU(s)`,
-    `${manifestRows.length} line item(s)`,
-    `${totalQty}`,
     "",
+    `${totalItems} item(s) (${totalUnits} unit${totalUnits !== 1 ? "s" : ""})`,
     fmt(shipmentProductSubtotal),
     fmt(shipmentShippingTotal),
     fmt(shipmentGrandTotal),
@@ -748,21 +748,18 @@ export const exportWaybillManifestPDF = async (
     "",
   ]);
 
-  // Column widths must fit inside printable A4 landscape width (~277mm)
   const col = {
-    orderRef: printableWidth * 0.075,
-    customer: printableWidth * 0.085,
-    sku: printableWidth * 0.075,
-    productName: printableWidth * 0.145,
-    qty: printableWidth * 0.035,
-    unitPrice: printableWidth * 0.075,
-    orderSubtotal: printableWidth * 0.08,
-    shippingFee: printableWidth * 0.075,
-    grandTotal: printableWidth * 0.08,
-    shipMethod: printableWidth * 0.065,
-    orderStatus: printableWidth * 0.065,
-    payment: printableWidth * 0.055,
-    payMethod: printableWidth * 0.065,
+    orderRef:    printableWidth * 0.09,
+    customer:    printableWidth * 0.10,
+    products:    printableWidth * 0.22,
+    itemsUnits:  printableWidth * 0.09,
+    subtotal:    printableWidth * 0.08,
+    shipping:    printableWidth * 0.07,
+    grandTotal:  printableWidth * 0.09,
+    shipMethod:  printableWidth * 0.08,
+    orderStatus: printableWidth * 0.07,
+    payment:     printableWidth * 0.06,
+    payMethod:   printableWidth * 0.065,
   };
 
   autoTable(doc, {
@@ -772,7 +769,7 @@ export const exportWaybillManifestPDF = async (
     tableWidth: printableWidth,
     showHead: "everyPage",
     horizontalPageBreak: false,
-    theme: "striped",
+    theme: "grid",
     headStyles: {
       fillColor: [0, 82, 204],
       textColor: [255, 255, 255],
@@ -792,23 +789,21 @@ export const exportWaybillManifestPDF = async (
       textColor: [51, 65, 85],
       overflow: "linebreak",
     },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: col.orderRef },
-      1: { cellWidth: col.customer, overflow: "linebreak" },
-      2: { cellWidth: col.sku, overflow: "linebreak" },
-      3: { cellWidth: col.productName, overflow: "linebreak" },
-      4: { cellWidth: col.qty, halign: "center" },
-      5: { cellWidth: col.unitPrice, halign: "right", overflow: "linebreak" },
-      6: { cellWidth: col.orderSubtotal, halign: "right", overflow: "linebreak" },
-      7: { cellWidth: col.shippingFee, halign: "right", overflow: "linebreak" },
-      8: { cellWidth: col.grandTotal, halign: "right", overflow: "linebreak" },
-      9: { cellWidth: col.shipMethod, halign: "center", overflow: "linebreak" },
-      10: { cellWidth: col.orderStatus, halign: "center", overflow: "linebreak" },
-      11: { cellWidth: col.payment, halign: "center", overflow: "linebreak" },
-      12: { cellWidth: col.payMethod, halign: "center", overflow: "linebreak" },
+      0:  { cellWidth: col.orderRef,    fontStyle: "bold" },
+      1:  { cellWidth: col.customer,    overflow: "linebreak" },
+      2:  { cellWidth: col.products,    overflow: "linebreak" },
+      3:  { cellWidth: col.itemsUnits,  overflow: "linebreak" },
+      4:  { cellWidth: col.subtotal,    halign: "right" },
+      5:  { cellWidth: col.shipping,    halign: "right" },
+      6:  { cellWidth: col.grandTotal,  halign: "right", fontStyle: "bold" },
+      7:  { cellWidth: col.shipMethod,  halign: "center", overflow: "linebreak" },
+      8:  { cellWidth: col.orderStatus, halign: "center" },
+      9:  { cellWidth: col.payment,     halign: "center" },
+      10: { cellWidth: col.payMethod,   halign: "center" },
     },
-    margin: { top: margin.top, right: margin.right, bottom: margin.bottom, left: margin.left },
-    didDrawPage: (data: any) => addFooter(doc, data, storeName),
+    margin: { top: 37, right: marginR, bottom: 14, left: marginL },
     didParseCell: (data: any) => {
       if (data.row.index === tableRows.length - 1) {
         data.cell.styles.fontStyle = "bold";
@@ -816,10 +811,36 @@ export const exportWaybillManifestPDF = async (
         data.cell.styles.textColor = [15, 23, 42];
       }
     },
+    didDrawPage: (data: any) => {
+      // Page footer
+      const pageStr = `Page ${doc.getNumberOfPages()}`;
+      doc.setFontSize(7.5).setFont("helvetica", "bold").setTextColor(148, 163, 184);
+      doc.text("This report is system-generated and confidential.", marginL, pageHeight - 8);
+      doc.setFont("helvetica", "normal");
+      doc.text(pageStr, pageWidth - marginR, pageHeight - 8, { align: "right" });
+
+      // Bottom rule
+      doc.setDrawColor(220, 220, 220).setLineWidth(0.3);
+      doc.line(marginL, pageHeight - 12, pageWidth - marginR, pageHeight - 12);
+    },
   });
+
+  // ── 5. SIGNATURE BLOCK ─────────────────────────────────────────────────────
+  const finalY: number = (doc as any).lastAutoTable?.finalY ?? tableStartY + 40;
+  let sigY = finalY + 14;
+  if (sigY + 30 > pageHeight - 20) {
+    doc.addPage();
+    sigY = 25;
+  }
+
+  doc.setFont("helvetica", "normal").setFontSize(8.5).setTextColor(30, 41, 59);
+  doc.text("Prepared By: __________________", marginL, sigY);
+  doc.text("Reviewed By: __________________", pageWidth / 3 + 8, sigY);
+  doc.text("Approved By: __________________", (pageWidth / 3) * 2 + 2, sigY);
 
   doc.save(`waybill-manifest-${shipment.waybill || "shipment"}.pdf`);
 };
+
 
 export const exportCustomerStatementPDF = async (
   customer: any,

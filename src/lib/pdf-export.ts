@@ -8,6 +8,22 @@ export interface PdfCompanySettings {
   contactEmail?: string;
   contactPhone?: string;
   currency?: string;
+  storeWebsite?: string;
+  storeKraPin?: string;
+  storeRegNumber?: string;
+  store_name?: string;
+  store_tagline?: string;
+  store_logo?: string;
+  physical_address?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  store_website?: string;
+  store_kra_pin?: string;
+  store_reg_number?: string;
+  store_address?: string;
+  store_phone?: string;
+  store_email?: string;
+  [key: string]: any;
 }
 
 function getImageFormat(base64: string): "JPEG" | "PNG" | "WEBP" {
@@ -555,12 +571,14 @@ export const exportWaybillManifestPDF = async (
   const rightEdge = pageWidth - marginR;
   const printableWidth = pageWidth - marginL - marginR;
 
-  const legalName = company.storeName || "AUTOSPARE EAST AFRICA";
-  const tagline = company.storeTagline || "Premium Automotive Parts & Logistics";
-  const addressLine = company.physicalAddress || "Mombasa Road, Nairobi Central Hub";
-  const telNo = company.contactPhone || "+254 711 223 344";
-  const emailAddr = company.contactEmail || "billing@autospare.com";
-  const websiteUrl = "www.autospare.com";
+  const legalName = company.storeName || company.store_name || "AUTOSPARE EAST AFRICA";
+  const tagline = company.storeTagline || company.store_tagline || "Premium Automotive Parts & Logistics";
+  const addressLine = company.store_address || company.physicalAddress || company.physical_address || "Mombasa Road, Nairobi Central Hub";
+  const telNo = company.store_phone || company.contactPhone || company.contact_phone || "+254 711 223 344";
+  const emailAddr = company.store_email || company.contactEmail || company.contact_email || "billing@autospare.com";
+  const websiteUrl = company.storeWebsite || company.store_website || "www.autospare.com";
+  const kraPin = company.storeKraPin || company.store_kra_pin || "";
+  const businessReg = company.storeRegNumber || company.store_reg_number || "";
   const currency = company.currency || "Ksh";
 
   const shippedDate = shipment.shipped_at
@@ -593,8 +611,12 @@ export const exportWaybillManifestPDF = async (
   // Right-aligned contact strip
   doc.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(100, 100, 100);
   doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightEdge, 12, { align: "right" });
-  doc.text(`Web: ${websiteUrl}`, rightEdge, 17, { align: "right" });
-  doc.text(`Addr: ${addressLine}`, rightEdge, 22, { align: "right" });
+  if (websiteUrl || kraPin) {
+    doc.text(`${websiteUrl ? `Web: ${websiteUrl}` : ""}${kraPin ? `  |  PIN: ${kraPin}` : ""}`, rightEdge, 17, { align: "right" });
+  }
+  if (businessReg || addressLine) {
+    doc.text(`${businessReg ? `Reg: ${businessReg}  |  ` : ""}Addr: ${addressLine}`, rightEdge, 22, { align: "right" });
+  }
 
   // Header separator
   doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
@@ -856,12 +878,14 @@ export const exportCustomerStatementPDF = async (
   });
 
   const currency = company.currency || "Ksh";
-  const storeName = company.storeName || "AUTOSPARE EAST AFRICA";
-  const tagline = company.storeTagline || "Premium Automotive Parts & Logistics";
-  const addressLine = company.physicalAddress || "Mombasa Road, Nairobi Central Hub";
-  const telNo = company.contactPhone || "+254 711 223 344";
-  const emailAddr = company.contactEmail || "billing@autospare.com";
-  const websiteUrl = "www.autospare.com";
+  const storeName = company.storeName || company.store_name || "AUTOSPARE EAST AFRICA";
+  const tagline = company.storeTagline || company.store_tagline || "Premium Automotive Parts & Logistics";
+  const addressLine = company.store_address || company.physicalAddress || company.physical_address || "Mombasa Road, Nairobi Central Hub";
+  const telNo = company.store_phone || company.contactPhone || company.contact_phone || "+254 711 223 344";
+  const emailAddr = company.store_email || company.contactEmail || company.contact_email || "billing@autospare.com";
+  const websiteUrl = company.storeWebsite || company.store_website || "www.autospare.com";
+  const kraPin = company.storeKraPin || company.store_kra_pin || "";
+  const businessReg = company.storeRegNumber || company.store_reg_number || "";
 
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -890,9 +914,13 @@ export const exportCustomerStatementPDF = async (
 
   // Right-aligned contact strip
   doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${telNo}`, rightEdge, 11, { align: "right" });
-  doc.text(`Email: ${emailAddr}`, rightEdge, 15, { align: "right" });
-  doc.text(`Addr: ${addressLine}`, rightEdge, 19, { align: "right" });
+  doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightEdge, 11, { align: "right" });
+  if (websiteUrl || kraPin) {
+    doc.text(`${websiteUrl ? `Web: ${websiteUrl}` : ""}${kraPin ? `  |  PIN: ${kraPin}` : ""}`, rightEdge, 15, { align: "right" });
+  }
+  if (businessReg || addressLine) {
+    doc.text(`${businessReg ? `Reg: ${businessReg}  |  ` : ""}Addr: ${addressLine}`, rightEdge, 19, { align: "right" });
+  }
 
   // Header separator
   doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
@@ -1084,11 +1112,14 @@ export const exportSingleOrderInvoicePDF = async (
   const doc = new jsPDFClass({ orientation: "portrait", unit: "mm", format: "a4" });
 
   const storeName   = settings.store_name    || "AUTOSPARE EAST AFRICA";
-  const storeEmail  = settings.contact_email || "support@autospare.co.ke";
-  const storePhone  = settings.contact_phone || "+254 700 000 000";
-  const storeAddr   = settings.physical_address || "Mombasa Road, Nairobi Central Hub";
-  const storeTag    = settings.store_tagline || "Premium OEM Spare Parts & Logistics";
+  const storeEmail  = settings.store_email    || settings.contact_email || "support@autospare.co.ke";
+  const storePhone  = settings.store_phone    || settings.contact_phone || "+254 700 000 000";
+  const storeAddr   = settings.store_address  || settings.physical_address || "Mombasa Road, Nairobi Central Hub";
+  const storeTag    = settings.store_tagline  || "Premium OEM Spare Parts & Logistics";
   const currency    = settings.currency      || "Ksh";
+  const storePin    = settings.store_kra_pin  || "";
+  const storeReg    = settings.store_reg_number || "";
+  const storeWeb    = settings.store_website  || "www.autospare.com";
 
   const pageWidth  = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -1117,9 +1148,13 @@ export const exportSingleOrderInvoicePDF = async (
 
   // Right-aligned contact strip
   doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${storePhone}`, rightEdge, 11, { align: "right" });
-  doc.text(`Email: ${storeEmail}`, rightEdge, 15, { align: "right" });
-  doc.text(`Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
+  doc.text(`Tel: ${storePhone}  |  Email: ${storeEmail}`, rightEdge, 11, { align: "right" });
+  if (storeWeb || storePin) {
+    doc.text(`${storeWeb ? `Web: ${storeWeb}` : ""}${storePin ? `  |  PIN: ${storePin}` : ""}`, rightEdge, 15, { align: "right" });
+  }
+  if (storeReg || storeAddr) {
+    doc.text(`${storeReg ? `Reg: ${storeReg}  |  ` : ""}Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
+  }
 
   // Header separator
   doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
@@ -1362,11 +1397,14 @@ export const exportCustomerLedgerPDF = async (
   const doc = new jsPDFClass({ orientation: "landscape", unit: "mm", format: "a4" });
 
   const storeName  = settings.store_name    || "AUTOSPARE EAST AFRICA";
-  const storeEmail = settings.contact_email || "support@autospare.co.ke";
-  const storePhone = settings.contact_phone || "+254 700 000 000";
-  const storeAddr  = settings.physical_address || "Mombasa Road, Nairobi Central Hub";
-  const storeTag   = settings.store_tagline || "Premium OEM Spare Parts & Logistics";
+  const storeEmail = settings.store_email    || settings.contact_email || "support@autospare.co.ke";
+  const storePhone = settings.store_phone    || settings.contact_phone || "+254 700 000 000";
+  const storeAddr  = settings.store_address  || settings.physical_address || "Mombasa Road, Nairobi Central Hub";
+  const storeTag   = settings.store_tagline  || "Premium OEM Spare Parts & Logistics";
   const currency   = settings.currency     || "Ksh";
+  const storePin   = settings.store_kra_pin  || "";
+  const storeReg   = settings.store_reg_number || "";
+  const storeWeb   = settings.store_website  || "www.autospare.com";
 
   const pageWidth  = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -1395,9 +1433,13 @@ export const exportCustomerLedgerPDF = async (
 
   // Right-aligned contact strip
   doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${storePhone}`, rightEdge, 11, { align: "right" });
-  doc.text(`Email: ${storeEmail}`, rightEdge, 15, { align: "right" });
-  doc.text(`Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
+  doc.text(`Tel: ${storePhone}  |  Email: ${storeEmail}`, rightEdge, 11, { align: "right" });
+  if (storeWeb || storePin) {
+    doc.text(`${storeWeb ? `Web: ${storeWeb}` : ""}${storePin ? `  |  PIN: ${storePin}` : ""}`, rightEdge, 15, { align: "right" });
+  }
+  if (storeReg || storeAddr) {
+    doc.text(`${storeReg ? `Reg: ${storeReg}  |  ` : ""}Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
+  }
 
   // Header separator
   doc.setDrawColor(220, 220, 220).setLineWidth(0.5);

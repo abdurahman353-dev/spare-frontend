@@ -596,6 +596,16 @@ export default function AdminOrdersPage() {
   }, [lastSyncedAt]);
 
   const handleStatusChange = async (id: number, status: string) => {
+    const statusRank: Record<string, number> = {
+      Pending: 1, Processing: 2, Shipped: 3, Delivered: 4, Cancelled: 5,
+    };
+    const order = orders.find((o: any) => o.id === id);
+    const currentRank = statusRank[order?.status ?? ""] ?? 0;
+    const newRank = statusRank[status] ?? 0;
+    if (newRank < currentRank) {
+      toast.error(`Cannot change status from "${order?.status}" to "${status}". Orders cannot be moved backwards.`);
+      return;
+    }
     try {
       await api.put(`/orders/${id}`, { status });
       toast.success(`Order marked as ${status}`);
@@ -608,13 +618,35 @@ export default function AdminOrdersPage() {
 
   const handleBulkStatusChange = async (status: string) => {
     if (selectedOrderIds.length === 0) return;
+
+    // Status progression rank — orders cannot be moved to a lower rank
+    const statusRank: Record<string, number> = {
+      Pending: 1, Processing: 2, Shipped: 3, Delivered: 4, Cancelled: 5,
+    };
+    const targetRank = statusRank[status] ?? 0;
+
+    // Filter: only include orders whose current status ranks lower than the target
+    const eligibleIds = selectedOrderIds.filter((id) => {
+      const order = orders.find((o: any) => o.id === id);
+      const currentRank = statusRank[order?.status ?? ""] ?? 0;
+      return currentRank < targetRank;
+    });
+
+    const skipped = selectedOrderIds.length - eligibleIds.length;
+
+    if (eligibleIds.length === 0) {
+      toast.error(`All selected orders are already at "${status}" or beyond — no changes made.`);
+      return;
+    }
+
     setIsBulkProcessing(true);
     try {
-      await api.post("/orders/bulk-status", {
-        order_ids: selectedOrderIds,
+      const res = await api.post("/orders/bulk-status", {
+        order_ids: eligibleIds,
         status: status
       });
-      toast.success(`${selectedOrderIds.length} orders updated to ${status}`);
+      const updated = res.data?.updated ?? eligibleIds.length;
+      toast.success(`${updated} order(s) marked as ${status}.${skipped > 0 ? ` ${skipped} skipped (already Delivered/Cancelled).` : ""}`);
       setSelectedOrderIds([]);
       fetchOrders();
     } catch (err) {
@@ -665,9 +697,9 @@ export default function AdminOrdersPage() {
       isWalkIn,
       {
         tagline:   settings.store_tagline   || undefined,
-        address:   settings.physical_address || settings.store_address || undefined,
-        phone:     settings.contact_phone   || settings.store_phone   || undefined,
-        email:     settings.contact_email   || settings.store_email   || undefined,
+        address:   settings.store_address   || settings.physical_address || undefined,
+        phone:     settings.store_phone     || settings.contact_phone   || undefined,
+        email:     settings.store_email     || settings.contact_email   || undefined,
         website:   settings.store_website   || undefined,
         kraPin:    settings.store_kra_pin   || undefined,
         regNumber: settings.store_reg_number || undefined,

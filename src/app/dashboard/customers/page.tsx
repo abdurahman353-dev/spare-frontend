@@ -672,10 +672,13 @@ export default function AdminCustomersPage() {
                           storeName: settings?.store_name,
                           storeTagline: settings?.store_tagline,
                           storeLogo: settings?.store_logo,
-                          physicalAddress: settings?.physical_address,
-                          contactEmail: settings?.contact_email,
-                          contactPhone: settings?.contact_phone,
-                          currency: "Ksh"
+                          physicalAddress: settings?.store_address || settings?.physical_address,
+                          contactEmail: settings?.store_email || settings?.contact_email,
+                          contactPhone: settings?.store_phone || settings?.contact_phone,
+                          currency: "Ksh",
+                          storeWebsite: settings?.store_website,
+                          storeKraPin: settings?.store_kra_pin,
+                          storeRegNumber: settings?.store_reg_number
                         });
                       }
                     }}

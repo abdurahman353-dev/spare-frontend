@@ -93,10 +93,11 @@ export default function Dashboard() {
 
   const kpis = [
     {
-      title: "Total Revenue",
+      title: "Revenue This Month",
+      subtitle: new Date().toLocaleString("default", { month: "long", year: "numeric" }),
       value: `Ksh ${Number(data.stats.revenue).toLocaleString()}`,
       icon: CreditCard,
-      trend: "+12.5%",
+      trend: "Current Month",
       trendUp: true,
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
@@ -177,7 +178,10 @@ export default function Dashboard() {
               </span>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">{kpi.title}</p>
+              <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-0.5">{kpi.title}</p>
+              {"subtitle" in kpi && kpi.subtitle && (
+                <p className="text-[10px] text-zinc-400 font-medium mb-1">{kpi.subtitle}</p>
+              )}
               <p className="text-2xl font-black text-zinc-900 tracking-tight">{kpi.value}</p>
             </div>
           </div>

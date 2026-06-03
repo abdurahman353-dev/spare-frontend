@@ -243,7 +243,7 @@ export function SearchableDropdown({
                           e.preventDefault();
                           handleEditClick(e, item.id, item.name);
                         }}
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-all"
+                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-all"
                         title="Edit"
                       >
                         {editingId === item.id ? (
@@ -260,7 +260,7 @@ export function SearchableDropdown({
                           e.preventDefault();
                           handleDeleteClick(e, item.id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-600 text-zinc-400 transition-all"
+                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 h-6 w-6 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-600 text-zinc-400 transition-all"
                         title="Delete"
                       >
                         {deletingId === item.id ? (

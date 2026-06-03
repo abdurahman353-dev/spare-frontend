@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Store, Settings, Bell, Shield, Loader2, Eye, EyeOff, Globe, Plus, Trash2, Image as ImageIcon, Upload, Star } from "lucide-react";
+import { Save, Store, Settings, Bell, Shield, Loader2, Eye, EyeOff, Globe, Plus, Trash2, Image as ImageIcon, Upload, Star, X } from "lucide-react";
 import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -471,7 +471,7 @@ export default function AdminSettingsPage() {
   const labelCls = "text-xs font-semibold text-zinc-500";
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-3 sm:p-6">
       {/* ── Page Header ── */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -532,16 +532,19 @@ export default function AdminSettingsPage() {
                 <Label className={labelCls}>Store Logo</Label>
                 <div className="flex flex-wrap items-center gap-6 mt-1.5">
                   {settings.store_logo ? (
-                    <div className="relative h-20 w-20 rounded-full overflow-hidden border-2 border-zinc-200 bg-zinc-50 flex items-center justify-center group shrink-0">
-                      <img src={settings.store_logo} alt="Store Logo Preview" className="h-full w-full object-cover" />
+                    <div className="relative shrink-0">
+                      <div className="h-20 w-20 rounded-full overflow-hidden border-2 border-zinc-200 bg-zinc-50 flex items-center justify-center">
+                        <img src={settings.store_logo} alt="Store Logo Preview" className="h-full w-full object-cover" />
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
                           setSettings(prev => ({ ...prev, store_logo: "" }));
                         }}
-                        className="absolute inset-0 bg-black/50 text-white font-bold text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full"
+                        className="absolute -top-1.5 -right-1.5 h-6 w-6 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md transition-all border border-white"
+                        title="Remove Logo"
                       >
-                        Remove
+                        <X className="h-3.5 w-3.5 font-bold" />
                       </button>
                     </div>
                   ) : (

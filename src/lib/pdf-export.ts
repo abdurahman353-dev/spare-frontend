@@ -421,7 +421,7 @@ export const exportInventoryPDF = async (
 
 // 3. Export Orders PDF
 export const exportOrdersPDF = async (
-  orders: any[],
+  rawOrders: any[],
   currency: string = "Ksh",
   logoBase64?: string,
   storeName?: string,
@@ -437,6 +437,16 @@ export const exportOrdersPDF = async (
     branch?: string;
   }
 ) => {
+  const orders = rawOrders.filter((o) => {
+    const isCancelled = o.status?.toLowerCase() === "cancelled" || o.payment_status?.toLowerCase() === "refunded" || o.payment_status?.toLowerCase() === "cancelled / refunded";
+    if (isCancelled) return false;
+    if (isWalkIn) {
+      const isPending = o.payment_status?.toLowerCase() === "pending" || o.status?.toLowerCase() === "pending";
+      if (isPending) return false;
+    }
+    return true;
+  });
+
   const { default: jsPDFClass } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDFClass({
@@ -551,9 +561,17 @@ export const exportOrdersPDF = async (
     const itemsUnitsDisplay = `${itemsCount} Item${itemsCount !== 1 ? 's' : ''} (${unitsCount} Unit${unitsCount !== 1 ? 's' : ''})`;
 
     const customerPhone = o.customer?.phone || "";
-    const customerDisplay = customerPhone
-      ? `${o.customer?.name || "Walk-In Guest"}\n${customerPhone}`
-      : (o.customer?.name || "Walk-In Guest");
+    const customerName = o.customer?.name || "";
+    const cleanPhone = customerPhone.replace(/\s+/g, "");
+    const isMockOrWalkIn = customerName.toLowerCase().includes("walk-in") || 
+                           customerName.toLowerCase().includes("guest") ||
+                           cleanPhone === "0700000000" || 
+                           cleanPhone === "+254700000000" || 
+                           cleanPhone === "254700000000" ||
+                           cleanPhone.includes("700000000");
+    const customerDisplay = isMockOrWalkIn || !customerPhone
+      ? (customerName || "Walk-In Guest")
+      : `${customerName}\n${customerPhone}`;
 
     return [
       o.tracking_number || `ORD-${o.id}`,
@@ -978,6 +996,21 @@ export const exportCustomerStatementPDF = async (
 
   let currentY = 36;
 
+  const rawOrders = customer.orders || [];
+  const orders = rawOrders.filter((o: any) => {
+    const isCancelled = o.status?.toLowerCase() === "cancelled" || o.payment_status?.toLowerCase() === "refunded" || o.payment_status?.toLowerCase() === "cancelled / refunded";
+    if (isCancelled) return false;
+    const isWalkIn = (o.tracking_number || "").startsWith("WK-");
+    if (isWalkIn) {
+      const isPending = o.payment_status?.toLowerCase() === "pending" || o.status?.toLowerCase() === "pending";
+      if (isPending) return false;
+    }
+    return true;
+  });
+  const ltv = orders.reduce((sum: number, o: any) => sum + parseFloat(o.total_amount || 0), 0);
+  const totalOrdersCount = orders.length;
+  const totalFulfillmentFeesPaid = orders.reduce((sum: number, o: any) => sum + parseFloat(o.shipping_fee || 0), 0);
+
   // ── 2. DOCUMENT TITLE ──────────────────────────────────────────────────────
   doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0, 82, 204);
   doc.text("OFFICIAL B2B ACCOUNT STATEMENT", marginL, currentY);
@@ -1004,7 +1037,6 @@ export const exportCustomerStatementPDF = async (
   doc.text(`Address: ${customer.address || "No address on file"}`, marginL + 5, currentY + 26);
 
   // Right column: Rank / Status details
-  const ltv = parseFloat(customer.orders_sum_total_amount || "0");
   let rankName = "Bronze";
   if (ltv >= 150000) rankName = "Platinum";
   else if (ltv >= 50000) rankName = "Gold";
@@ -1021,10 +1053,6 @@ export const exportCustomerStatementPDF = async (
   currentY += 34;
 
   // ── 4. SUMMARY STATS CARD ──────────────────────────────────────────────────
-  const orders = customer.orders || [];
-  const totalOrdersCount = orders.length;
-  const totalFulfillmentFeesPaid = orders.reduce((sum: number, o: any) => sum + parseFloat(o.shipping_fee || 0), 0);
-
   doc.setFillColor(239, 246, 255);
   doc.roundedRect(marginL, currentY, printableWidth, 14, 2, 2, "F");
   
@@ -1239,10 +1267,19 @@ export const exportSingleOrderInvoicePDF = async (
   y2 += 7;
 
   const custName = customerObj?.name || order?.customer?.name || "Guest Walk-In";
-  const custEmail = customerObj?.email || order?.customer?.email || "N/A";
-  const custPhone = customerObj?.phone || order?.customer?.phone || "N/A";
-  const custCompany = customerObj?.company_name || order?.customer?.company_name || "N/A";
-  const custTax = customerObj?.tax_id || order?.customer?.tax_id || "N/A";
+  const custEmailRaw = customerObj?.email || order?.customer?.email || "";
+  const custPhoneRaw = customerObj?.phone || order?.customer?.phone || "";
+  const cleanPhone = custPhoneRaw.replace(/\s+/g, "");
+  const isMockPhone = cleanPhone === "0700000000" || 
+                      cleanPhone === "+254700000000" || 
+                      cleanPhone === "254700000000" ||
+                      cleanPhone.includes("700000000");
+  const isWalkInCust = custName.toLowerCase().includes("walk-in") || custName.toLowerCase().includes("guest");
+  
+  const custPhone = (isMockPhone || isWalkInCust || !custPhoneRaw) ? "—" : custPhoneRaw;
+  const custEmail = (isWalkInCust || !custEmailRaw || custEmailRaw.includes("walkin") || custEmailRaw.includes("guest")) ? "—" : custEmailRaw;
+  const custCompany = customerObj?.company_name || order?.customer?.company_name || "—";
+  const custTax = customerObj?.tax_id || order?.customer?.tax_id || "—";
 
   const billLines: [string, string][] = [
     ["Customer Name",  custName],
@@ -1419,10 +1456,21 @@ export const exportSingleOrderInvoicePDF = async (
 
 // ─── 7. Customer Full Order Ledger Statement PDF ─────────────────────────────
 export const exportCustomerLedgerPDF = async (
-  orders: any[],
+  rawOrders: any[],
   customer: any,
   settings: Record<string, string> = {}
 ) => {
+  const orders = rawOrders.filter((o: any) => {
+    const isCancelled = o.status?.toLowerCase() === "cancelled" || o.payment_status?.toLowerCase() === "refunded" || o.payment_status?.toLowerCase() === "cancelled / refunded";
+    if (isCancelled) return false;
+    const isWalkIn = (o.tracking_number || "").startsWith("WK-");
+    if (isWalkIn) {
+      const isPending = o.payment_status?.toLowerCase() === "pending" || o.status?.toLowerCase() === "pending";
+      if (isPending) return false;
+    }
+    return true;
+  });
+
   const { default: jsPDFClass } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDFClass({ orientation: "landscape", unit: "mm", format: "a4" });

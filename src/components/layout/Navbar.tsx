@@ -200,42 +200,112 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Mobile menu button */}
-        <div className="md:hidden flex items-center gap-2">
+        {/* Mobile: Cart + Menu */}
+        <div className="md:hidden flex items-center gap-1">
+          <Link href="/cart" className="relative p-2 rounded-full hover:bg-secondary transition-colors">
+            <ShoppingCart className="h-5 w-5 text-zinc-700" />
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 bg-primary text-white text-[9px] font-black h-4 w-4 rounded-full flex items-center justify-center border-2 border-white shadow">
+                {cartCount}
+              </span>
+            )}
+          </Link>
           <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
             {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>
         </div>
       </div>
 
-      {/* Mobile Nav */}
+      {/* Mobile Nav Drawer */}
       {isOpen && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="md:hidden border-b bg-background"
+          className="md:hidden border-b bg-background shadow-lg"
         >
-          <div className="container mx-auto px-4 py-4 flex flex-col space-y-4">
+          <div className="container mx-auto px-4 py-4 flex flex-col space-y-1">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
                 onClick={() => setIsOpen(false)}
-                className={`text-sm font-medium transition-colors ${
-                  pathname === link.href ? "text-primary" : "text-muted-foreground"
+                className={`text-sm font-semibold py-2.5 px-3 rounded-lg transition-colors flex items-center gap-2 ${
+                  pathname === link.href
+                    ? "text-primary bg-blue-50"
+                    : "text-zinc-700 hover:text-primary hover:bg-zinc-50"
                 }`}
               >
                 {link.name}
               </Link>
             ))}
-            <div className="h-px bg-border my-2" />
-            <Link href="/login" onClick={() => setIsOpen(false)} className="text-sm font-medium text-muted-foreground">
-              Partner Login
-            </Link>
-            <Link href="/contact" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full mt-2")}>
-              Get Quote
-            </Link>
+
+            <div className="h-px bg-zinc-100 my-1" />
+
+            {isAuthenticated ? (
+              <>
+                {/* User info */}
+                <div className="flex items-center gap-3 px-3 py-2">
+                  <div className="h-9 w-9 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-600 shrink-0">
+                    <UserIcon className="h-5 w-5" />
+                  </div>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                      {user?.role === "superadmin" ? "Super Admin" : user?.role === "admin" ? "Admin" : "Customer"}
+                    </span>
+                    <span className="text-sm font-bold text-zinc-900">{user?.name}</span>
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-100 my-1" />
+
+                {/* Admin links */}
+                {(user?.role === "superadmin" || user?.role === "admin") ? (
+                  <>
+                    <Link href="/dashboard" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                      <LayoutDashboard className="h-4 w-4" /> Admin Panel
+                    </Link>
+                    <Link href="/dashboard/settings" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                      <SettingsIcon className="h-4 w-4" /> System Settings
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/account" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                      <UserIcon className="h-4 w-4" /> Account Dashboard
+                    </Link>
+                    <Link href="/account?tab=orders" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                      <Package className="h-4 w-4" /> My Orders
+                    </Link>
+                    <Link href="/account?tab=address" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                      <MapPin className="h-4 w-4" /> Delivery Addresses
+                    </Link>
+                    <Link href="/cart" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4" /> My Cart {cartCount > 0 && <span className="ml-auto bg-primary text-white text-[10px] font-black h-5 min-w-5 px-1 rounded-full flex items-center justify-center">{cartCount}</span>}
+                    </Link>
+                  </>
+                )}
+
+                <div className="h-px bg-zinc-100 my-1" />
+
+                <button
+                  onClick={() => { logout(); setIsOpen(false); }}
+                  className="w-full text-left text-sm font-semibold py-2.5 px-3 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" /> Sign Out
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="h-px bg-zinc-100 my-1" />
+                <Link href="/login" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                  <UserIcon className="h-4 w-4" /> Partner Login
+                </Link>
+                <Link href="/contact" onClick={() => setIsOpen(false)} className={cn(buttonVariants(), "w-full mt-1 font-bold")}>
+                  Get Quote
+                </Link>
+              </>
+            )}
           </div>
         </motion.div>
       )}

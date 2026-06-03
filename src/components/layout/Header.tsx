@@ -20,7 +20,7 @@ import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
-export function Header() {
+export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -84,7 +84,7 @@ export function Header() {
   return (
     <header className="h-16 border-b bg-white flex items-center justify-between px-4 lg:px-6 shadow-sm z-30">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="md:hidden text-zinc-500">
+        <Button variant="ghost" size="icon" className="md:hidden text-zinc-500" onClick={onMenuClick}>
           <Menu className="h-5 w-5" />
         </Button>
         <div className="hidden md:flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-500 bg-zinc-50 border border-zinc-200 px-3.5 py-2 rounded-xl">

@@ -954,7 +954,7 @@ export default function AdminLogisticsPage() {
 
 
   return (
-    <div className="space-y-6 p-8 bg-white min-h-screen font-sans">
+    <div className="space-y-6 p-3 sm:p-6 bg-white min-h-screen font-sans">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900">Logistics Containerization</h1>
@@ -1179,7 +1179,7 @@ export default function AdminLogisticsPage() {
           )}
 
           {/* Table Container */}
-          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-x-auto custom-scrollbar">
             <Table>
               <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
                 <TableRow>
@@ -1362,7 +1362,7 @@ export default function AdminLogisticsPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-x-auto custom-scrollbar">
             <Table>
               <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
                 <TableRow>
@@ -1594,7 +1594,7 @@ export default function AdminLogisticsPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-x-auto custom-scrollbar">
             <Table>
               <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
                 <TableRow>
@@ -1687,7 +1687,7 @@ export default function AdminLogisticsPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-x-auto custom-scrollbar">
           <Table>
             <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
               <TableRow>

@@ -120,13 +120,38 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
   }
+  /* Prevent horizontal page scroll on mobile */
+  body, #__next {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+}
+
+/* Thin scrollbar for horizontally-scrollable table wrappers */
+.overflow-x-auto::-webkit-scrollbar {
+  height: 4px;
+}
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 20px;
+}
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 transparent;
 }
 
 @keyframes blink {

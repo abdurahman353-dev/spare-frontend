@@ -808,7 +808,7 @@ export default function AdminOrdersPage() {
   const statuses = ["All Status", "Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-3 sm:p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Orders</h1>
@@ -840,20 +840,20 @@ export default function AdminOrdersPage() {
             </div>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2">
           <Button 
             onClick={handleExportPDF}
             disabled={loading || orders.length === 0}
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none"
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none text-xs sm:text-sm"
           >
-            <FileText className="mr-1.5 h-4 w-4" /> {activeOrdersTab === "WalkIn" ? "Export Walk-In PDF" : "Export Shipments PDF"}
+            <FileText className="mr-1 h-4 w-4" /> {activeOrdersTab === "WalkIn" ? "Export Walk-In PDF" : "Export PDF"}
           </Button>
           {activeOrdersTab === "WalkIn" && (
             <Button 
               onClick={() => { resetWalkInFormFields(); setIsWalkInModalOpen(true); }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 text-xs sm:text-sm"
             >
-              <ShoppingBag className="h-4 w-4" /> New Walk-In Order
+              <ShoppingBag className="h-4 w-4" /> New Walk-In
             </Button>
           )}
         </div>
@@ -1038,6 +1038,7 @@ export default function AdminOrdersPage() {
         </AnimatePresence>
 
       <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
+        <div className="overflow-x-auto">
         {activeOrdersTab === "WalkIn" ? (
           <Table>
             <TableHeader className="bg-emerald-50/60">
@@ -1284,6 +1285,7 @@ export default function AdminOrdersPage() {
             </TableBody>
           </Table>
         )}
+        </div>
         <PaginationControls
           currentPage={currentPage}
           setCurrentPage={setCurrentPage}

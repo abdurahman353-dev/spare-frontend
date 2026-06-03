@@ -162,7 +162,7 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-3 sm:p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Inventory Management</h1>
@@ -249,7 +249,7 @@ export default function InventoryPage() {
         </Button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-x-auto custom-scrollbar">
         <Table>
           <TableHeader className="bg-zinc-50/50">
             <TableRow>

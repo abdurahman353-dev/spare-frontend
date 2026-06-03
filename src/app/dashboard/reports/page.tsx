@@ -717,7 +717,7 @@ export default function AdminReportsPage() {
         </div>
 
         {/* Main Content Area */}
-        <div className="flex-1 p-6 md:p-8 bg-zinc-50/30 overflow-y-auto">
+        <div className="flex-1 p-3 sm:p-6 md:p-8 bg-zinc-50/30 overflow-y-auto">
           
           {/* Global Date Filter (Visible on all tabs) */}
           <div className="flex flex-wrap items-end gap-4 mb-8 p-5 bg-white rounded-2xl shadow-sm border border-zinc-200">
@@ -883,7 +883,7 @@ export default function AdminReportsPage() {
               </div>
 
               {/* Data Table */}
-              <div className="rounded-2xl border border-zinc-200 overflow-hidden bg-white shadow-sm mt-8">
+              <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm mt-8">
                 <div className="p-5 border-b border-zinc-100 bg-zinc-50/50">
                   <h3 className="text-sm font-black text-zinc-800">Recent Transactions Log</h3>
                 </div>
@@ -950,7 +950,7 @@ export default function AdminReportsPage() {
                 <SummaryCard label="Critical Out of Stock"  value={String(filteredInventory.filter(i => i.quantity === 0).length)} sub="Requires immediate replenishment" />
               </div>
 
-              <div className="rounded-2xl border border-zinc-200 overflow-hidden bg-white shadow-sm">
+              <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
                 <Table>
                   <TableHeader className="bg-zinc-50">
                     <TableRow>
@@ -1119,7 +1119,7 @@ export default function AdminReportsPage() {
               )}
 
               {selectedCustomerId ? (
-                <div className="rounded-2xl border border-zinc-200 overflow-hidden bg-white shadow-sm">
+                <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
                   <Table>
                     <TableHeader className="bg-zinc-50">
                       <TableRow>
@@ -1178,7 +1178,7 @@ export default function AdminReportsPage() {
                 <SummaryCard label="Net Income (ex-VAT)"    value={`Ksh ${netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
               </div>
 
-              <div className="rounded-2xl border border-zinc-200 overflow-hidden bg-white shadow-sm">
+              <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
                 <Table>
                   <TableHeader className="bg-zinc-50">
                     <TableRow>

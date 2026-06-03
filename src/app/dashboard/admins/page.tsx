@@ -327,7 +327,7 @@ export default function AdminsAndAuditsPage() {
   };
 
   return (
-    <div className="space-y-6 p-6 font-sans">
+    <div className="space-y-6 p-3 sm:p-6 font-sans">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -401,7 +401,7 @@ export default function AdminsAndAuditsPage() {
           </div>
 
           {/* Table Container */}
-          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-x-auto custom-scrollbar">
             <Table>
               <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
                 <TableRow>
@@ -558,7 +558,7 @@ export default function AdminsAndAuditsPage() {
           </div>
 
           {/* Audit Logs Table */}
-          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-x-auto custom-scrollbar">
             <Table>
               <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
                 <TableRow>
@@ -657,7 +657,7 @@ export default function AdminsAndAuditsPage() {
               {/* Credentials & Role */}
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-primary">1. Essential Credentials</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
                     <Input 
@@ -681,7 +681,7 @@ export default function AdminsAndAuditsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Temp Password */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Password *</label>
@@ -744,7 +744,7 @@ export default function AdminsAndAuditsPage() {
               <div className="space-y-4 pt-3 border-t border-zinc-100">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-primary">2. Additional Contact & Address Details</h3>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
                     <Input 
@@ -765,7 +765,7 @@ export default function AdminsAndAuditsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">City</label>
                     <Input 
@@ -823,7 +823,7 @@ export default function AdminsAndAuditsPage() {
               {/* Credentials & Role */}
               <div className="space-y-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-primary">1. Essential Credentials</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
                     <Input 
@@ -865,7 +865,7 @@ export default function AdminsAndAuditsPage() {
               <div className="space-y-4 pt-3 border-t border-zinc-100">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-primary">2. Additional Contact & Address Details</h3>
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
                     <Input 
@@ -886,7 +886,7 @@ export default function AdminsAndAuditsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">City</label>
                     <Input 

@@ -256,7 +256,7 @@ export default function AdminCustomersPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-3 sm:p-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-zinc-900">Customers</h1>
@@ -293,7 +293,7 @@ export default function AdminCustomersPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-x-auto custom-scrollbar">
         <Table>
           <TableHeader className="bg-zinc-50/50">
             <TableRow>
@@ -781,7 +781,7 @@ export default function AdminCustomersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="p-6 space-y-5">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Contact Name *</label>
                 <Input
@@ -801,7 +801,7 @@ export default function AdminCustomersPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
                 <Input
@@ -875,7 +875,7 @@ export default function AdminCustomersPage() {
             <DialogTitle className="text-xl font-bold text-zinc-900">Add New Customer</DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Contact Name *</label>
                 <Input 
@@ -895,7 +895,7 @@ export default function AdminCustomersPage() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Email Address *</label>
                 <Input 
@@ -922,7 +922,7 @@ export default function AdminCustomersPage() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Phone Number *</label>
                 <Input 

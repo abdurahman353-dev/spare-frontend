@@ -41,7 +41,7 @@ const STATUS_STYLES: Record<string, string> = {
   Cancelled:  "bg-red-50 text-red-700 border-red-200",
 };
 
-function DocumentHeader({ title, subtitle, period, storeName = "AutoSpare Distributors" }: { title: string; subtitle: string; period: string; storeName?: string }) {
+function DocumentHeader({ title, subtitle, period, storeName }: { title: string; subtitle: string; period: string; storeName?: string }) {
   const now = new Date().toLocaleString("en-KE", { year: "numeric", month: "long", day: "numeric", hour: '2-digit', minute: '2-digit' });
   return (
     <div className="flex flex-col md:flex-row justify-between items-start gap-4 pb-5 border-b-2 border-zinc-900 mb-6 print:mb-4">
@@ -289,8 +289,9 @@ export default function AdminReportsPage() {
   }, [selectedCustomer, selectedCustomerLtv, settings]);
 
   // ── Professional PDF Export Engine ──
-  const exportToPDF = () => {
-    const doc = new jsPDF();
+  const exportToPDF = async () => {
+    const isStatement = activeTab === "statement";
+    const doc = new jsPDF(isStatement ? { orientation: "landscape", unit: "mm", format: "a4" } : undefined);
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
     
@@ -300,55 +301,33 @@ export default function AdminReportsPage() {
     const reportCode = activeTab.toUpperCase();
     const docId = `${reportCode}-${dateStamp}-${randomSeq}`;
     
-    // Fallback company details
-    const legalName = storeName || "AutoSpare Distributors Ltd";
-    const tagline = storeTagline || "Premium Automotive Parts & Logistics";
-    const addressLine = storeAddress || "Mombasa Road, Nairobi Central Hub, Suite 4B";
-    const telNo = storePhone || "+254 711 223 344";
-    const emailAddr = storeEmail || "billing@autospare.com";
-    const websiteUrl = storeWebsite || "www.autospare.com";
-    const kraPin = storeKraPin || "A001234567Z";
-    const businessReg = storeRegNumber || "PVT-79A8B6C";
-    const activeBranch = storeBranch || "Nairobi Main Warehouse";
-    const currentUserName = "AutoSpare Admin";
-    
-    // 1. Draw Professional Branded Header (Letterhead)
-    // Left Accent Bar
-    doc.setFillColor(0, 82, 204); // Deep brand blue
-    doc.rect(14, 14, 3, 22, 'F');
-    
-    // Draw modern abstract vector logo
-    doc.setFillColor(0, 82, 204);
-    doc.roundedRect(21, 14, 12, 12, 2, 2, 'F');
-    doc.setFillColor(255, 255, 255);
-    // Draw cross star shape inside the logo
-    doc.triangle(27, 16, 25, 20, 29, 20, 'F');
-    doc.triangle(27, 24, 25, 20, 29, 20, 'F');
-    
-    // Legal Name and Tagline
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12.5);
-    doc.setTextColor(0, 82, 204);
-    doc.text(legalName, 37, 19);
-    
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(7.5);
-    doc.setTextColor(120, 120, 120);
-    doc.text(tagline, 37, 24);
-    
-    // Right Align Contact Details Strip
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.8);
-    doc.setTextColor(100, 100, 100);
-    const rightMargin = pageWidth - 14;
-    doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightMargin, 18, { align: 'right' });
-    doc.text(`Web: ${websiteUrl}  |  PIN: ${kraPin}`, rightMargin, 23, { align: 'right' });
-    doc.text(`Reg: ${businessReg}  |  Addr: ${addressLine}`, rightMargin, 28, { align: 'right' });
-    
-    // Decorative thin line below header
-    doc.setDrawColor(220, 220, 220);
-    doc.setLineWidth(0.5);
-    doc.line(14, 32, pageWidth - 14, 32);
+    // Company details from real settings
+    const legalName = storeName;
+    const tagline = storeTagline || "";
+    const addressLine = storeAddress || "";
+    const telNo = storePhone || "";
+    const emailAddr = storeEmail || "";
+    const websiteUrl = storeWebsite || "";
+    const kraPin = storeKraPin || "";
+    const businessReg = storeRegNumber || "";
+    const activeBranch = storeBranch || "Main Branch";
+    const currentUserName = "Admin";
+
+    // 1. Draw Branded Header with real logo
+    const { drawBrandedHeader, loadImgAsBase64 } = await import("@/lib/pdf-export");
+    const logoUrl = settings.store_logo || "";
+    const logoBase64 = logoUrl ? await loadImgAsBase64(logoUrl) : "";
+    await drawBrandedHeader(doc as any, {
+      storeName: legalName,
+      storeTagline: tagline,
+      storeAddress: addressLine,
+      storePhone: telNo,
+      storeEmail: emailAddr,
+      storeWebsite: websiteUrl,
+      storeKraPin: kraPin,
+      storeRegNumber: businessReg,
+      storeLogo: logoBase64
+    });
     
     // 2. Report Information Block (2 Columns - Clean and Spacious)
     const infoY = 38;
@@ -390,30 +369,32 @@ export default function AdminReportsPage() {
       doc.setFontSize(8.5);
       doc.setTextColor(30, 41, 59);
       
-      doc.text(`Total Invoices: ${filteredOrders.length}`, 16, currentY + 10);
+      doc.text(`Total Invoices: ${channelRevenueOrders.length}`, 16, currentY + 10);
       doc.text(`Gross (Ksh): ${totalRevenue.toLocaleString()}`, 64, currentY + 10);
       doc.text(`VAT 16% (Ksh): ${totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 114, currentY + 10);
       doc.text(`Net (Ksh): ${netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 164, currentY + 10);
-      
+
       currentY += 22;
-      
+
+      // Group orders by date for daily totals
+      const dailySalesMap = new Map<string, number>();
+      channelRevenueOrders.forEach(o => {
+        const d = o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "Unknown";
+        dailySalesMap.set(d, (dailySalesMap.get(d) || 0) + Number(o.total_amount || 0));
+      });
+      const dailySalesRows = Array.from(dailySalesMap.entries())
+        .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+        .map(([date, total]) => [date, total.toLocaleString()]);
+
       autoTable(doc, {
         startY: currentY,
-        head: [['Order Ref', 'Client/Customer', 'Branch/Hub', 'Salesperson', 'Payment Method', 'Status', 'Gross (Ksh)']],
-        body: filteredOrders.map(o => [
-          o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`,
-          o.customer?.name || "Walk-In Guest",
-          o.items?.[0]?.warehouse?.name || activeBranch,
-          o.user?.name || o.salesperson || "POS Admin",
-          o.payment_method || "M-Pesa",
-          o.status || "Completed",
-          Number(o.total_amount).toLocaleString()
-        ]),
-        foot: [['TOTAL', '', '', '', '', '', `Ksh ${totalRevenue.toLocaleString()}`]],
+        head: [['Date', 'Daily Total (Ksh)']],
+        body: dailySalesRows,
+        foot: [['TOTAL', `Ksh ${totalRevenue.toLocaleString()}`]],
         theme: 'grid',
-        headStyles: { fillColor: [0, 82, 204], fontSize: 8, fontStyle: 'bold' },
-        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', fontSize: 8 },
-        styles: { fontSize: 7.5, cellPadding: 2.5 }
+        headStyles: { fillColor: [0, 82, 204], fontSize: 9, fontStyle: 'bold' },
+        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', fontSize: 9 },
+        styles: { fontSize: 8.5, cellPadding: 3 }
       });
       
     } else if (activeTab === "inventory") {
@@ -425,26 +406,27 @@ export default function AdminReportsPage() {
       doc.setFontSize(8.5);
       doc.setTextColor(30, 41, 59);
       
-      const lowStockCount = filteredInventory.filter(i => i.quantity <= 5 && i.quantity > 0).length;
+      const lowStockCount = filteredInventory.filter(i => i.quantity > 0 && i.quantity <= (Number(i.min_stock) || 5)).length;
       const outOfStockCount = filteredInventory.filter(i => i.quantity === 0).length;
-      
+
       doc.text(`Total Monitored SKUs: ${filteredInventory.length}`, 22, currentY + 10);
       doc.text(`Low Stock Warn: ${lowStockCount}`, 85, currentY + 10);
       doc.text(`Critical Out of Stock: ${outOfStockCount}`, 145, currentY + 10);
-      
+
       currentY += 22;
-      
+
       autoTable(doc, {
         startY: currentY,
         head: [['SKU Code', 'Product / Item Description', 'Warehouse Hub', 'Min Stock', 'Available Qty', 'System Status']],
         body: filteredInventory.map(i => {
           const qty = Number(i.quantity);
-          const st = qty === 0 ? "Out of Stock" : qty <= 5 ? "Low Stock" : "In Stock";
+          const minSt = Number(i.min_stock) || 5;
+          const st = qty === 0 ? "Out of Stock" : qty <= minSt ? "Low Stock" : "In Stock";
           return [
             i.product?.sku || "—",
             i.product?.name || "—",
             i.warehouse?.name || activeBranch,
-            "10",
+            `${minSt} PCS`,
             qty.toString(),
             st
           ];
@@ -459,42 +441,140 @@ export default function AdminReportsPage() {
         alert("Please select a customer first.");
         return;
       }
-      
+
+      const currency = settings.currency || "Ksh";
+      const fmt = (n: number) => `${currency} ${n.toLocaleString()}`;
+
       // Summary Metrics Card
       doc.setFillColor(240, 253, 250);
-      doc.roundedRect(14, currentY, pageWidth - 28, 16, 2, 2, 'F');
-      
+      doc.roundedRect(14, currentY, doc.internal.pageSize.width - 28, 16, 2, 2, 'F');
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(30, 41, 59);
-      
+
       const totalStatementVal = customerOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
-      
-      doc.text(`Account: ${selectedCustomer.name}`, 22, currentY + 10);
+      const totalStatementFees = customerOrders.reduce((s, o) => s + Number(o.shipping_fee || 0), 0);
+      const totalStatementItems = customerOrders.reduce((s, o) => s + (o.items?.length || 0), 0);
+      const totalStatementUnits = customerOrders.reduce((s, o) => s + (o.items || []).reduce((acc: number, i: any) => acc + (i.quantity || 0), 0), 0);
+
+      doc.text(`Account: ${selectedCustomer.name}`, 16, currentY + 10);
       doc.text(`Tier: ${selectedCustomerRank?.name || "Bronze"}`, 85, currentY + 10);
-      doc.text(`Statement Invoices: ${customerOrders.length}`, 125, currentY + 10);
-      doc.text(`Total LTV: Ksh ${totalStatementVal.toLocaleString()}`, 165, currentY + 10);
-      
+      doc.text(`Orders: ${customerOrders.length}`, 145, currentY + 10);
+      doc.text(`LTV: ${fmt(totalStatementVal)}`, 195, currentY + 10);
+
       currentY += 22;
-      
+
+      const pageW = doc.internal.pageSize.width;
+      const mL = 14;
+      const mR = 14;
+      const pw = pageW - mL - mR;
+
+      const statementHead = [
+        "Date",
+        "Order Ref",
+        "Status",
+        "Pay Status",
+        "Origin Warehouse",
+        "Destination / Address",
+        "Items",
+        "Total Items",
+        "Subtotal Cost",
+        "Shipping Fee",
+        "Total Paid",
+      ];
+
+      const statementRows = customerOrders.map((o: any) => {
+        const items = o.items || [];
+        const productNames = items.map((item: any) =>
+          `${item.product?.name || "—"} (Qty: ${item.quantity || 1})`
+        ).join(", ") || "—";
+        const itemsCount = items.length;
+        const unitsCount = items.reduce((s: number, i: any) => s + (i.quantity || 0), 0);
+        const subtotal = items.reduce(
+          (s: number, i: any) => s + (Number(i.quantity) || 0) * parseFloat(i.price ?? i.product?.price ?? 0),
+          0
+        );
+        const shippingFee = parseFloat(o.shipping_fee || 0);
+        const grandTotal = parseFloat(o.total_amount || 0);
+        const dest = o.shipping_city
+          ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}`
+          : "In-Store Collection";
+        return [
+          o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "—",
+          o.tracking_number || `ORD-${o.id}`,
+          o.status || "—",
+          o.payment_status || "—",
+          o.items?.[0]?.warehouse?.name || "—",
+          dest,
+          productNames,
+          `${itemsCount} item${itemsCount !== 1 ? "s" : ""} (${unitsCount} unit${unitsCount !== 1 ? "s" : ""})`,
+          fmt(subtotal),
+          fmt(shippingFee),
+          fmt(grandTotal),
+        ];
+      });
+
+      // Totals footer row
+      statementRows.push([
+        "TOTALS",
+        `${customerOrders.length} order(s)`,
+        "", "", "", "",
+        "",
+        `${totalStatementItems} items (${totalStatementUnits} units)`,
+        fmt(totalStatementVal - totalStatementFees),
+        fmt(totalStatementFees),
+        fmt(totalStatementVal),
+      ]);
+
+      const col = {
+        date:       pw * 0.07,
+        ref:        pw * 0.09,
+        status:     pw * 0.07,
+        payStatus:  pw * 0.07,
+        warehouse:  pw * 0.09,
+        dest:       pw * 0.10,
+        items:      pw * 0.16,
+        totalItems: pw * 0.09,
+        subtotal:   pw * 0.08,
+        shipping:   pw * 0.08,
+        total:      pw * 0.10,
+      };
+
       autoTable(doc, {
         startY: currentY,
-        head: [['Invoice Ref', 'Date Issued', 'Warehouse/Branch', 'Payment Method', 'Invoice Status', 'Gross Amount (Ksh)']],
-        body: customerOrders.map(o => [
-          o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`,
-          o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "—",
-          o.items?.[0]?.warehouse?.name || activeBranch,
-          o.payment_method || "M-Pesa",
-          o.status || "Completed",
-          Number(o.total_amount).toLocaleString()
-        ]),
-        foot: [['TOTAL STATEMENT VALUE', '', '', '', '', `Ksh ${totalStatementVal.toLocaleString()}`]],
+        head: [statementHead],
+        body: statementRows,
         theme: 'grid',
-        headStyles: { fillColor: [0, 82, 204], fontSize: 8, fontStyle: 'bold' },
-        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', fontSize: 8 },
-        styles: { fontSize: 7.5, cellPadding: 2.5 }
+        tableWidth: pw,
+        showHead: "everyPage",
+        headStyles: { fillColor: [0, 82, 204], fontSize: 7, fontStyle: 'bold', halign: "center" },
+        styles: { fontSize: 6.5, cellPadding: 1.8, overflow: "linebreak", valign: "middle" },
+        bodyStyles: { fontSize: 6.5, textColor: [51, 65, 85], overflow: "linebreak" },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0:  { cellWidth: col.date,       halign: "center" },
+          1:  { cellWidth: col.ref,        fontStyle: "bold" },
+          2:  { cellWidth: col.status,     halign: "center" },
+          3:  { cellWidth: col.payStatus,  halign: "center" },
+          4:  { cellWidth: col.warehouse,  overflow: "linebreak" },
+          5:  { cellWidth: col.dest,       overflow: "linebreak" },
+          6:  { cellWidth: col.items,      overflow: "linebreak" },
+          7:  { cellWidth: col.totalItems, overflow: "linebreak" },
+          8:  { cellWidth: col.subtotal,   halign: "right" },
+          9:  { cellWidth: col.shipping,   halign: "right" },
+          10: { cellWidth: col.total,      halign: "right", fontStyle: "bold" },
+        },
+        margin: { top: 37, left: mL, right: mR },
+        didParseCell: (data: any) => {
+          if (data.row.index === statementRows.length - 1) {
+            data.cell.styles.fontStyle = "bold";
+            data.cell.styles.fillColor = [241, 245, 249];
+            data.cell.styles.textColor = [15, 23, 42];
+          }
+        },
       });
-      
+
     } else if (activeTab === "vat") {
       // Summary Metrics Card
       doc.setFillColor(245, 243, 255);
@@ -511,28 +591,35 @@ export default function AdminReportsPage() {
       
       currentY += 22;
       
+      // Group by date for daily VAT breakdown
+      const dailyVatMap = new Map<string, { gross: number; vat: number; net: number }>();
+      channelRevenueOrders.forEach(o => {
+        const d = o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "Unknown";
+        const gross = Number(o.total_amount || 0);
+        const prev = dailyVatMap.get(d) || { gross: 0, vat: 0, net: 0 };
+        prev.gross += gross;
+        prev.vat   += gross * 0.16;
+        prev.net   += gross * 0.84;
+        dailyVatMap.set(d, prev);
+      });
+      const dailyVatRows = Array.from(dailyVatMap.entries())
+        .sort((a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime())
+        .map(([date, t]) => [
+          date,
+          t.gross.toLocaleString(),
+          t.vat.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+          t.net.toLocaleString(undefined, { maximumFractionDigits: 0 })
+        ]);
+
       autoTable(doc, {
         startY: currentY,
-        head: [['Invoice Ref', 'Date', 'Customer Name', 'Branch / Hub', 'Gross (Ksh)', 'VAT 16% (Ksh)', 'Net (Ksh)']],
-        body: channelRevenueOrders.map(o => {
-          const gross = Number(o.total_amount || 0);
-          const vat = gross * 0.16;
-          const net = gross - vat;
-          return [
-            o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`,
-            o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "—",
-            o.customer?.name || "Walk-In Guest",
-            o.items?.[0]?.warehouse?.name || activeBranch,
-            gross.toLocaleString(),
-            vat.toLocaleString(undefined, { maximumFractionDigits: 0 }),
-            net.toLocaleString(undefined, { maximumFractionDigits: 0 })
-          ];
-        }),
-        foot: [['TOTALS', '', '', '', totalRevenue.toLocaleString(), totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 }), netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })]],
+        head: [['Date', 'Gross (Ksh)', 'VAT 16% (Ksh)', 'Net (Ksh)']],
+        body: dailyVatRows,
+        foot: [['TOTALS', totalRevenue.toLocaleString(), totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 }), netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })]],
         theme: 'grid',
-        headStyles: { fillColor: [0, 82, 204], fontSize: 7.5, fontStyle: 'bold' },
-        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', fontSize: 7.5 },
-        styles: { fontSize: 7, cellPadding: 2.2 }
+        headStyles: { fillColor: [0, 82, 204], fontSize: 9, fontStyle: 'bold' },
+        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', fontSize: 9 },
+        styles: { fontSize: 8.5, cellPadding: 3 }
       });
     }
     
@@ -577,7 +664,7 @@ export default function AdminReportsPage() {
       doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 10, { align: 'right' });
     }
     
-    doc.save(`AutoSpare_Report_${activeTab}_${today}.pdf`);
+    doc.save(`${(storeName || "Report").replace(/\s+/g, "_")}_${activeTab}_${today}.pdf`);
   };
 
   if (loading) {
@@ -693,6 +780,7 @@ export default function AdminReportsPage() {
                 title="Sales Summary & Analytics"
                 subtitle={`${channelLabel} · ${warehouseLabel}`}
                 period={periodLabel}
+                storeName={storeName}
               />
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
@@ -854,11 +942,11 @@ export default function AdminReportsPage() {
 
             {/* ── TAB 2: Inventory Report ── */}
             <TabsContent value="inventory" className="mt-0 space-y-8 animate-in fade-in duration-500">
-              <DocumentHeader title="Inventory Status Report" subtitle="Real-time stock level analysis across all distribution hubs" period={`As of ${new Date().toLocaleDateString("en-KE")}`} />
+              <DocumentHeader title="Inventory Status Report" subtitle="Real-time stock level analysis across all distribution hubs" period={`As of ${new Date().toLocaleDateString("en-KE")}`} storeName={storeName} />
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 <SummaryCard label="Total Monitored SKUs"    value={String(filteredInventory.length)} />
-                <SummaryCard label="Low Stock Warning"     value={String(filteredInventory.filter(i => i.quantity <= 5 && i.quantity > 0).length)} sub="Items ≤ 5 units remaining" />
+                <SummaryCard label="Low Stock Warning"     value={String(filteredInventory.filter(i => i.quantity > 0 && i.quantity <= (Number(i.min_stock) || 5)).length)} sub="Items at or below their threshold" />
                 <SummaryCard label="Critical Out of Stock"  value={String(filteredInventory.filter(i => i.quantity === 0).length)} sub="Requires immediate replenishment" />
               </div>
 
@@ -878,10 +966,11 @@ export default function AdminReportsPage() {
                       <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No inventory data available.</TableCell></TableRow>
                     ) : paginatedInventory.map((item, i) => {
                       const qty = Number(item.quantity);
-                      const status = qty === 0 ? "OUT OF STOCK" : qty <= 5 ? "LOW STOCK" : "IN STOCK";
+                      const minSt = Number(item.min_stock) || 5;
+                      const status = qty === 0 ? "OUT OF STOCK" : qty <= minSt ? "LOW STOCK" : "IN STOCK";
                       const statusCls = qty === 0
                         ? "bg-red-900 text-white hover:bg-red-950 border-none font-bold uppercase tracking-wider"
-                        : qty <= 5
+                        : qty <= minSt
                           ? "bg-red-600 text-white hover:bg-red-700 animate-blink border-none font-bold uppercase tracking-wider"
                           : "bg-emerald-500 text-white hover:bg-emerald-600 border-none font-bold uppercase tracking-wider";
                       return (
@@ -917,6 +1006,7 @@ export default function AdminReportsPage() {
                 title="Customer Account Statement"
                 subtitle={selectedCustomer ? `Official statement for ${selectedCustomer.name}` : "Select a customer profile to generate statement"}
                 period={periodLabel}
+                storeName={storeName}
               />
 
               <div className="flex items-end gap-4 p-5 bg-white rounded-2xl shadow-sm border border-zinc-200">
@@ -1079,7 +1169,7 @@ export default function AdminReportsPage() {
 
             {/* ── TAB 4: VAT / Tax Report ── */}
             <TabsContent value="vat" className="mt-0 space-y-8 animate-in fade-in duration-500">
-              <DocumentHeader title="VAT & Tax Compliance Report" subtitle="Financial breakdown of taxable transactions for KRA filing" period={periodLabel} />
+              <DocumentHeader title="VAT & Tax Compliance Report" subtitle="Financial breakdown of taxable transactions for KRA filing" period={periodLabel} storeName={storeName} />
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                 <SummaryCard label="Total Gross Sales"     value={`Ksh ${totalRevenue.toLocaleString()}`} />

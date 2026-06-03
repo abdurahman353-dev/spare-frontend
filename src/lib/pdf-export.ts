@@ -26,11 +26,139 @@ export interface PdfCompanySettings {
   [key: string]: any;
 }
 
-function getImageFormat(base64: string): "JPEG" | "PNG" | "WEBP" {
+export function getImageFormat(base64: string): "JPEG" | "PNG" | "WEBP" {
   if (base64.startsWith("data:image/png")) return "PNG";
   if (base64.startsWith("data:image/webp")) return "WEBP";
   return "JPEG";
 }
+
+export const loadImgAsBase64 = (url: string): Promise<string> => {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve("");
+      return;
+    }
+    if (url.startsWith("data:image/")) {
+      resolve(url);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+          return;
+        }
+      } catch (e) {
+        console.error("Canvas conversion error", e);
+      }
+      resolve("");
+    };
+    img.onerror = () => resolve("");
+    img.src = url;
+  });
+};
+
+export const drawBrandedHeader = async (
+  doc: jsPDF,
+  companySettings: PdfCompanySettings
+) => {
+  const legalName  = companySettings?.storeName  || companySettings?.store_name  || "AutoSpare Distributors";
+  const tagline    = companySettings?.storeTagline || companySettings?.store_tagline || "Premium Automotive Parts & Logistics";
+  const addressLine = companySettings?.storeAddress || companySettings?.physicalAddress || companySettings?.physical_address || companySettings?.store_address || "";
+  const telNo      = companySettings?.storePhone   || companySettings?.contactPhone || companySettings?.contact_phone || companySettings?.store_phone || "";
+  const emailAddr  = companySettings?.storeEmail   || companySettings?.contactEmail || companySettings?.contact_email || companySettings?.store_email || "";
+  const websiteUrl = companySettings?.storeWebsite || companySettings?.store_website || "";
+  const kraPin     = companySettings?.storeKraPin  || companySettings?.store_kra_pin || "";
+  const businessReg = companySettings?.storeRegNumber || companySettings?.store_reg_number || "";
+  const logoUrl    = companySettings?.storeLogo    || companySettings?.store_logo || "";
+
+  const pageWidth = doc.internal.pageSize.width;
+  const marginL = 14;
+  const marginR = 14;
+  const rightEdge = pageWidth - marginR;
+
+  // 1. Draw Logo
+  let leftX = 14;
+  if (logoUrl) {
+    const base64 = await loadImgAsBase64(logoUrl);
+    if (base64) {
+      try {
+        const logoSize = 18;
+        doc.addImage(base64, getImageFormat(base64), 14, 8, logoSize, logoSize);
+        leftX = 14 + logoSize + 4;
+      } catch (e) {
+        console.error("Failed to render logo", e);
+        drawFallbackLogo(doc);
+        leftX = 35;
+      }
+    } else {
+      drawFallbackLogo(doc);
+      leftX = 35;
+    }
+  } else {
+    drawFallbackLogo(doc);
+    leftX = 35;
+  }
+
+  // 2. Draw Business Name and Tagline
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12.5);
+  doc.setTextColor(0, 82, 204);
+  
+  // Wrap business name if it is too long (limit to 75mm width)
+  const nameLines = doc.splitTextToSize(legalName, 75);
+  doc.text(nameLines, leftX, 13);
+  
+  const nextY = 13 + (nameLines.length * 4.5);
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(7.5);
+  doc.setTextColor(120, 120, 120);
+  doc.text(tagline, leftX, nextY);
+
+  // 3. Draw Stacked Contact Details on the right
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(100, 100, 100);
+  
+  let contactY = 11;
+  doc.text(`Tel: ${telNo}`, rightEdge, contactY, { align: "right" });
+  contactY += 4.2;
+  doc.text(`Email: ${emailAddr}`, rightEdge, contactY, { align: "right" });
+  
+  if (websiteUrl || kraPin) {
+    contactY += 4.2;
+    doc.text(`${websiteUrl ? `Web: ${websiteUrl}` : ""}${kraPin ? `  |  PIN: ${kraPin}` : ""}`, rightEdge, contactY, { align: "right" });
+  }
+  if (businessReg || addressLine) {
+    contactY += 4.2;
+    doc.text(`${businessReg ? `Reg: ${businessReg}  |  ` : ""}Addr: ${addressLine}`, rightEdge, contactY, { align: "right" });
+  }
+
+  // Draw separator line at Y = 32
+  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
+  doc.line(marginL, 32, rightEdge, 32);
+};
+
+const drawFallbackLogo = (doc: jsPDF) => {
+  // Left blue accent bar
+  doc.setFillColor(0, 82, 204);
+  doc.rect(14, 8, 3, 20, "F");
+
+  // Abstract logo block
+  doc.setFillColor(0, 82, 204);
+  doc.roundedRect(21, 8, 10, 10, 2, 2, "F");
+  doc.setFillColor(255, 255, 255);
+  doc.triangle(26, 10, 24, 13, 28, 13, "F");
+  doc.triangle(26, 16, 24, 13, 28, 13, "F");
+};
+
 
 /** Standard A4 print margins (mm) — fits home/office printers with safe area */
 const A4_PRINT_MARGINS = { top: 12, right: 10, bottom: 14, left: 10 };
@@ -57,7 +185,7 @@ const addHeader = (
   doc: jsPDF,
   title: string,
   subtitle: string,
-  storeName: string = "AUTOSPARE EAST AFRICA",
+  storeName: string = "",
   logoBase64?: string
 ) => {
   let xOffset = 14;
@@ -100,7 +228,7 @@ const addCompanyManifestHeader = (
   documentTitle: string,
   company: PdfCompanySettings
 ) => {
-  const storeName = company.storeName || "AUTOSPARE EAST AFRICA";
+  const storeName = company.storeName || "";
   const pageWidth = doc.internal.pageSize.width;
   let leftX = 14;
 
@@ -164,7 +292,7 @@ const addCompanyManifestHeader = (
 };
 
 // Helper to add footer to pages
-const addFooter = (doc: jsPDF, data: any, storeName: string = "AutoSpare East Africa") => {
+const addFooter = (doc: jsPDF, data: any, storeName: string = "") => {
   const str = `Page ${doc.getNumberOfPages()}`;
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
@@ -196,7 +324,7 @@ export const exportProductsPDF = async (
     format: "a4",
   });
 
-  const name = storeName || "AUTOSPARE EAST AFRICA";
+  const name = storeName || "";
   addHeader(doc, name, "Genuine Parts Catalog Report", name, logoBase64);
 
   const tableColumn = ["SKU", "Part Name", "Category", "Brand", "Weight", "Status", "Unit Price"];
@@ -247,7 +375,7 @@ export const exportInventoryPDF = async (
     format: "a4",
   });
 
-  const name = storeName || "AUTOSPARE EAST AFRICA";
+  const name = storeName || "";
   addHeader(doc, name, "Inventory Stock Balance & Warehouse Distribution Report", name, logoBase64);
 
   const tableColumn = ["SKU", "Product Name", "Brand", "Warehouse Location", "Quantity", "Min Stock", "Status"];
@@ -322,50 +450,29 @@ export const exportOrdersPDF = async (
   const marginL = 14;
   const marginR = 14;
 
-  const legalName    = storeName || "AUTOSPARE EAST AFRICA";
-  const tagline      = companySettings?.tagline  || "Premium Automotive Parts & Logistics";
-  const addressLine  = companySettings?.address  || "Mombasa Road, Nairobi Central Hub";
-  const telNo        = companySettings?.phone    || "+254 711 223 344";
-  const emailAddr    = companySettings?.email    || "billing@autospare.com";
-  const websiteUrl   = companySettings?.website  || "www.autospare.com";
+  const legalName    = storeName || "";
+  const tagline      = companySettings?.tagline  || "";
+  const addressLine  = companySettings?.address  || "";
+  const telNo        = companySettings?.phone    || "";
+  const emailAddr    = companySettings?.email    || "";
+  const websiteUrl   = companySettings?.website  || "";
   const kraPin       = companySettings?.kraPin   || "";
   const businessReg  = companySettings?.regNumber || "";
-  const activeBranch = companySettings?.branch   || "Main Warehouse";
+  const activeBranch = companySettings?.branch   || "";
   const reportType   = isWalkIn ? "WALK-IN POS" : "SHIPMENT";
-  const today        = new Date().toISOString().split("T")[0];
 
-  // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
-  // Left blue accent bar
-  doc.setFillColor(0, 82, 204);
-  doc.rect(marginL, 8, 3, 22, "F");
-
-  // Abstract logo block
-  doc.setFillColor(0, 82, 204);
-  doc.roundedRect(21, 8, 12, 12, 2, 2, "F");
-  doc.setFillColor(255, 255, 255);
-  doc.triangle(27, 10, 25, 14, 29, 14, "F");
-  doc.triangle(27, 18, 25, 14, 29, 14, "F");
-
-  // Company name & tagline
-  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
-  doc.text(legalName, 37, 15);
-  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
-  doc.text(tagline, 37, 20);
-
-  // Right-aligned contact strip
-  const rightEdge = pageWidth - marginR;
-  doc.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightEdge, 12, { align: "right" });
-  if (websiteUrl || kraPin) {
-    doc.text(`${websiteUrl ? `Web: ${websiteUrl}` : ""}${kraPin ? `  |  PIN: ${kraPin}` : ""}`, rightEdge, 17, { align: "right" });
-  }
-  if (businessReg || addressLine) {
-    doc.text(`${businessReg ? `Reg: ${businessReg}  |  ` : ""}Addr: ${addressLine}`, rightEdge, 22, { align: "right" });
-  }
-
-  // Header separator
-  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
-  doc.line(marginL, 32, pageWidth - marginR, 32);
+  const settingsObj: PdfCompanySettings = {
+    storeName: legalName,
+    storeTagline: tagline,
+    storeAddress: addressLine,
+    storePhone: telNo,
+    storeEmail: emailAddr,
+    storeWebsite: websiteUrl,
+    storeKraPin: kraPin,
+    storeRegNumber: businessReg,
+    storeLogo: logoBase64
+  };
+  await drawBrandedHeader(doc, settingsObj);
 
   // ── 2. REPORT INFO BLOCK ───────────────────────────────────────────────────
   const infoY = 36;
@@ -548,7 +655,8 @@ export const exportOrdersPDF = async (
   doc.text("Reviewed By: __________________", pageWidth / 3 + 8, sigY);
   doc.text("Approved By: __________________", (pageWidth / 3) * 2 + 2, sigY);
 
-  doc.save(`${isWalkIn ? "walkin" : "shipment"}_orders_report_${today}.pdf`);
+  const _today = new Date().toISOString().split("T")[0];
+  doc.save(`${isWalkIn ? "walkin" : "shipment"}_orders_report_${_today}.pdf`);
 };
 
 // 4. Export Waybill / Shipment Products Manifest PDF
@@ -571,12 +679,12 @@ export const exportWaybillManifestPDF = async (
   const rightEdge = pageWidth - marginR;
   const printableWidth = pageWidth - marginL - marginR;
 
-  const legalName = company.storeName || company.store_name || "AUTOSPARE EAST AFRICA";
-  const tagline = company.storeTagline || company.store_tagline || "Premium Automotive Parts & Logistics";
-  const addressLine = company.store_address || company.physicalAddress || company.physical_address || "Mombasa Road, Nairobi Central Hub";
-  const telNo = company.store_phone || company.contactPhone || company.contact_phone || "+254 711 223 344";
-  const emailAddr = company.store_email || company.contactEmail || company.contact_email || "billing@autospare.com";
-  const websiteUrl = company.storeWebsite || company.store_website || "www.autospare.com";
+  const legalName = company.storeName || company.store_name || "";
+  const tagline = company.storeTagline || company.store_tagline || "";
+  const addressLine = company.store_address || company.physicalAddress || company.physical_address || "";
+  const telNo = company.store_phone || company.contactPhone || company.contact_phone || "";
+  const emailAddr = company.store_email || company.contactEmail || company.contact_email || "";
+  const websiteUrl = company.storeWebsite || company.store_website || "";
   const kraPin = company.storeKraPin || company.store_kra_pin || "";
   const businessReg = company.storeRegNumber || company.store_reg_number || "";
   const currency = company.currency || "Ksh";
@@ -591,36 +699,7 @@ export const exportWaybillManifestPDF = async (
   const orderCount = orders.length;
 
   // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
-  // Left blue accent bar
-  doc.setFillColor(0, 82, 204);
-  doc.rect(marginL, 8, 3, 22, "F");
-
-  // Abstract logo block
-  doc.setFillColor(0, 82, 204);
-  doc.roundedRect(21, 8, 12, 12, 2, 2, "F");
-  doc.setFillColor(255, 255, 255);
-  doc.triangle(27, 10, 25, 14, 29, 14, "F");
-  doc.triangle(27, 18, 25, 14, 29, 14, "F");
-
-  // Company name & tagline
-  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
-  doc.text(legalName.toUpperCase(), 37, 15);
-  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
-  doc.text(tagline, 37, 20);
-
-  // Right-aligned contact strip
-  doc.setFont("helvetica", "normal").setFontSize(6.8).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightEdge, 12, { align: "right" });
-  if (websiteUrl || kraPin) {
-    doc.text(`${websiteUrl ? `Web: ${websiteUrl}` : ""}${kraPin ? `  |  PIN: ${kraPin}` : ""}`, rightEdge, 17, { align: "right" });
-  }
-  if (businessReg || addressLine) {
-    doc.text(`${businessReg ? `Reg: ${businessReg}  |  ` : ""}Addr: ${addressLine}`, rightEdge, 22, { align: "right" });
-  }
-
-  // Header separator
-  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
-  doc.line(marginL, 32, rightEdge, 32);
+  await drawBrandedHeader(doc, company);
 
   // ── 2. REPORT INFO BLOCK ───────────────────────────────────────────────────
   const infoY = 36;
@@ -878,12 +957,12 @@ export const exportCustomerStatementPDF = async (
   });
 
   const currency = company.currency || "Ksh";
-  const storeName = company.storeName || company.store_name || "AUTOSPARE EAST AFRICA";
-  const tagline = company.storeTagline || company.store_tagline || "Premium Automotive Parts & Logistics";
-  const addressLine = company.store_address || company.physicalAddress || company.physical_address || "Mombasa Road, Nairobi Central Hub";
-  const telNo = company.store_phone || company.contactPhone || company.contact_phone || "+254 711 223 344";
-  const emailAddr = company.store_email || company.contactEmail || company.contact_email || "billing@autospare.com";
-  const websiteUrl = company.storeWebsite || company.store_website || "www.autospare.com";
+  const storeName = company.storeName || company.store_name || "";
+  const tagline = company.storeTagline || company.store_tagline || "";
+  const addressLine = company.store_address || company.physicalAddress || company.physical_address || "";
+  const telNo = company.store_phone || company.contactPhone || company.contact_phone || "";
+  const emailAddr = company.store_email || company.contactEmail || company.contact_email || "";
+  const websiteUrl = company.storeWebsite || company.store_website || "";
   const kraPin = company.storeKraPin || company.store_kra_pin || "";
   const businessReg = company.storeRegNumber || company.store_reg_number || "";
 
@@ -895,38 +974,9 @@ export const exportCustomerStatementPDF = async (
   const printableWidth = pageWidth - marginL - marginR;
 
   // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
-  // Left blue accent bar
-  doc.setFillColor(0, 82, 204);
-  doc.rect(marginL, 8, 3, 20, "F");
+  await drawBrandedHeader(doc, company);
 
-  // Abstract logo block
-  doc.setFillColor(0, 82, 204);
-  doc.roundedRect(21, 8, 10, 10, 2, 2, "F");
-  doc.setFillColor(255, 255, 255);
-  doc.triangle(26, 10, 24, 13, 28, 13, "F");
-  doc.triangle(26, 16, 24, 13, 28, 13, "F");
-
-  // Company name & tagline
-  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
-  doc.text(storeName.toUpperCase(), 35, 14);
-  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
-  doc.text(tagline, 35, 18);
-
-  // Right-aligned contact strip
-  doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${telNo}  |  Email: ${emailAddr}`, rightEdge, 11, { align: "right" });
-  if (websiteUrl || kraPin) {
-    doc.text(`${websiteUrl ? `Web: ${websiteUrl}` : ""}${kraPin ? `  |  PIN: ${kraPin}` : ""}`, rightEdge, 15, { align: "right" });
-  }
-  if (businessReg || addressLine) {
-    doc.text(`${businessReg ? `Reg: ${businessReg}  |  ` : ""}Addr: ${addressLine}`, rightEdge, 19, { align: "right" });
-  }
-
-  // Header separator
-  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
-  doc.line(marginL, 30, rightEdge, 30);
-
-  let currentY = 34;
+  let currentY = 36;
 
   // ── 2. DOCUMENT TITLE ──────────────────────────────────────────────────────
   doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(0, 82, 204);
@@ -1111,15 +1161,15 @@ export const exportSingleOrderInvoicePDF = async (
   const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDFClass({ orientation: "portrait", unit: "mm", format: "a4" });
 
-  const storeName   = settings.store_name    || "AUTOSPARE EAST AFRICA";
-  const storeEmail  = settings.store_email    || settings.contact_email || "support@autospare.co.ke";
-  const storePhone  = settings.store_phone    || settings.contact_phone || "+254 700 000 000";
-  const storeAddr   = settings.store_address  || settings.physical_address || "Mombasa Road, Nairobi Central Hub";
-  const storeTag    = settings.store_tagline  || "Premium OEM Spare Parts & Logistics";
+  const storeName   = settings.store_name    || "";
+  const storeEmail  = settings.store_email    || settings.contact_email || "";
+  const storePhone  = settings.store_phone    || settings.contact_phone || "";
+  const storeAddr   = settings.store_address  || settings.physical_address || "";
+  const storeTag    = settings.store_tagline  || "";
   const currency    = settings.currency      || "Ksh";
   const storePin    = settings.store_kra_pin  || "";
   const storeReg    = settings.store_reg_number || "";
-  const storeWeb    = settings.store_website  || "www.autospare.com";
+  const storeWeb    = settings.store_website  || "";
 
   const pageWidth  = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -1129,36 +1179,17 @@ export const exportSingleOrderInvoicePDF = async (
   const w = pageWidth - marginL - marginR;
 
   // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
-  // Left blue accent bar
-  doc.setFillColor(0, 82, 204);
-  doc.rect(marginL, 8, 3, 20, "F");
-
-  // Abstract logo block
-  doc.setFillColor(0, 82, 204);
-  doc.roundedRect(21, 8, 10, 10, 2, 2, "F");
-  doc.setFillColor(255, 255, 255);
-  doc.triangle(26, 10, 24, 13, 28, 13, "F");
-  doc.triangle(26, 16, 24, 13, 28, 13, "F");
-
-  // Company name & tagline
-  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
-  doc.text(storeName.toUpperCase(), 35, 14);
-  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
-  doc.text(storeTag, 35, 18);
-
-  // Right-aligned contact strip
-  doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${storePhone}  |  Email: ${storeEmail}`, rightEdge, 11, { align: "right" });
-  if (storeWeb || storePin) {
-    doc.text(`${storeWeb ? `Web: ${storeWeb}` : ""}${storePin ? `  |  PIN: ${storePin}` : ""}`, rightEdge, 15, { align: "right" });
-  }
-  if (storeReg || storeAddr) {
-    doc.text(`${storeReg ? `Reg: ${storeReg}  |  ` : ""}Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
-  }
-
-  // Header separator
-  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
-  doc.line(marginL, 30, rightEdge, 30);
+  await drawBrandedHeader(doc, {
+    storeName,
+    storeTagline: storeTag,
+    storeAddress: storeAddr,
+    storePhone,
+    storeEmail,
+    storeWebsite: storeWeb,
+    storeKraPin: storePin,
+    storeRegNumber: storeReg,
+    storeLogo: settings.store_logo || ""
+  });
 
   // ── 2. DOCUMENT TITLE / BLUE BANNER ─────────────────────────────────────────
   doc.setFillColor(0, 82, 204);
@@ -1396,15 +1427,15 @@ export const exportCustomerLedgerPDF = async (
   const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDFClass({ orientation: "landscape", unit: "mm", format: "a4" });
 
-  const storeName  = settings.store_name    || "AUTOSPARE EAST AFRICA";
-  const storeEmail = settings.store_email    || settings.contact_email || "support@autospare.co.ke";
-  const storePhone = settings.store_phone    || settings.contact_phone || "+254 700 000 000";
-  const storeAddr  = settings.store_address  || settings.physical_address || "Mombasa Road, Nairobi Central Hub";
-  const storeTag   = settings.store_tagline  || "Premium OEM Spare Parts & Logistics";
+  const storeName  = settings.store_name    || "";
+  const storeEmail = settings.store_email    || settings.contact_email || "";
+  const storePhone = settings.store_phone    || settings.contact_phone || "";
+  const storeAddr  = settings.store_address  || settings.physical_address || "";
+  const storeTag   = settings.store_tagline  || "";
   const currency   = settings.currency     || "Ksh";
   const storePin   = settings.store_kra_pin  || "";
   const storeReg   = settings.store_reg_number || "";
-  const storeWeb   = settings.store_website  || "www.autospare.com";
+  const storeWeb   = settings.store_website  || "";
 
   const pageWidth  = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -1414,38 +1445,19 @@ export const exportCustomerLedgerPDF = async (
   const w = pageWidth - marginL - marginR;
 
   // ── 1. BRANDED LETTERHEAD ──────────────────────────────────────────────────
-  // Left blue accent bar
-  doc.setFillColor(0, 82, 204);
-  doc.rect(marginL, 8, 3, 20, "F");
+  await drawBrandedHeader(doc, {
+    storeName,
+    storeTagline: storeTag,
+    storeAddress: storeAddr,
+    storePhone,
+    storeEmail,
+    storeWebsite: storeWeb,
+    storeKraPin: storePin,
+    storeRegNumber: storeReg,
+    storeLogo: settings.store_logo || ""
+  });
 
-  // Abstract logo block
-  doc.setFillColor(0, 82, 204);
-  doc.roundedRect(21, 8, 10, 10, 2, 2, "F");
-  doc.setFillColor(255, 255, 255);
-  doc.triangle(26, 10, 24, 13, 28, 13, "F");
-  doc.triangle(26, 16, 24, 13, 28, 13, "F");
-
-  // Company name & tagline
-  doc.setFont("helvetica", "bold").setFontSize(12.5).setTextColor(0, 82, 204);
-  doc.text(storeName.toUpperCase(), 35, 14);
-  doc.setFont("helvetica", "italic").setFontSize(7.5).setTextColor(120, 120, 120);
-  doc.text(storeTag, 35, 18);
-
-  // Right-aligned contact strip
-  doc.setFont("helvetica", "normal").setFontSize(6.5).setTextColor(100, 100, 100);
-  doc.text(`Tel: ${storePhone}  |  Email: ${storeEmail}`, rightEdge, 11, { align: "right" });
-  if (storeWeb || storePin) {
-    doc.text(`${storeWeb ? `Web: ${storeWeb}` : ""}${storePin ? `  |  PIN: ${storePin}` : ""}`, rightEdge, 15, { align: "right" });
-  }
-  if (storeReg || storeAddr) {
-    doc.text(`${storeReg ? `Reg: ${storeReg}  |  ` : ""}Addr: ${storeAddr}`, rightEdge, 19, { align: "right" });
-  }
-
-  // Header separator
-  doc.setDrawColor(220, 220, 220).setLineWidth(0.5);
-  doc.line(marginL, 30, rightEdge, 30);
-
-  let y = 34;
+  let y = 36;
 
   // ── 2. DOCUMENT TITLE ──────────────────────────────────────────────────────
   doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(0, 82, 204);

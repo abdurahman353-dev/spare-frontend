@@ -11,6 +11,7 @@ import { Save, Store, Settings, Bell, Shield, Loader2, Eye, EyeOff, Globe, Plus,
 import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,8 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hubsList, setHubsList] = useState<Array<{ name: string; lat: number; lng: number; desc: string }>>([]);
+  const [hubsPage, setHubsPage] = useState(1);
+  const [hubsPageSize, setHubsPageSize] = useState(5);
   const [passwordState, setPasswordState] = useState({
     current_password: "",
     password: "",
@@ -320,7 +323,7 @@ export default function AdminSettingsPage() {
                 name: hubName,
                 lat: parseFloat(existing.lat) || 0,
                 lng: parseFloat(existing.lng) || 0,
-                desc: existing.desc || `${city.name} regional distribution node.`
+                desc: existing.desc || ""
               });
             } else {
               const cleanCity = city.name.trim().toLowerCase();
@@ -332,14 +335,14 @@ export default function AdminSettingsPage() {
                   name: hubName,
                   lat: coords.lat,
                   lng: coords.lng,
-                  desc: coords.desc
+                  desc: ""
                 });
               } else {
                 derivedHubs.push({
                   name: hubName,
                   lat: -1.2921,
                   lng: 36.8219,
-                  desc: `${city.name} distribution node.`
+                  desc: ""
                 });
               }
             }
@@ -704,67 +707,84 @@ export default function AdminSettingsPage() {
                     <p className="text-zinc-400 text-xs mt-1">Add countries and cities in the <strong className="font-bold text-primary">Logistics &rarr; Shipping Zones</strong> tab to automatically generate map pins!</p>
                   </div>
                 ) : (
-                  hubsList.map((hub, idx) => (
-                    <Card key={idx} className="border-zinc-200 shadow-xs relative overflow-hidden bg-zinc-50/20">
-                      <CardContent className="p-5 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Hub / Region (Synced Location)</Label>
-                          <Input 
-                            value={hub.name} 
-                            readOnly
-                            disabled
-                            placeholder="Synced Name" 
-                            className="bg-zinc-50 border-zinc-200 text-zinc-400 font-semibold cursor-not-allowed"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Latitude</Label>
-                            <Input 
-                              type="number"
-                              step="any"
-                              value={hub.lat} 
-                              onChange={(e) => {
-                                const updated = [...hubsList];
-                                updated[idx].lat = parseFloat(e.target.value) || 0;
-                                setHubsList(updated);
-                              }}
-                              placeholder="-1.2921" 
-                              className="bg-white border-zinc-200 font-bold"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Longitude</Label>
-                            <Input 
-                              type="number"
-                              step="any"
-                              value={hub.lng} 
-                              onChange={(e) => {
-                                const updated = [...hubsList];
-                                updated[idx].lng = parseFloat(e.target.value) || 0;
-                                setHubsList(updated);
-                              }}
-                              placeholder="36.8219" 
-                              className="bg-white border-zinc-200 font-bold"
-                            />
-                          </div>
-                        </div>
-                        <div className="md:col-span-2 space-y-1">
-                          <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Description / Overlay Details</Label>
-                          <Input 
-                            value={hub.desc} 
-                            onChange={(e) => {
-                              const updated = [...hubsList];
-                              updated[idx].desc = e.target.value;
-                              setHubsList(updated);
-                            }}
-                            placeholder="Brief information popup content..." 
-                            className="bg-white border-zinc-200 font-medium text-zinc-700"
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
+                  <>
+                    {hubsList
+                      .slice((hubsPage - 1) * hubsPageSize, hubsPage * hubsPageSize)
+                      .map((hub, idx) => {
+                        const absoluteIdx = (hubsPage - 1) * hubsPageSize + idx;
+                        return (
+                          <Card key={absoluteIdx} className="border-zinc-200 shadow-xs relative overflow-hidden bg-zinc-50/20">
+                            <CardContent className="p-5 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-1">
+                                <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Hub / Region (Synced Location)</Label>
+                                <Input 
+                                  value={hub.name} 
+                                  readOnly
+                                  disabled
+                                  placeholder="Synced Name" 
+                                  className="bg-zinc-50 border-zinc-200 text-zinc-400 font-semibold cursor-not-allowed"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Latitude</Label>
+                                  <Input 
+                                    type="number"
+                                    step="any"
+                                    value={hub.lat} 
+                                    onChange={(e) => {
+                                      const updated = [...hubsList];
+                                      updated[absoluteIdx].lat = parseFloat(e.target.value) || 0;
+                                      setHubsList(updated);
+                                    }}
+                                    placeholder="-1.2921" 
+                                    className="bg-white border-zinc-200 font-bold"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Longitude</Label>
+                                  <Input 
+                                    type="number"
+                                    step="any"
+                                    value={hub.lng} 
+                                    onChange={(e) => {
+                                      const updated = [...hubsList];
+                                      updated[absoluteIdx].lng = parseFloat(e.target.value) || 0;
+                                      setHubsList(updated);
+                                    }}
+                                    placeholder="36.8219" 
+                                    className="bg-white border-zinc-200 font-bold"
+                                  />
+                                </div>
+                              </div>
+                              <div className="md:col-span-2 space-y-1">
+                                <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Description / Overlay Details</Label>
+                                <Input 
+                                  value={hub.desc} 
+                                  onChange={(e) => {
+                                    const updated = [...hubsList];
+                                    updated[absoluteIdx].desc = e.target.value;
+                                    setHubsList(updated);
+                                  }}
+                                  placeholder="Brief information popup content..." 
+                                  className="bg-white border-zinc-200 font-medium text-zinc-700"
+                                />
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    }
+                    <PaginationControls
+                      currentPage={hubsPage}
+                      setCurrentPage={setHubsPage}
+                      pageSize={hubsPageSize}
+                      setPageSize={(size: number) => { setHubsPageSize(size); setHubsPage(1); }}
+                      totalItems={hubsList.length}
+                      itemName="hubs"
+                      pageSizeOptions={[5, 10, 20, 50]}
+                    />
+                  </>
                 )}
               </div>
             </TabsContent>

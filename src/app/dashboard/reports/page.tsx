@@ -465,105 +465,83 @@ export default function AdminReportsPage() {
 
       currentY += 22;
 
-      const pageW = doc.internal.pageSize.width;
-      const mL = 14;
-      const mR = 14;
-      const pw = pageW - mL - mR;
+      // ── CUSTOMER ACCOUNT STATEMENT & LEDGER table (identical to exportCustomerLedgerPDF) ──
+      const grandTotalItemsCount = customerOrders.reduce((s: number, o: any) => s + (o.items?.length || 0), 0);
+      const grandTotalUnitsCount = customerOrders.reduce((s: number, o: any) => s + (o.items || []).reduce((acc: number, i: any) => acc + (i.quantity || 0), 0), 0);
 
       const statementHead = [
-        "Date",
         "Order Ref",
-        "Status",
-        "Pay Status",
+        "Order Date",
+        "Main Product Reference",
+        "Items Count",
         "Origin Warehouse",
-        "Destination / Address",
-        "Items",
-        "Total Items",
-        "Subtotal Cost",
-        "Shipping Fee",
-        "Total Paid",
+        "Fulfillment Destination",
+        `Products Cost (${currency})`,
+        `Shipping Fee (${currency})`,
+        `Total Paid (${currency})`,
+        "Order Status",
+        "Payment Mode",
       ];
 
-      const statementRows = customerOrders.map((o: any) => {
-        const items = o.items || [];
-        const productNames = items.map((item: any) =>
-          `${item.product?.name || "—"} (Qty: ${item.quantity || 1})`
-        ).join(", ") || "—";
-        const itemsCount = items.length;
-        const unitsCount = items.reduce((s: number, i: any) => s + (i.quantity || 0), 0);
-        const subtotal = items.reduce(
-          (s: number, i: any) => s + (Number(i.quantity) || 0) * parseFloat(i.price ?? i.product?.price ?? 0),
-          0
-        );
-        const shippingFee = parseFloat(o.shipping_fee || 0);
-        const grandTotal = parseFloat(o.total_amount || 0);
-        const dest = o.shipping_city
-          ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}`
-          : "In-Store Collection";
+      const statementRows: string[][] = customerOrders.map((o: any) => {
+        const subtotal = Math.max(0, Number(o.total_amount || 0) - Number(o.shipping_fee || 0));
+        const productNames = (o.items || [])
+          .map((item: any) => `${item.product?.name || "Genuine Spare Part"} (Qty: ${item.quantity || 1})`)
+          .filter(Boolean)
+          .join(", ") || "Genuine Spare Part";
+        const totalQty = (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
         return [
-          o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "—",
           o.tracking_number || `ORD-${o.id}`,
-          o.status || "—",
-          o.payment_status || "—",
-          o.items?.[0]?.warehouse?.name || "—",
-          dest,
+          o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "—",
           productNames,
-          `${itemsCount} item${itemsCount !== 1 ? "s" : ""} (${unitsCount} unit${unitsCount !== 1 ? "s" : ""})`,
+          `${o.items?.length || 0} Item(s) (${totalQty} Unit${totalQty !== 1 ? "s" : ""})`,
+          o.items?.[0]?.warehouse?.name || "Main Warehouse Hub",
+          o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}` : "In-Store Collection",
           fmt(subtotal),
-          fmt(shippingFee),
-          fmt(grandTotal),
+          fmt(Number(o.shipping_fee || 0)),
+          fmt(Number(o.total_amount || 0)),
+          o.status === "In Transit" ? "Shipped" : (o.status || "Pending"),
+          o.payment_method || "M-Pesa",
         ];
       });
 
-      // Totals footer row
+      // Grand totals row
       statementRows.push([
         "TOTALS",
         `${customerOrders.length} order(s)`,
-        "", "", "", "",
         "",
-        `${totalStatementItems} items (${totalStatementUnits} units)`,
+        `${grandTotalItemsCount} item(s) (${grandTotalUnitsCount} unit${grandTotalUnitsCount !== 1 ? "s" : ""})`,
+        "", "",
         fmt(totalStatementVal - totalStatementFees),
         fmt(totalStatementFees),
         fmt(totalStatementVal),
+        "", "",
       ]);
 
-      const col = {
-        date:       pw * 0.07,
-        ref:        pw * 0.09,
-        status:     pw * 0.07,
-        payStatus:  pw * 0.07,
-        warehouse:  pw * 0.09,
-        dest:       pw * 0.10,
-        items:      pw * 0.16,
-        totalItems: pw * 0.09,
-        subtotal:   pw * 0.08,
-        shipping:   pw * 0.08,
-        total:      pw * 0.10,
-      };
+      const pageW = doc.internal.pageSize.width;
+      const mL = 14;
+      const mR = 14;
 
       autoTable(doc, {
         startY: currentY,
         head: [statementHead],
         body: statementRows,
-        theme: 'grid',
-        tableWidth: pw,
+        theme: "grid",
         showHead: "everyPage",
-        headStyles: { fillColor: [0, 82, 204], fontSize: 7, fontStyle: 'bold', halign: "center" },
-        styles: { fontSize: 6.5, cellPadding: 1.8, overflow: "linebreak", valign: "middle" },
-        bodyStyles: { fontSize: 6.5, textColor: [51, 65, 85], overflow: "linebreak" },
+        headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255], fontStyle: "bold", fontSize: 7.5 },
+        bodyStyles: { fontSize: 7.5, textColor: [51, 65, 85] },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
-          0:  { cellWidth: col.date,       halign: "center" },
-          1:  { cellWidth: col.ref,        fontStyle: "bold" },
-          2:  { cellWidth: col.status,     halign: "center" },
-          3:  { cellWidth: col.payStatus,  halign: "center" },
-          4:  { cellWidth: col.warehouse,  overflow: "linebreak" },
-          5:  { cellWidth: col.dest,       overflow: "linebreak" },
-          6:  { cellWidth: col.items,      overflow: "linebreak" },
-          7:  { cellWidth: col.totalItems, overflow: "linebreak" },
-          8:  { cellWidth: col.subtotal,   halign: "right" },
-          9:  { cellWidth: col.shipping,   halign: "right" },
-          10: { cellWidth: col.total,      halign: "right", fontStyle: "bold" },
+          0: { cellWidth: 28, fontStyle: "bold" },
+          1: { cellWidth: 22, halign: "center" },
+          3: { cellWidth: 20, halign: "center" },
+          4: { cellWidth: 28 },
+          5: { cellWidth: 32 },
+          6: { halign: "right" },
+          7: { halign: "right" },
+          8: { halign: "right", fontStyle: "bold" },
+          9: { cellWidth: 22, halign: "center" },
+          10: { cellWidth: 24, halign: "center" },
         },
         margin: { top: 37, left: mL, right: mR },
         didParseCell: (data: any) => {

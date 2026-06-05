@@ -69,8 +69,8 @@ export const drawBrandedHeader = async (
   doc: jsPDF,
   companySettings: PdfCompanySettings
 ) => {
-  const legalName  = companySettings?.storeName  || companySettings?.store_name  || "AutoSpare Distributors";
-  const tagline    = companySettings?.storeTagline || companySettings?.store_tagline || "Premium Automotive Parts & Logistics";
+  const legalName  = companySettings?.storeName  || companySettings?.store_name  || "";
+  const tagline    = companySettings?.storeTagline || companySettings?.store_tagline || "";
   const addressLine = companySettings?.storeAddress || companySettings?.physicalAddress || companySettings?.physical_address || companySettings?.store_address || "";
   const telNo      = companySettings?.storePhone   || companySettings?.contactPhone || companySettings?.contact_phone || companySettings?.store_phone || "";
   const emailAddr  = companySettings?.storeEmail   || companySettings?.contactEmail || companySettings?.contact_email || companySettings?.store_email || "";
@@ -539,7 +539,7 @@ export const exportOrdersPDF = async (
     "Products",
     "Items / Units",
     "Origin Warehouse",
-    "Destination",
+    isWalkIn ? "Destination / Address" : "Destination",
     "Date",
     "Subtotal",
     "Shipping",
@@ -573,15 +573,21 @@ export const exportOrdersPDF = async (
       ? (customerName || "Walk-In Guest")
       : `${customerName}\n${customerPhone}`;
 
+    const destDisplay = isWalkIn
+      ? (o.shipping_method === "Pickup"
+          ? "In-Store · Walk-In Counter"
+          : `${o.shipping_city || ""} · ${o.shipping_address || ""}`.trim().replace(/^ · | · $/g, "") || "—")
+      : (o.shipping_city
+          ? (o.shipping_country ? `${o.shipping_city}, ${o.shipping_country}` : o.shipping_city)
+          : "In-Store Collection");
+
     return [
       o.tracking_number || `ORD-${o.id}`,
       customerDisplay,
       productNames,
       itemsUnitsDisplay,
       o.items?.[0]?.warehouse?.name || "N/A",
-      o.shipping_city
-        ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}`
-        : "In-Store Collection",
+      destDisplay,
       new Date(o.created_at).toLocaleDateString("en-KE"),
       `${currency} ${Math.max(0, parseFloat(o.total_amount || 0) - parseFloat(o.shipping_fee || 0)).toLocaleString()}`,
       `${currency} ${parseFloat(o.shipping_fee || 0).toLocaleString()}`,

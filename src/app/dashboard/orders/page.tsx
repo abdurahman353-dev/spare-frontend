@@ -123,6 +123,10 @@ export default function AdminOrdersPage() {
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const currentSelectedOrder = useMemo(() => {
+    if (!selectedOrder) return null;
+    return orders.find(o => o.id === selectedOrder.id) || selectedOrder;
+  }, [orders, selectedOrder]);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
   // POS / Walk-in Order State
@@ -202,7 +206,9 @@ export default function AdminOrdersPage() {
       toast.success("Walk-In order updated successfully!");
       setIsEditWalkInModalOpen(false);
       setEditWalkInTarget(null);
-      await fetchOrders();
+      // Silent re-fetch — currentSelectedOrder (useMemo) will auto-update
+      // the detail modal in real time without closing it.
+      await fetchOrders(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to update order.");
     } finally {
@@ -330,7 +336,7 @@ export default function AdminOrdersPage() {
       );
       setIsVoidDialogOpen(false);
       setVoidOrderTarget(null);
-      await fetchOrders();
+      await fetchOrders(true);
       await fetchMetadata();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to void order. Please try again.");
@@ -447,12 +453,13 @@ export default function AdminOrdersPage() {
         customer_id: targetCustomerId,
         tracking_number: walkInRef,
         total_amount: totalAmount,
-        status: "Delivered",
+        // Pickup = customer takes goods immediately → Delivered
+        // Local Delivery = needs to be dispatched → Pending
+        status: shippingMethod === "Pickup" ? "Delivered" : "Pending",
         payment_status: paymentStatus,
         payment_method: finalPaymentMethod,
         shipping_method: shippingMethod,
         shipping_fee: shippingFee,
-        shipping_country: "Kenya",
         shipping_city: shippingMethod === "Pickup" ? "In-Store" : shippingCity.trim(),
         shipping_address: shippingMethod === "Pickup" ? "Walk-In Counter" : shippingAddress.trim(),
         items: orderItems.map(item => ({
@@ -745,7 +752,8 @@ export default function AdminOrdersPage() {
           (order.customer?.name || "").toLowerCase().includes(sq) ||
           (order.customer?.email || "").toLowerCase().includes(sq) ||
           (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
-          getWalkInDestinationLabel(order).toLowerCase().includes(sq)
+          getWalkInDestinationLabel(order).toLowerCase().includes(sq) ||
+          (order.payment_method || "cash").toLowerCase().includes(sq)
         );
         const matchesPayStatus = walkInPayStatusFilter === "All" ||
           (walkInPayStatusFilter === "Cancelled / Refunded"
@@ -1103,11 +1111,11 @@ export default function AdminOrdersPage() {
                     {/* Destination / Address column */}
                     <TableCell>
                       {order.shipping_method === "Pickup" ? (
-                        <span className="text-[10px] text-zinc-400 font-medium italic">In-Store — No Delivery</span>
+                        <span className="text-xs text-zinc-400 font-medium italic">In-Store — No Delivery</span>
                       ) : (
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-bold text-zinc-700">{order.shipping_city || "—"}</p>
-                          <p className="text-[10px] text-zinc-400 max-w-[120px] truncate">{order.shipping_address || "—"}</p>
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-zinc-900">{order.shipping_city || "—"}</p>
+                          <p className="text-xs font-bold text-zinc-700 max-w-[160px] truncate">{order.shipping_address || "—"}</p>
                         </div>
                       )}
                     </TableCell>
@@ -1117,11 +1125,38 @@ export default function AdminOrdersPage() {
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
                         </span>
                       ) : (
-                        <div className="space-y-0.5">
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-full">
-                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>Dispatch
-                          </span>
-                          <p className="text-[10px] text-zinc-400">{order.shipping_city}</p>
+                        <div className="space-y-1">
+                          {(() => {
+                            let badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200";
+                            let dotClass = "bg-yellow-500";
+                            let label = "Pending";
+
+                            if (order.status === "Processing") {
+                              badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
+                              dotClass = "bg-indigo-500";
+                              label = "Processing";
+                            } else if (order.status === "Shipped" || order.status === "In Transit") {
+                              badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
+                              dotClass = "bg-blue-500";
+                              label = "Shipped";
+                            } else if (order.status === "Delivered") {
+                              badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                              dotClass = "bg-emerald-500";
+                              label = "Delivered";
+                            } else if (order.status === "Cancelled" || isOrderVoided(order)) {
+                              badgeClass = "bg-red-50 text-red-700 border-red-200";
+                              dotClass = "bg-red-500";
+                              label = "Cancelled";
+                            }
+
+                            return (
+                              <span className={cn("inline-flex items-center gap-1 text-[10px] font-black border px-2 py-0.5 rounded-full uppercase tracking-wider", badgeClass)}>
+                                <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", dotClass)}></span>
+                                Dispatch — {label}
+                              </span>
+                            );
+                          })()}
+                          <p className="text-[10px] font-bold text-zinc-500 ml-1">{order.shipping_city}</p>
                         </div>
                       )}
                     </TableCell>
@@ -1136,7 +1171,9 @@ export default function AdminOrdersPage() {
                       })()}
                     </TableCell>
                     <TableCell>
-                      <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">{order.payment_method || "Cash"}</p>
+                      <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">
+                        {order.payment_status === "Pending" ? "— (Pending Payment)" : (order.payment_method || "Cash")}
+                      </p>
                     </TableCell>
                     <TableCell className="text-right">
                       <p className={cn(
@@ -1154,13 +1191,38 @@ export default function AdminOrdersPage() {
                         <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-emerald-100")}>
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52 rounded-xl border-zinc-200 shadow-xl p-1">
+                        <DropdownMenuContent align="end" className="w-56 rounded-xl border-zinc-200 shadow-xl p-1">
                           <DropdownMenuGroup>
                             <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Walk-In Actions</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
                               <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
+
+                            {/* ── Delivery Status Progression (Local Delivery only) ── */}
+                            {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Delivered" && (
+                              <>
+                                <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
+                                {order.status === "Pending" && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                    <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
+                                  </DropdownMenuItem>
+                                )}
+                                {(order.status === "Pending" || order.status === "Processing") && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
+                                    <Truck className="mr-2 h-4 w-4" /> Mark Shipped
+                                  </DropdownMenuItem>
+                                )}
+                                {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped") && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Delivered")} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
+                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+
+                            {/* ── Payment Controls ── */}
                             {order.payment_status !== "Paid" && !isOrderVoided(order) ? (
                               <DropdownMenuItem
                                 onClick={() => handleMarkWalkInPaid(order)}
@@ -1176,7 +1238,7 @@ export default function AdminOrdersPage() {
                                 <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
                               </DropdownMenuItem>
                             ) : null}
-                            {!isOrderVoided(order) && order.status === "Pending" && (
+                            {!isOrderVoided(order) && (
                             <DropdownMenuItem
                               onClick={() => handleOpenVoidDialog(order)}
                               className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
@@ -1249,7 +1311,10 @@ export default function AdminOrdersPage() {
                       <div className="flex items-center gap-2">
                         <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name?.split(' ').shift() || "Origin"}</div>
                         <span className="text-[10px] font-black text-zinc-400 italic">TO</span>
-                        <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">{order.shipping_city}, {order.shipping_country || 'Kenya'}</div>
+                        <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
+                          {order.shipping_city}
+                          {order.shipping_country ? `, ${order.shipping_country}` : ""}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
@@ -1275,6 +1340,17 @@ export default function AdminOrdersPage() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm"><RefreshCw className="mr-2 h-4 w-4 text-indigo-500" /> Mark Processing</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm"><Truck className="mr-2 h-4 w-4 text-blue-500" /> Mark Shipped</DropdownMenuItem>
+                            {!isOrderVoided(order) && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenVoidDialog(order)}
+                                  className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -1302,31 +1378,31 @@ export default function AdminOrdersPage() {
         <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
           <DialogHeader className="p-6 bg-white border-b flex flex-row items-center justify-between">
             <div className="space-y-1 text-left">
-              <DialogTitle className="text-xl font-bold text-zinc-900">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-zinc-900">Order Ref: {currentSelectedOrder?.tracking_number || currentSelectedOrder?.id}</DialogTitle>
               <DialogDescription className="text-zinc-400 font-medium text-xs">
-                Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
+                Placed on {currentSelectedOrder ? new Date(currentSelectedOrder.created_at).toLocaleDateString() : ''}
               </DialogDescription>
             </div>
             <Badge className={cn(
               "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none",
-              selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
-              selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
-              selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
-              selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+              currentSelectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+              currentSelectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
+              currentSelectedOrder?.status === "Shipped" || currentSelectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
+              currentSelectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
               "bg-zinc-200 text-zinc-700"
             )}>
-              {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
+              {currentSelectedOrder?.status === "In Transit" ? "SHIPPED" : currentSelectedOrder?.status}
             </Badge>
           </DialogHeader>
           <div className="p-6 max-h-[60vh] overflow-y-auto">
             <div className="mb-6 space-y-4">
                 {/* Origin / Destination — hide destination for walk-in in-store */}
                 <div className="bg-zinc-50 p-5 rounded-xl border border-zinc-200">
-                  {selectedOrder?.shipping_method === "Pickup" || selectedOrder?.shipping_method === "In-Store Collection" ? (
+                  {currentSelectedOrder?.shipping_method === "Pickup" || currentSelectedOrder?.shipping_method === "In-Store Collection" ? (
                     <div className="flex items-center gap-3">
                       <div className="space-y-1">
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Source Warehouse</p>
-                        <p className="text-sm font-bold text-slate-700 uppercase">{selectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}</p>
+                        <p className="text-sm font-bold text-slate-700 uppercase">{currentSelectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}</p>
                       </div>
                       <div className="ml-auto">
                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
@@ -1338,13 +1414,17 @@ export default function AdminOrdersPage() {
                     <div className="flex items-center justify-between">
                       <div className="space-y-1">
                         <p className="text-[10px] font-bold text-slate-400 uppercase">Origin</p>
-                        <p className="text-sm font-bold text-slate-700 uppercase">{selectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}</p>
+                        {/* Show only warehouse name — never append country */}
+                        <p className="text-sm font-bold text-slate-700 uppercase">
+                          {(currentSelectedOrder?.items?.[0]?.warehouse?.name || "Warehouse").split(',')[0].trim()}
+                        </p>
                       </div>
                       <ArrowRightLeft className="h-4 w-4 text-zinc-300" />
                       <div className="space-y-1 text-right">
                         <p className="text-[10px] font-bold text-emerald-400 uppercase">Final Destination</p>
+                        {/* Show ONLY shipping_city — exactly as typed, no country appended */}
                         <p className="text-sm font-bold text-emerald-700 uppercase">
-                          {selectedOrder?.shipping_city ? `${selectedOrder.shipping_city}, ${selectedOrder.shipping_country || 'Kenya'}` : "Delivery Address"}
+                          {currentSelectedOrder?.shipping_city || "Delivery Address"}
                         </p>
                       </div>
                     </div>
@@ -1355,18 +1435,18 @@ export default function AdminOrdersPage() {
               <div className="mb-6">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Customer Information</h4>
                 <div className="bg-white p-4 rounded-xl border border-zinc-200">
-                  <p className="font-bold text-zinc-900">{selectedOrder?.customer?.name || "Guest"}</p>
+                  <p className="font-bold text-zinc-900">{currentSelectedOrder?.customer?.name || "Guest"}</p>
                   {/* Hide auto-generated walk-in emails */}
-                  {selectedOrder?.customer?.name?.toLowerCase() !== "walk-in customer" && (
-                    <p className="text-sm text-zinc-500 font-medium">{selectedOrder?.customer?.email}</p>
+                  {currentSelectedOrder?.customer?.name?.toLowerCase() !== "walk-in customer" && (
+                    <p className="text-sm text-zinc-500 font-medium">{currentSelectedOrder?.customer?.email}</p>
                   )}
-                  <p className="text-sm text-zinc-500 font-medium mt-1">{selectedOrder?.shipping_address}</p>
+                  <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
                 </div>
               </div>
 
             <div className="space-y-4">
                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
-              {selectedOrder?.items?.map((item: any, idx: number) => (
+              {currentSelectedOrder?.items?.map((item: any, idx: number) => (
                 <div key={idx} className="flex justify-between items-center py-3 border-b last:border-0">
                   <div className="space-y-1">
                     <p className="font-bold text-zinc-900 text-sm">{item.product?.name || `Part ID: ${item.product_id}`}</p>
@@ -1379,12 +1459,12 @@ export default function AdminOrdersPage() {
             
             <div className="mt-6 pt-4 border-t border-zinc-100 space-y-2">
               <div className="flex justify-between items-center text-zinc-500 font-bold text-[11px] uppercase tracking-tight">
-                <span>Shipping ({selectedOrder?.shipping_method})</span>
-                <span>Ksh {Number(selectedOrder?.shipping_fee || 0).toLocaleString()}</span>
+                <span>Shipping ({currentSelectedOrder?.shipping_method})</span>
+                <span>Ksh {Number(currentSelectedOrder?.shipping_fee || 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-bold text-zinc-900 text-sm">Total Settlement</span>
-                <span className="text-xl font-black text-zinc-900">Ksh {Number(selectedOrder?.total_amount).toLocaleString()}</span>
+                <span className="text-xl font-black text-zinc-900">Ksh {Number(currentSelectedOrder?.total_amount).toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -1813,11 +1893,36 @@ export default function AdminOrdersPage() {
             </div>
             {/* Shipping Method */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Fulfillment Method</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Fulfillment Method</label>
+                {(editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") && (
+                  <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Locked — Shipped/Delivered</span>
+                )}
+              </div>
               <select
-                className="h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700"
+                disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                className={cn(
+                  "h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700",
+                  (editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") && "bg-zinc-100 cursor-not-allowed opacity-75"
+                )}
                 value={editWalkInForm.shipping_method}
-                onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_method: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "Pickup") {
+                    setEditWalkInForm({
+                      ...editWalkInForm,
+                      shipping_method: val,
+                      shipping_fee: 0,
+                      shipping_city: "",
+                      shipping_address: "",
+                    });
+                  } else {
+                    setEditWalkInForm({
+                      ...editWalkInForm,
+                      shipping_method: val,
+                    });
+                  }
+                }}
               >
                 {["Pickup", "Local Delivery"].map(m => (
                   <option key={m} value={m}>{m}</option>
@@ -1832,8 +1937,9 @@ export default function AdminOrdersPage() {
                   <Input
                     type="number"
                     min={0}
+                    disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
                     placeholder="0"
-                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold"
+                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold disabled:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-75"
                     value={editWalkInForm.shipping_fee}
                     onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_fee: parseFloat(e.target.value) || 0 })}
                   />
@@ -1842,8 +1948,9 @@ export default function AdminOrdersPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
                   <Input
-                    placeholder="e.g. Nairobi"
-                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold"
+                    placeholder={(editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") ? "" : "e.g. Nairobi"}
+                    disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold disabled:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-75"
                     value={editWalkInForm.shipping_city}
                     onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_city: e.target.value })}
                   />
@@ -1852,8 +1959,9 @@ export default function AdminOrdersPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Delivery Address</label>
                   <Input
-                    placeholder="e.g. 123 Moi Avenue"
-                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold"
+                    placeholder={(editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") ? "" : "e.g. 123 Moi Avenue"}
+                    disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold disabled:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-75"
                     value={editWalkInForm.shipping_address}
                     onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_address: e.target.value })}
                   />

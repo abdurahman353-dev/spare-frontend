@@ -266,14 +266,14 @@ export default function HubMapContent() {
             syncedHubs.push({
               name: hubName,
               coords: [parseFloat(existing.lat) || 0, parseFloat(existing.lng) || 0],
-              desc: existing.desc || `${city} active distribution node.`
+              desc: existing.desc || ""
             });
           } else {
             const coords = getCoordinatesForLocation(city, country);
             syncedHubs.push({
               name: hubName,
               coords: [coords.lat, coords.lng],
-              desc: coords.desc
+              desc: ""
             });
           }
         });
@@ -325,7 +325,7 @@ export default function HubMapContent() {
             <Popup>
               <div className="p-1">
                 <h4 className="font-bold text-zinc-900 text-sm mb-0.5">{hub.name}</h4>
-                <p className="text-zinc-500 text-xs my-0 leading-tight">{hub.desc}</p>
+                {hub.desc && <p className="text-zinc-500 text-xs my-0 leading-tight">{hub.desc}</p>}
               </div>
             </Popup>
           </Marker>

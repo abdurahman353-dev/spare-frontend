@@ -435,17 +435,28 @@ export const exportOrdersPDF = async (
     kraPin?: string;
     regNumber?: string;
     branch?: string;
-  }
+  },
+  isFilterActive: boolean = false
 ) => {
-  const orders = rawOrders.filter((o) => {
-    const isCancelled = o.status?.toLowerCase() === "cancelled" || o.payment_status?.toLowerCase() === "refunded" || o.payment_status?.toLowerCase() === "cancelled / refunded";
-    if (isCancelled) return false;
-    if (isWalkIn) {
-      const isPending = o.payment_status?.toLowerCase() === "pending" || o.status?.toLowerCase() === "pending";
-      if (isPending) return false;
-    }
-    return true;
-  });
+  // When a specific pay-status filter is active, export the pre-filtered list as-is.
+  // When showing "All" (default), only include Paid orders for Walk-In; exclude
+  // Cancelled/Refunded for both Walk-In and Shipment.
+  const orders = isFilterActive
+    ? rawOrders
+    : rawOrders.filter((o) => {
+        const isCancelled =
+          o.status?.toLowerCase() === "cancelled" ||
+          o.payment_status?.toLowerCase() === "refunded" ||
+          o.payment_status?.toLowerCase() === "cancelled / refunded";
+        if (isCancelled) return false;
+        if (isWalkIn) {
+          const isPending =
+            o.payment_status?.toLowerCase() === "pending" ||
+            o.status?.toLowerCase() === "pending";
+          if (isPending) return false;
+        }
+        return true;
+      });
 
   const { default: jsPDFClass } = await import("jspdf");
   const { default: autoTable } = await import("jspdf-autotable");
@@ -544,7 +555,8 @@ export const exportOrdersPDF = async (
     "Subtotal",
     "Shipping",
     "Grand Total",
-    "Status",
+    "Pay Status",
+    "Dispatch Status",
   ];
 
   const tableRows = orders.map((o) => {
@@ -592,6 +604,7 @@ export const exportOrdersPDF = async (
       `${currency} ${Math.max(0, parseFloat(o.total_amount || 0) - parseFloat(o.shipping_fee || 0)).toLocaleString()}`,
       `${currency} ${parseFloat(o.shipping_fee || 0).toLocaleString()}`,
       `${currency} ${parseFloat(o.total_amount || 0).toLocaleString()}`,
+      o.payment_status || "Pending",
       o.status || "Pending",
     ];
   });
@@ -608,6 +621,7 @@ export const exportOrdersPDF = async (
     `${currency} ${Math.max(0, totalGross - totalFees).toLocaleString()}`,
     `${currency} ${totalFees.toLocaleString()}`,
     `${currency} ${totalGross.toLocaleString()}`,
+    "",
     "",
   ]);
 
@@ -631,17 +645,18 @@ export const exportOrdersPDF = async (
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: w * 0.09, fontStyle: "bold" },
-      1: { cellWidth: w * 0.10, overflow: "linebreak" },
-      2: { cellWidth: w * 0.18, overflow: "linebreak" },
-      3: { cellWidth: w * 0.09, overflow: "linebreak" },
-      4: { cellWidth: w * 0.08, overflow: "linebreak" },
-      5: { cellWidth: w * 0.08, overflow: "linebreak" },
-      6: { cellWidth: w * 0.07, halign: "center" },
-      7: { cellWidth: w * 0.08, halign: "right" },
-      8: { cellWidth: w * 0.07, halign: "right" },
-      9: { cellWidth: w * 0.09, halign: "right", fontStyle: "bold" },
+      0:  { cellWidth: w * 0.09, fontStyle: "bold" },
+      1:  { cellWidth: w * 0.09, overflow: "linebreak" },
+      2:  { cellWidth: w * 0.17, overflow: "linebreak" },
+      3:  { cellWidth: w * 0.08, overflow: "linebreak" },
+      4:  { cellWidth: w * 0.08, overflow: "linebreak" },
+      5:  { cellWidth: w * 0.08, overflow: "linebreak" },
+      6:  { cellWidth: w * 0.06, halign: "center" },
+      7:  { cellWidth: w * 0.08, halign: "right" },
+      8:  { cellWidth: w * 0.06, halign: "right" },
+      9:  { cellWidth: w * 0.08, halign: "right", fontStyle: "bold" },
       10: { cellWidth: w * 0.07, halign: "center" },
+      11: { cellWidth: w * 0.06, halign: "center" },
     },
     margin: { top: 37, left: marginL, right: marginR },
     didParseCell: (data: any) => {

@@ -696,6 +696,10 @@ export default function AdminOrdersPage() {
       return;
     }
     const isWalkIn = activeOrdersTab === "WalkIn";
+    // A filter is "active" when the user explicitly selected a specific pay status.
+    // In that case the PDF exports the current filtered set as-is (including Pending/Cancelled).
+    // With no filter ("All"), only Paid walk-in orders are exported.
+    const isFilterActive = isWalkIn && walkInPayStatusFilter !== "All";
     exportOrdersPDF(
       filteredOrders,
       settings.currency || "Ksh",
@@ -711,7 +715,8 @@ export default function AdminOrdersPage() {
         kraPin:    settings.store_kra_pin   || undefined,
         regNumber: settings.store_reg_number || undefined,
         branch:    settings.store_branch    || undefined,
-      }
+      },
+      isFilterActive
     );
     toast.success("PDF generated successfully");
   };

@@ -1314,7 +1314,7 @@ export default function AdminOrdersPage() {
                     <TableCell><div className="space-y-0.5"><p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p><p className="text-[11px] text-zinc-500 font-medium">{order.customer?.email}</p></div></TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name?.split(' ').shift() || "Origin"}</div>
+                        <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name || "Origin"}</div>
                         <span className="text-[10px] font-black text-zinc-400 italic">TO</span>
                         <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
                           {order.shipping_city}

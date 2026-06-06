@@ -14,6 +14,7 @@ interface User {
   city?: string;
   address?: string;
   phone?: string | null;
+  total_spent?: number;
 }
 
 interface AuthContextType {

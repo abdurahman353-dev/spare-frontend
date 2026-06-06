@@ -728,10 +728,8 @@ function AccountPortalInner() {
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Origin Node</p>
                     <p className="text-[13px] font-bold text-[#1e293b]">
-                      {selectedOrder?.items?.[0]?.warehouse?.location?.includes(',') 
-                        ? selectedOrder.items[0].warehouse.location.split(',').pop()?.trim() 
-                        : selectedOrder?.items?.[0]?.warehouse?.name?.split(' ').shift() || 
-                          selectedOrder?.items?.[0]?.warehouse?.code?.split('-').shift() || "Warehouse"}
+                      {selectedOrder?.items?.[0]?.warehouse?.name || 
+                        selectedOrder?.items?.[0]?.warehouse?.code || "Warehouse"}
                     </p>
                   </div>
                   <div className="flex-1 px-4 flex items-center">

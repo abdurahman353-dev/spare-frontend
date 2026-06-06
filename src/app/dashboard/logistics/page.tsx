@@ -1216,7 +1216,7 @@ export default function AdminLogisticsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
-                            {shipment.origin?.split(' ').shift() || "Origin"}
+                            {shipment.origin || "Origin"}
                           </div>
                           <ArrowRight className="h-3 w-3 text-zinc-300" />
                           <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
@@ -1434,7 +1434,7 @@ export default function AdminLogisticsPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
-                          {order.items?.[0]?.warehouse?.name?.split(' ').shift() || "Origin"}
+                          {order.items?.[0]?.warehouse?.name || "Origin"}
                         </div>
                         <ArrowRightLeft className="h-3 w-3 text-zinc-300" />
                         <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
@@ -1633,7 +1633,7 @@ export default function AdminLogisticsPage() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
-                            {dest.warehouse?.name?.split(' ').shift() || "Any"}
+                            {dest.warehouse?.name || "Any"}
                           </div>
                           <ArrowRightLeft className="h-3 w-3 text-zinc-300" />
                           <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">

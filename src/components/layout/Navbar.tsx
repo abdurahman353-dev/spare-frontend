@@ -139,7 +139,21 @@ export function Navbar() {
                       ) : (
                         <>
                           <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Loyalty Status</p>
-                          <p className="text-sm font-black text-primary tracking-tighter uppercase mt-0.5">PLATINUM CUSTOMER</p>
+                          {(() => {
+                            const ltv = user?.total_spent ?? 0;
+                            const platThresh   = parseFloat(settings.rank_platinum_threshold || "150000");
+                            const goldThresh   = parseFloat(settings.rank_gold_threshold    || "50000");
+                            const silverThresh = parseFloat(settings.rank_silver_threshold  || "10000");
+                            let label = "Bronze Member", color = "#b45309"; // amber-700
+                            if (ltv >= platThresh) { label = "Platinum Customer"; color = "#0052cc"; }
+                            else if (ltv >= goldThresh)   { label = "Gold Member";       color = "#ca8a04"; } // yellow-600
+                            else if (ltv >= silverThresh) { label = "Silver Member";     color = "#64748b"; } // slate-500
+                            return (
+                              <p className="text-sm font-black tracking-tighter uppercase mt-0.5" style={{ color }}>
+                                {label}
+                              </p>
+                            );
+                          })()}
                         </>
                       )}
                     </DropdownMenuLabel>

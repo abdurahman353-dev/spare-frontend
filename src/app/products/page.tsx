@@ -6,8 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, LogOut, Plus, Minus, Tag, Zap } from "lucide-react";
-// ... (omitting intermediate code for brevity, but I'll ensure the actual tool call is correct)
+import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, LogOut, Plus, Minus, Tag, Zap, Compass } from "lucide-react";
 import api from "@/lib/axios";
 import { useCart } from "@/context/CartContext";
 import Image from "next/image";
@@ -17,6 +16,8 @@ import { toast } from "react-hot-toast";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { ProductViewModal } from "@/components/modals/ProductViewModal";
+import { Joyride, Step } from "react-joyride";
+const JoyrideComponent = Joyride as any;
 
 interface Category {
   id: number;
@@ -295,9 +296,83 @@ function ProductCard({ product, priority = false }: { product: Product, priority
 }
 
 export default function PublicProductsPage() {
+  const { settings } = useSettings();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Products-page Joyride tour
+  const [mounted, setMounted] = useState(false);
+  const [runTour, setRunTour] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    // Only show if the account-page tour has already been completed AND products tour not done
+    const tourDone = localStorage.getItem("spare_tour_done");
+    const productsTourDone = localStorage.getItem("spare_products_tour_done");
+    if (tourDone && !productsTourDone) {
+      localStorage.setItem("spare_products_tour_done", "true");
+      const t = setTimeout(() => setRunTour(true), 1200);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  const bizName     = settings.store_name       || "our store";
+  const bizTagline  = settings.store_tagline    || "";
+  const bizCurrency = settings.currency         || "Ksh";
+  const bizPhone    = settings.contact_phone    || "";
+  const bizWA       = settings.contact_whatsapp || "";
+  const bizBranch   = settings.store_branch     || "";
+  const bizWebsite  = settings.store_website    || "";
+  const bizHours    = settings.working_hours    || "";
+
+  const productTourSteps: Step[] = [
+    {
+      target: "body",
+      placement: "center" as const,
+      title: `${bizName} — Parts Catalog`,
+      content: `${bizTagline ? `"${bizTagline}" — ` : ""}Browse and order genuine Mercedes-Benz spare parts. We will walk you through how to find a part, pick a warehouse hub, and add it to your cart.${bizWebsite ? ` Learn more at ${bizWebsite}.` : ""}`,
+      skipBeacon: true,
+    },
+    {
+      target: "#tour-search-filter",
+      placement: "right" as const,
+      title: "Search & Filter Parts",
+      content: `Use the search box to find ${bizName} parts by SKU, name, or brand. Tick one or more categories to narrow results instantly. All prices are displayed in ${bizCurrency}.`,
+    },
+    {
+      target: "#tour-product-grid",
+      placement: "top" as const,
+      title: "Parts Catalog Grid",
+      content: `Each card shows the part image, brand, SKU, weight, price in ${bizCurrency}, and any active discount. Click the image to open a full details view with all product specifications.`,
+    },
+    {
+      target: "#tour-product-card",
+      placement: "top" as const,
+      title: "Select a Warehouse Hub First",
+      content: `Before adding a part to your cart you must select a Warehouse Hub from the pulsing dropdown on the card. Each hub shows live stock (e.g. '${bizBranch || "Nairobi Hub"} — 12 PCS'). Parts from different hubs are tracked separately.${bizHours ? ` Dispatch hours: ${bizHours}.` : ""}`,
+    },
+    {
+      target: "#tour-cart-btn",
+      placement: "bottom" as const,
+      title: "Your Shopping Cart",
+      content: `Once you select a hub and click 'Add to Cart', the cart icon updates with your item count. Click it to review quantities, remove items, or proceed to ${bizName} checkout.${bizPhone ? ` Need help? Call ${bizPhone}.` : ""}${bizWA ? ` WhatsApp: ${bizWA}.` : ""}`,
+    },
+    {
+      target: "#tour-profile-menu",
+      placement: "bottom" as const,
+      title: "Access Your Account Dashboard",
+      content: `Click your name in the top-right corner to open the quick-access menu. Jump to your ${bizName} Account Dashboard, view My Orders, manage Delivery Addresses, change your password, or log out.`,
+    },
+  ];
+
+  const handleProductTourCallback = (data: any) => {
+    const { status } = data;
+    if (["finished", "skipped"].includes(status)) {
+      setRunTour(false);
+      localStorage.setItem("spare_products_tour_done", "true");
+    }
+  };
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -360,21 +435,61 @@ export default function PublicProductsPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
+      {mounted && (
+        <JoyrideComponent
+          callback={handleProductTourCallback}
+          continuous
+          run={runTour}
+          scrollToFirstStep
+          showProgress
+          showSkipButton
+          steps={productTourSteps as any}
+          styles={{
+            options: {
+              arrowColor: "#ffffff",
+              backgroundColor: "#ffffff",
+              overlayColor: "rgba(0,0,0,0.45)",
+              primaryColor: "#0052cc",
+              textColor: "#1e293b",
+              zIndex: 10000,
+            },
+            tooltip: {
+              borderRadius: "12px",
+              padding: "20px",
+              boxShadow: "0 20px 25px -5px rgb(0 0 0/0.1),0 8px 10px -6px rgb(0 0 0/0.1)",
+              fontFamily: "sans-serif",
+            },
+            tooltipTitle: { fontWeight: 800, fontSize: "16px", color: "#1e293b", marginBottom: "10px" },
+            tooltipContent: { fontSize: "13px", lineHeight: 1.6, color: "#64748b" },
+            buttonNext: { backgroundColor: "#0052cc", color: "#ffffff", fontWeight: "bold", borderRadius: "6px", padding: "8px 16px", fontSize: "12px" },
+            buttonBack: { marginRight: "12px", color: "#64748b", fontWeight: "bold", fontSize: "12px" },
+            buttonSkip: { color: "#ef4444", fontWeight: "bold", fontSize: "12px" },
+          } as any}
+        />
+      )}
       <Navbar />
       <main className="flex-1 bg-secondary/30">
         <div className="bg-[#1e293b] text-white py-12">
-          <div className="container mx-auto px-4">
-            <h1 className="text-3xl font-bold">Parts Catalog</h1>
-            <p className="text-slate-400 mt-2">
-              Browse our extensive inventory of genuine Mercedes-Benz parts.
-            </p>
+          <div className="container mx-auto px-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">Parts Catalog</h1>
+              <p className="text-slate-400 mt-2">
+                Browse our extensive inventory of genuine Mercedes-Benz parts.
+              </p>
+            </div>
+            <Button
+              onClick={() => { setRunTour(true); }}
+              className="bg-[#0052cc] hover:bg-[#004bb3] text-white font-bold text-xs h-9 px-4 rounded-md transition-all shadow-sm border-none flex items-center gap-2"
+            >
+              <Compass className="h-4 w-4" /> Start Tour
+            </Button>
           </div>
         </div>
 
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col md:flex-row gap-8">
             {/* Filters Sidebar */}
-            <aside className="w-full md:w-64 space-y-8">
+            <aside id="tour-search-filter" className="w-full md:w-64 space-y-8">
               <div>
                 <h3 className="font-bold mb-4 uppercase text-[11px] tracking-widest text-[#64748b]">Search</h3>
                 <div className="relative">
@@ -430,7 +545,7 @@ export default function PublicProductsPage() {
             </aside>
 
             {/* Products Grid */}
-            <div className="flex-1">
+            <div id="tour-product-grid" className="flex-1">
               <div className="flex justify-between items-center mb-8 border-b border-[#f1f5f9] pb-4">
                 <p className="text-[#64748b] text-[14px] font-medium">
                   Showing <span className="text-[#1e293b] font-bold">{filteredProducts.length}</span> parts available
@@ -468,11 +583,12 @@ export default function PublicProductsPage() {
                 <div className="space-y-8">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {paginatedProducts.map((product, index) => (
-                      <ProductCard
-                        key={product.id}
-                        product={product}
-                        priority={index < 6}
-                      />
+                      <div key={product.id} id={index === 0 ? "tour-product-card" : undefined}>
+                        <ProductCard
+                          product={product}
+                          priority={index < 6}
+                        />
+                      </div>
                     ))}
                   </div>
 

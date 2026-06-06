@@ -10,9 +10,11 @@ import {
   Package, Clock, Settings, ShoppingBag, MapPin, CreditCard, 
   ChevronRight, LogOut, Loader2, User, Lock, ShieldCheck,
   Eye, EyeOff, CheckCircle2, AlertCircle, Plus, Home, Smartphone,
-  Search, Download, ArrowRightLeft, FileText, Truck, Star
+  Search, Download, ArrowRightLeft, FileText, Truck, Star, Compass
 } from "lucide-react";
 import Link from "next/link";
+import { Joyride, Step } from "react-joyride";
+const JoyrideComponent = Joyride as any;
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/axios";
 import { cn } from "@/lib/utils";
@@ -26,13 +28,122 @@ import { exportSingleOrderInvoicePDF, exportCustomerLedgerPDF } from "@/lib/pdf-
 import { Suspense } from "react";
 
 function AccountPortalInner() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { settings } = useSettings();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Dashboard");
+
+  // Onboarding Tour State
+  const [mounted, setMounted] = useState(false);
+  const [runTour, setRunTour] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const completed = localStorage.getItem("spare_tour_done");
+    if (!completed) {
+      localStorage.setItem("spare_tour_done", "true");
+      const timer = setTimeout(() => {
+        setRunTour(true);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const bizName     = settings.store_name      || "our store";
+  const bizTagline  = settings.store_tagline   || "";
+  const bizCurrency = settings.currency        || "Ksh";
+  const bizEmail    = settings.contact_email   || "";
+  const bizPhone    = settings.contact_phone   || "";
+  const bizWA       = settings.contact_whatsapp|| "";
+  const bizAddress  = settings.physical_address|| "";
+  const bizHours    = settings.working_hours   || "";
+  const bizWebsite  = settings.store_website   || "";
+  const bizBranch   = settings.store_branch    || "";
+  const bizCountry  = settings.store_country   || "";
+
+  const tourSteps: Step[] = [
+    {
+      target: "body",
+      placement: "center" as const,
+      title: `👋 Welcome to ${bizName}!`,
+      content: `${bizTagline ? `"${bizTagline}" — ` : ""}Let's take a quick guided tour of your customer portal. We'll show you how to track orders, print statements & invoices, manage delivery addresses, and more.${bizWebsite ? ` Visit us at ${bizWebsite}.` : ""}`,
+      skipBeacon: true,
+    },
+    {
+      target: "#tour-loyalty",
+      placement: "bottom" as const,
+      title: "⭐ Your B2B Loyalty Status",
+      content: `Every purchase you make at ${bizName} increases your Lifetime Spent in ${bizCurrency}. Based on this, you're assigned a Loyalty Tier (Bronze, Silver, Gold, or Platinum). Higher tiers unlock special discounts and priority logistics handling.`,
+    },
+    {
+      target: "#tour-nav",
+      placement: "right" as const,
+      title: "📂 Portal Navigation Sidebar",
+      content: `Quickly navigate through sections of your ${bizName} account: Dashboard overview, full Order Ledger, saved Delivery Addresses, and Security Settings.`,
+    },
+    {
+      target: "#tour-shop",
+      placement: "right" as const,
+      title: "🛒 Start/Continue Shopping",
+      content: `Click this button to go straight to the ${bizName} parts catalog and browse our inventory of genuine Mercedes-Benz spare parts ready for delivery.${bizBranch ? ` Our primary warehouse is "${bizBranch}".` : ""}`,
+    },
+    {
+      target: "#tour-stats",
+      placement: "bottom" as const,
+      title: "📊 Real-Time Account Metrics",
+      content: `Track your active (undelivered) orders, lifetime spent (in ${bizCurrency}), and total count of parts purchased — all updated in real-time from ${bizName}'s system.`,
+    },
+    {
+      target: "#tour-stepper",
+      placement: "top" as const,
+      title: "🚚 Logistics Lifecycle — How Your Order Moves",
+      content: `Your order moves through 4 key stages: Pending → Hub Processing → Shipped → Delivered. ${bizName} sends you automated email notifications at each stage (Processing, Shipped, and Delivered) to keep you fully informed.${bizHours ? ` Our team operates: ${bizHours}.` : ""}`,
+    },
+    {
+      target: "#tour-table",
+      placement: "top" as const,
+      title: "📦 Recent History & Live Waybills",
+      content: `View status details of your recent orders placed with ${bizName}. Click the 'Inspect' button on any row to open Logistics Intelligence details, see live Container Waybills, check carrier names, and track ETAs.`,
+    },
+    {
+      target: "#tour-statement-section",
+      placement: "bottom" as const,
+      title: "📄 Export Ledger Statements",
+      content: `From the My Orders tab, click 'Download Statement PDF' to get a professional statement of all your purchases from ${bizName}${bizEmail ? ` (${bizEmail})` : ""}. Single invoices can also be downloaded from any order's Inspect modal.`,
+    },
+    {
+      target: "#tour-addresses-section",
+      placement: "top" as const,
+      title: "📍 Verified Shipping Destinations",
+      content: `Save your frequently used delivery addresses${bizCountry ? ` in ${bizCountry}` : ""}. Saved addresses can be selected during checkout to instantly prefill your delivery details and compute accurate ${bizName} logistics fees.${bizPhone ? ` Need help? Call us: ${bizPhone}.` : ""}${bizWA ? ` WhatsApp: ${bizWA}.` : ""}${bizAddress ? ` We are located at: ${bizAddress}.` : ""}`,
+    },
+  ];
+
+  const handleJoyrideCallback = (data: any) => {
+    const { action, index, status, type } = data;
+    if (type === "step:after") {
+      if (index === 6) {
+        setActiveTab("My Orders");
+      } else if (index === 7) {
+        setActiveTab("Delivery Addresses");
+      }
+    } else if (type === "step:before") {
+      if (index <= 6) {
+        setActiveTab("Dashboard");
+      } else if (index === 7) {
+        setActiveTab("My Orders");
+      } else if (index === 8) {
+        setActiveTab("Delivery Addresses");
+      }
+    }
+    if (["finished", "skipped"].includes(status)) {
+      setRunTour(false);
+      localStorage.setItem("spare_tour_done", "true");
+    }
+  };
 
   // Modals state
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -126,6 +237,9 @@ function AccountPortalInner() {
       });
   }, []);
 
+  // Refresh live user profile on mount so loyalty badge is real-time
+  useEffect(() => { refreshUser(); }, []);
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordData.password !== passwordData.password_confirmation) {
@@ -176,6 +290,63 @@ function AccountPortalInner() {
 
   return (
     <div className="flex flex-col min-h-screen bg-white font-sans text-slate-900">
+      {mounted && (
+        <JoyrideComponent
+          callback={handleJoyrideCallback}
+          continuous
+          run={runTour}
+          scrollToFirstStep
+          showProgress
+          showSkipButton
+          steps={tourSteps as any}
+          styles={{
+            options: {
+              arrowColor: '#ffffff',
+              backgroundColor: '#ffffff',
+              overlayColor: 'rgba(0, 0, 0, 0.45)',
+              primaryColor: '#0052cc',
+              textColor: '#1e293b',
+              zIndex: 10000,
+            },
+            tooltip: {
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+              fontFamily: 'sans-serif'
+            },
+            tooltipTitle: {
+              fontWeight: 800,
+              fontSize: '16px',
+              color: '#1e293b',
+              marginBottom: '10px'
+            },
+            tooltipContent: {
+              fontSize: '13px',
+              lineHeight: 1.6,
+              color: '#64748b'
+            },
+            buttonNext: {
+              backgroundColor: '#0052cc',
+              color: '#ffffff',
+              fontWeight: 'bold',
+              borderRadius: '6px',
+              padding: '8px 16px',
+              fontSize: '12px'
+            },
+            buttonBack: {
+              marginRight: '12px',
+              color: '#64748b',
+              fontWeight: 'bold',
+              fontSize: '12px'
+            },
+            buttonSkip: {
+              color: '#ef4444',
+              fontWeight: 'bold',
+              fontSize: '12px'
+            }
+          } as any}
+        />
+      )}
       <Navbar />
       
       <main className="flex-1 py-10">
@@ -190,6 +361,13 @@ function AccountPortalInner() {
               <p className="text-[#64748b] text-[15px] mt-1">Manage your orders and account preferences.</p>
             </div>
              <div className="flex items-center gap-3">
+               <Button 
+                 onClick={() => { setRunTour(true); }}
+
+                 className="bg-[#0052cc] hover:bg-[#004bb3] text-white font-bold text-xs h-9 px-4 rounded-md transition-all shadow-sm border-none flex items-center gap-2"
+               >
+                 <Compass className="h-4 w-4" /> Start Tour
+               </Button>
                {loading ? (
                  <div className="animate-pulse bg-slate-200 h-8 w-32 rounded-md" />
                ) : (
@@ -203,7 +381,7 @@ function AccountPortalInner() {
                    else if (ltv >= goldThresh)  { label = "Gold Member";     bgClass = "bg-yellow-500"; }
                    else if (ltv >= silverThresh) { label = "Silver Member";   bgClass = "bg-slate-400"; }
                    return (
-                     <div className={cn("text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm", bgClass)}>
+                     <div id="tour-loyalty" className={cn("text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm", bgClass)}>
                        <Star className="h-3 w-3 fill-white" /> {label}
                      </div>
                    );
@@ -215,7 +393,7 @@ function AccountPortalInner() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
             {/* Sidebar - Clean Style */}
-            <div className="lg:col-span-3 space-y-1">
+            <div id="tour-nav" className="lg:col-span-3 space-y-1">
               <p className="text-[11px] font-bold text-[#94a3b8] uppercase tracking-widest mb-4 ml-2">Account Portal</p>
               {tabs.map((item) => (
                 <button 
@@ -235,6 +413,7 @@ function AccountPortalInner() {
               
               <div className="pt-6 mt-6 border-t border-[#f1f5f9] space-y-2">
                  <Link 
+                  id="tour-shop"
                   href="/products"
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-[#0052cc] hover:bg-[#eff6ff] text-[14px] font-medium transition-all border border-[#0052cc]/20"
                 >
@@ -260,6 +439,7 @@ function AccountPortalInner() {
                     className="space-y-8"
                   >
                     {/* Stats Grid */}
+                    <div id="tour-stats">
                     {loading ? (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {[1, 2, 3].map((i) => (
@@ -283,9 +463,10 @@ function AccountPortalInner() {
                         ))}
                       </div>
                     )}
+                    </div>
 
                     {/* Logistics Lifecycle Stepper Guide */}
-                    <div className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
+                    <div id="tour-stepper" className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
                       <div className="px-6 py-4 border-b border-[#e2e8f0] bg-[#f8fafc]">
                         <h2 className="text-[14px] font-bold text-[#1e293b] flex items-center gap-2">
                           <Truck className="h-4 w-4 text-[#0052cc]" />
@@ -373,7 +554,7 @@ function AccountPortalInner() {
                     </div>
 
                     {/* Content Table Area */}
-                    <div className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
+                    <div id="tour-table" className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
                       <div className="px-6 py-5 border-b border-[#e2e8f0] flex items-center justify-between">
                         <h2 className="text-[16px] font-bold text-[#1e293b]">Recent Logistics History</h2>
                         <button onClick={() => setActiveTab("My Orders")} className="text-[12px] font-bold text-[#0052cc] hover:underline uppercase tracking-wider">Explore All</button>
@@ -537,7 +718,7 @@ function AccountPortalInner() {
 
                 {activeTab === "My Orders" && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                    <div className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
+                    <div id="tour-statement-section" className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
                       <div className="px-6 py-5 border-b border-[#e2e8f0] flex items-center justify-between">
                         <h2 className="text-[16px] font-bold text-[#1e293b]">Full Order Ledger</h2>
                         <Button onClick={downloadStatement} size="sm" className="bg-[#0052cc] hover:bg-[#0747a6] text-[12px] font-bold text-white uppercase tracking-wider h-9 px-4">
@@ -626,7 +807,7 @@ function AccountPortalInner() {
 
                 {activeTab === "Delivery Addresses" && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                    <Card className="border-[#e2e8f0] shadow-sm rounded-lg overflow-hidden">
+                    <Card id="tour-addresses-section" className="border-[#e2e8f0] shadow-sm rounded-lg overflow-hidden">
                       <CardHeader className="px-6 py-5 border-b border-[#e2e8f0]">
                         <CardTitle className="text-lg font-bold text-[#1e293b]">Verified Shipping Destinations</CardTitle>
                       </CardHeader>

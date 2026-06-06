@@ -86,7 +86,7 @@ export function Navbar() {
 
         <div className="hidden md:flex items-center gap-8">
           <div className="flex items-center gap-4 border-r pr-8">
-            <Link href="/cart" className="relative group p-2 rounded-full hover:bg-secondary transition-colors">
+            <Link id="tour-cart-btn" href="/cart" className="relative group p-2 rounded-full hover:bg-secondary transition-colors">
               <motion.div
                 key={cartCount}
                 initial={{ scale: 1 }}
@@ -111,7 +111,7 @@ export function Navbar() {
             <div className="flex items-center gap-4">
               <DropdownMenu>
                 <DropdownMenuTrigger>
-                  <div className="flex items-center gap-2 group outline-none cursor-pointer">
+                  <div id="tour-profile-menu" className="flex items-center gap-2 group outline-none cursor-pointer">
                     <div className="h-8 w-8 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-600 group-hover:bg-primary group-hover:text-white transition-all">
                       <UserIcon className="h-4 w-4" />
                     </div>

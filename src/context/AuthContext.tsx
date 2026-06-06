@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import api from "@/lib/axios";
 import { useRouter } from "next/navigation";
 
@@ -24,6 +24,8 @@ interface AuthContextType {
   register: (data: any) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (data: any) => Promise<void>;
+  /** Re-fetch live user profile (total_spent, etc.) from /user */
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
 }
@@ -47,6 +49,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+
+  /** Re-fetch user profile (including live total_spent) from /user */
+  const refreshUser = useCallback(async () => {
+    try {
+      const res = await api.get("/user");
+      setUser(res.data);
+    } catch {
+      // silently ignore — session may have expired
+    }
+  }, []);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -87,15 +99,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (credentials: any) => {
     const res = await api.post("/login", credentials);
-    const { user, token } = res.data;
+    const { user: loginUser, token } = res.data;
     localStorage.setItem("auth_token", token);
     setCookie("auth_token", token);
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    setUser(user);
-    
-    if (user.must_change_password) {
+    // Set from login response immediately (already contains total_spent from backend)
+    setUser(loginUser);
+    // Also fire a background re-fetch so total_spent is always live real-time
+    api.get("/user").then(r => setUser(r.data)).catch(() => {});
+
+    if (loginUser.must_change_password) {
       router.push("/change-password");
-    } else if (user.role === "admin" || user.role === "superadmin") {
+    } else if (loginUser.role === "admin" || loginUser.role === "superadmin") {
       router.push("/dashboard");
     } else {
       router.push("/products");
@@ -104,17 +119,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (data: any) => {
     const res = await api.post("/register", data);
-    const { user, token } = res.data;
+    const { user: regUser, token } = res.data;
     localStorage.setItem("auth_token", token);
     setCookie("auth_token", token);
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    setUser(user);
+    setUser(regUser);
     router.push("/");
   };
 
   const changePassword = async (data: any) => {
     const res = await api.post("/change-password", data);
-    // Refresh user to get updated must_change_password flag
+    // Refresh user to get updated must_change_password flag and total_spent
     const userRes = await api.get("/user");
     setUser(userRes.data);
     return res.data;
@@ -140,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register, 
       logout,
       changePassword,
+      refreshUser,
       isAuthenticated: !!user,
       isAdmin: user?.role === "admin" || user?.role === "superadmin"
     }}>
@@ -155,4 +171,3 @@ export function useAuth() {
   }
   return context;
 }
-

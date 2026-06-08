@@ -97,7 +97,7 @@ export default function CheckoutPage() {
         d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
         d.product_id?.toString() === item.id?.toString()
       );
-      // Priority 2: Global warehouse rate (product_id = null)
+      // Priority 2: Global warehouse rate (no product restriction)
       if (!rate) {
         rate = destinations.find(d => 
           d.country === shippingDetails.country && 
@@ -106,25 +106,17 @@ export default function CheckoutPage() {
           !d.product_id
         );
       }
-      // Priority 3: Product-specific rate without warehouse constraint
+      // Priority 3: Product-specific rate with no warehouse restriction
       if (!rate) {
         rate = destinations.find(d => 
           d.country === shippingDetails.country && 
           d.city === shippingDetails.city && 
-          d.product_id?.toString() === item.id?.toString()
+          d.product_id?.toString() === item.id?.toString() &&
+          !d.warehouse_id
         );
       }
-      // Fallback: Any route rate for this country/city
-      if (!rate) {
-        rate = destinations.find(d => 
-          d.country === shippingDetails.country && 
-          d.city === shippingDetails.city &&
-          !d.product_id
-        );
-      }
-      
+      // No rate found = shipping fee for this product is strictly 0. No guessing.
       if (rate) {
-        // Use the exact configured fee from DB — no formula recalculation
         const itemQty = item.quantity || 1;
         const feePerItem = method === "express"
           ? parseFloat(rate.express_fee || 0)
@@ -138,12 +130,14 @@ export default function CheckoutPage() {
 
   // Helper to get per-item shipping fee for the checkout payload
   const getItemShippingFee = (item: any, method: "standard" | "express"): number => {
+    // Priority 1: Exact product+warehouse for this city/country
     let rate = destinations.find(d => 
       d.country === shippingDetails.country && 
       d.city === shippingDetails.city && 
       d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
       d.product_id?.toString() === item.id?.toString()
     );
+    // Priority 2: Global warehouse rate (no product restriction)
     if (!rate) {
       rate = destinations.find(d => 
         d.country === shippingDetails.country && 
@@ -152,13 +146,16 @@ export default function CheckoutPage() {
         !d.product_id
       );
     }
+    // Priority 3: Product-specific rate with no warehouse restriction
     if (!rate) {
       rate = destinations.find(d => 
         d.country === shippingDetails.country && 
         d.city === shippingDetails.city &&
-        !d.product_id
+        d.product_id?.toString() === item.id?.toString() &&
+        !d.warehouse_id
       );
     }
+    // No rate found = strictly 0. No fallback to unrelated records.
     if (!rate) return 0;
     const feePerItem = method === "express"
       ? parseFloat(rate.express_fee || 0)

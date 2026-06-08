@@ -121,6 +121,7 @@ export default function AdminLogisticsPage() {
   const [cityToDelete, setCityToDelete] = useState<number | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [updatingShipmentId, setUpdatingShipmentId] = useState<number | null>(null);
 
   // Shipping Fee Filters
   const [feeSearchQuery, setFeeSearchQuery] = useState("");
@@ -632,14 +633,32 @@ export default function AdminLogisticsPage() {
     setIsSaving(true);
     try {
       if (editingShipmentId) {
-        await api.put(`/shipments/${editingShipmentId}`, formData);
+        const res = await api.put(`/shipments/${editingShipmentId}`, formData);
         toast.success("Shipment updated successfully!");
+        if (res.data?.sms_logs && res.data.sms_logs.length > 0) {
+          res.data.sms_logs.forEach((log: any) => {
+            if (!log.success) {
+              toast.error(`SMS to ${log.phone} failed: ${log.error}`, { duration: 6000, icon: '⚠️' });
+            } else {
+              toast.success(`SMS alert sent to ${log.phone}!`);
+            }
+          });
+        }
       } else {
-        await api.post("/shipments", {
+        const res = await api.post("/shipments", {
           ...formData,
           order_ids: selectedOrders
         });
         toast.success("Shipment registered and orders assigned!");
+        if (res.data?.sms_logs && res.data.sms_logs.length > 0) {
+          res.data.sms_logs.forEach((log: any) => {
+            if (!log.success) {
+              toast.error(`SMS to ${log.phone} failed: ${log.error}`, { duration: 6000, icon: '⚠️' });
+            } else {
+              toast.success(`SMS alert sent to ${log.phone}!`);
+            }
+          });
+        }
       }
       
       setIsModalOpen(false);
@@ -655,12 +674,30 @@ export default function AdminLogisticsPage() {
   };
 
   const updateShipmentStatus = async (shipmentId: number, status: string) => {
+    setUpdatingShipmentId(shipmentId);
     try {
-      await api.put(`/shipments/${shipmentId}`, { status });
+      const res = await api.put(`/shipments/${shipmentId}`, { status });
       toast.success("Shipment status updated!");
-      fetchShipments();
+
+      // If there are SMS logs, check for success or failures
+      if (res.data?.sms_logs && res.data.sms_logs.length > 0) {
+        res.data.sms_logs.forEach((log: any) => {
+          if (!log.success) {
+            toast.error(`SMS to ${log.phone} failed: ${log.error}`, {
+              duration: 6000,
+              icon: '⚠️'
+            });
+          } else {
+            toast.success(`SMS alert sent to ${log.phone}!`);
+          }
+        });
+      }
+
+      await fetchShipments();
     } catch (err) {
       toast.error("Failed to update status");
+    } finally {
+      setUpdatingShipmentId(null);
     }
   };
 
@@ -1227,14 +1264,23 @@ export default function AdminLogisticsPage() {
                       <TableCell className="text-xs font-bold text-[#0052cc]">{shipment.eta || "N/A"}</TableCell>
                       <TableCell className="text-xs font-bold text-zinc-700">{shipment.orders_count || 0} Orders</TableCell>
                       <TableCell>
-                        <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                          shipment.status === "Delivered" ? "bg-emerald-100 text-emerald-700" : 
-                          shipment.status === "In Transit" ? "bg-blue-100 text-[#0052cc]" : "bg-zinc-100 text-zinc-500"
-                        )}>{shipment.status}</Badge>
+                        {updatingShipmentId === shipment.id ? (
+                          <Badge className="rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider bg-zinc-100 text-zinc-500">
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin inline" /> Updating...
+                          </Badge>
+                        ) : (
+                          <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                            shipment.status === "Delivered" ? "bg-emerald-100 text-emerald-700" : 
+                            shipment.status === "In Transit" ? "bg-blue-100 text-[#0052cc]" : "bg-zinc-100 text-zinc-500"
+                          )}>{shipment.status}</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="px-6 text-right">
                         <DropdownMenu>
-                          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full")}>
+                          <DropdownMenuTrigger 
+                            className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full")}
+                            disabled={updatingShipmentId !== null}
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,15 @@ export default function AdminSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [hubsList, setHubsList] = useState<Array<{ name: string; lat: number; lng: number; desc: string }>>([]);
   const [hubsPage, setHubsPage] = useState(1);
-  const [hubsPageSize, setHubsPageSize] = useState(5);
+  const [hubsPageSize, setHubsPageSize] = useState(10);
+  const [hubCountryFilter, setHubCountryFilter] = useState("all");
+  const [hubCityFilter, setHubCityFilter] = useState("all");
+  const [hubCountrySearch, setHubCountrySearch] = useState("");
+  const [hubCitySearch, setHubCitySearch] = useState("");
+  const [hubCountryOpen, setHubCountryOpen] = useState(false);
+  const [hubCityOpen, setHubCityOpen] = useState(false);
+  const countryDropdownRef = useRef<HTMLDivElement>(null);
+  const cityDropdownRef = useRef<HTMLDivElement>(null);
   const [passwordState, setPasswordState] = useState({
     current_password: "",
     password: "",
@@ -94,6 +102,51 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (countryDropdownRef.current && !countryDropdownRef.current.contains(e.target as Node)) {
+        setHubCountryOpen(false);
+      }
+      if (cityDropdownRef.current && !cityDropdownRef.current.contains(e.target as Node)) {
+        setHubCityOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Derived hub filter options
+  const hubCountryOptions = useMemo(() => {
+    const countries = Array.from(new Set(
+      hubsList.map(h => h.name.includes(", ") ? h.name.split(", ").slice(-1)[0] : "")
+        .filter(Boolean)
+    )).sort();
+    return countries;
+  }, [hubsList]);
+
+  const hubCityOptions = useMemo(() => {
+    const filtered = hubCountryFilter === "all"
+      ? hubsList
+      : hubsList.filter(h => h.name.endsWith(", " + hubCountryFilter));
+    const cities = Array.from(new Set(
+      filtered.map(h => h.name.includes(", ") ? h.name.split(", ")[0] : h.name)
+        .filter(Boolean)
+    )).sort();
+    return cities;
+  }, [hubsList, hubCountryFilter]);
+
+  const filteredHubs = useMemo(() => {
+    return hubsList.filter(h => {
+      const parts = h.name.split(", ");
+      const city = parts[0] || "";
+      const country = parts.slice(1).join(", ") || "";
+      const matchCountry = hubCountryFilter === "all" || country === hubCountryFilter;
+      const matchCity = hubCityFilter === "all" || city === hubCityFilter;
+      return matchCountry && matchCity;
+    });
+  }, [hubsList, hubCountryFilter, hubCityFilter]);
 
   // Sync phone prefixes with selected Business Country
   useEffect(() => {
@@ -689,7 +742,7 @@ export default function AdminSettingsPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <h2 className="text-lg font-bold text-zinc-900">Map Hubs / Regions</h2>
-                  <p className="text-zinc-500 text-sm mt-0.5">Configure regional distribution coordinates and overlay text for map pins synced from your active shipping zones.</p>
+                  <p className="text-zinc-500 text-sm mt-0.5">Set the overlay description for each hub pin, synced automatically from your active shipping zones.</p>
                 </div>
               </div>
 
@@ -698,79 +751,189 @@ export default function AdminSettingsPage() {
                 <Globe className="h-5 w-5 text-blue-500 shrink-0 mt-0.5 animate-pulse" />
                 <div>
                   <p className="font-black text-blue-900 uppercase tracking-wider text-[10px]">Automatic Shipping Zone Sync Active</p>
-                  <p className="mt-0.5 text-blue-700/90 font-medium">All distribution map pin names are automatically generated in real-time from active countries and cities defined under your Shipping Zones. You only need to customize their physical map coordinates (Latitude/Longitude) and descriptive popups here!</p>
+                  <p className="mt-0.5 text-blue-700/90 font-medium">All map hub names and coordinates are generated automatically from your active Shipping Zones. Use the filters below to find a specific city or country and set its overlay description.</p>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              {/* ── Filters ── */}
+              {hubsList.length > 0 && (
+                <div className="flex flex-wrap gap-3 items-center">
+
+                  {/* Country Filter */}
+                  <div className="relative" ref={countryDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => { setHubCountryOpen(o => !o); setHubCityOpen(false); }}
+                      className="h-9 min-w-[160px] px-3 flex items-center justify-between gap-2 border border-zinc-200 rounded-lg bg-white text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors shadow-xs"
+                    >
+                      <span className="truncate">{hubCountryFilter === "all" ? "All Countries" : hubCountryFilter}</span>
+                      <svg className="h-3.5 w-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {hubCountryOpen && (
+                      <div className="absolute z-50 top-full mt-1 left-0 w-56 bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden">
+                        <div className="p-2 border-b border-zinc-100">
+                          <div className="relative">
+                            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <input
+                              autoFocus
+                              value={hubCountrySearch}
+                              onChange={e => setHubCountrySearch(e.target.value)}
+                              placeholder="Search country..."
+                              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-zinc-200 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                            />
+                          </div>
+                        </div>
+                        <div className="overflow-y-auto max-h-52">
+                          {["all", ...hubCountryOptions]
+                            .filter(c => c === "all" || c.toLowerCase().includes(hubCountrySearch.toLowerCase()))
+                            .map(country => (
+                              <button
+                                key={country}
+                                type="button"
+                                onClick={() => {
+                                  setHubCountryFilter(country);
+                                  setHubCityFilter("all");
+                                  setHubCitySearch("");
+                                  setHubCountrySearch("");
+                                  setHubCountryOpen(false);
+                                  setHubsPage(1);
+                                }}
+                                className={cn(
+                                  "w-full text-left px-3 py-2 text-xs font-semibold hover:bg-zinc-50 transition-colors",
+                                  hubCountryFilter === country ? "text-primary bg-primary/5 font-bold" : "text-zinc-700"
+                                )}
+                              >
+                                {country === "all" ? "All Countries" : country}
+                              </button>
+                            ))
+                          }
+                          {hubCountryOptions.filter(c => c.toLowerCase().includes(hubCountrySearch.toLowerCase())).length === 0 && hubCountrySearch && (
+                            <p className="text-xs text-zinc-400 text-center py-3">No countries found</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* City Filter */}
+                  <div className="relative" ref={cityDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => { setHubCityOpen(o => !o); setHubCountryOpen(false); }}
+                      className="h-9 min-w-[160px] px-3 flex items-center justify-between gap-2 border border-zinc-200 rounded-lg bg-white text-sm font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors shadow-xs"
+                    >
+                      <span className="truncate">{hubCityFilter === "all" ? "All Cities" : hubCityFilter}</span>
+                      <svg className="h-3.5 w-3.5 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {hubCityOpen && (
+                      <div className="absolute z-50 top-full mt-1 left-0 w-56 bg-white border border-zinc-200 rounded-xl shadow-xl overflow-hidden">
+                        <div className="p-2 border-b border-zinc-100">
+                          <div className="relative">
+                            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                            <input
+                              autoFocus
+                              value={hubCitySearch}
+                              onChange={e => setHubCitySearch(e.target.value)}
+                              placeholder="Search city..."
+                              className="w-full h-8 pl-8 pr-3 text-xs rounded-lg border border-zinc-200 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                            />
+                          </div>
+                        </div>
+                        <div className="overflow-y-auto max-h-52">
+                          {["all", ...hubCityOptions]
+                            .filter(c => c === "all" || c.toLowerCase().includes(hubCitySearch.toLowerCase()))
+                            .map(city => (
+                              <button
+                                key={city}
+                                type="button"
+                                onClick={() => {
+                                  setHubCityFilter(city);
+                                  setHubCitySearch("");
+                                  setHubCityOpen(false);
+                                  setHubsPage(1);
+                                }}
+                                className={cn(
+                                  "w-full text-left px-3 py-2 text-xs font-semibold hover:bg-zinc-50 transition-colors",
+                                  hubCityFilter === city ? "text-primary bg-primary/5 font-bold" : "text-zinc-700"
+                                )}
+                              >
+                                {city === "all" ? "All Cities" : city}
+                              </button>
+                            ))
+                          }
+                          {hubCityOptions.filter(c => c.toLowerCase().includes(hubCitySearch.toLowerCase())).length === 0 && hubCitySearch && (
+                            <p className="text-xs text-zinc-400 text-center py-3">No cities found</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Active filter chip + clear */}
+                  {(hubCountryFilter !== "all" || hubCityFilter !== "all") && (
+                    <button
+                      type="button"
+                      onClick={() => { setHubCountryFilter("all"); setHubCityFilter("all"); setHubsPage(1); }}
+                      className="h-9 px-3 flex items-center gap-1.5 text-xs font-bold text-zinc-500 border border-zinc-200 rounded-lg hover:bg-zinc-50 transition-colors"
+                    >
+                      <X className="h-3 w-3" /> Clear Filters
+                    </button>
+                  )}
+
+                  <span className="ml-auto text-xs font-semibold text-zinc-400">
+                    {filteredHubs.length} hub{filteredHubs.length !== 1 ? "s" : ""} shown
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-3">
                 {hubsList.length === 0 ? (
                   <div className="text-center p-12 bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
                     <Globe className="h-10 w-10 text-zinc-300 mx-auto mb-2 animate-bounce" />
                     <p className="font-bold text-zinc-500 text-sm">No Active Shipping Zones Defined</p>
                     <p className="text-zinc-400 text-xs mt-1">Add countries and cities in the <strong className="font-bold text-primary">Logistics &rarr; Shipping Zones</strong> tab to automatically generate map pins!</p>
                   </div>
+                ) : filteredHubs.length === 0 ? (
+                  <div className="text-center p-10 bg-zinc-50 rounded-xl border border-dashed border-zinc-200">
+                    <Globe className="h-8 w-8 text-zinc-300 mx-auto mb-2" />
+                    <p className="font-bold text-zinc-500 text-sm">No hubs match your filters</p>
+                    <p className="text-zinc-400 text-xs mt-1">Try selecting a different country or city.</p>
+                  </div>
                 ) : (
                   <>
-                    {hubsList
+                    {filteredHubs
                       .slice((hubsPage - 1) * hubsPageSize, hubsPage * hubsPageSize)
-                      .map((hub, idx) => {
-                        const absoluteIdx = (hubsPage - 1) * hubsPageSize + idx;
+                      .map((hub) => {
+                        // Find the true index in hubsList to update correctly
+                        const absoluteIdx = hubsList.findIndex(h => h.name === hub.name);
+                        const parts = hub.name.split(", ");
+                        const city = parts[0] || hub.name;
+                        const country = parts.slice(1).join(", ") || "";
                         return (
-                          <Card key={absoluteIdx} className="border-zinc-200 shadow-xs relative overflow-hidden bg-zinc-50/20">
-                            <CardContent className="p-5 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="space-y-1">
-                                <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Hub / Region (Synced Location)</Label>
-                                <Input 
-                                  value={hub.name} 
-                                  readOnly
-                                  disabled
-                                  placeholder="Synced Name" 
-                                  className="bg-zinc-50 border-zinc-200 text-zinc-400 font-semibold cursor-not-allowed"
-                                />
-                              </div>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Latitude</Label>
-                                  <Input 
-                                    type="number"
-                                    step="any"
-                                    value={hub.lat} 
-                                    onChange={(e) => {
-                                      const updated = [...hubsList];
-                                      updated[absoluteIdx].lat = parseFloat(e.target.value) || 0;
-                                      setHubsList(updated);
-                                    }}
-                                    placeholder="-1.2921" 
-                                    className="bg-white border-zinc-200 font-bold"
-                                  />
+                          <Card key={hub.name} className="border-zinc-200 shadow-sm relative overflow-hidden bg-white hover:shadow-md transition-shadow">
+                            <CardContent className="p-5 flex flex-col md:flex-row md:items-center gap-4">
+                              {/* Location badge */}
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="h-9 w-9 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                                  <Globe className="h-4 w-4 text-blue-500" />
                                 </div>
-                                <div className="space-y-1">
-                                  <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Longitude</Label>
-                                  <Input 
-                                    type="number"
-                                    step="any"
-                                    value={hub.lng} 
-                                    onChange={(e) => {
-                                      const updated = [...hubsList];
-                                      updated[absoluteIdx].lng = parseFloat(e.target.value) || 0;
-                                      setHubsList(updated);
-                                    }}
-                                    placeholder="36.8219" 
-                                    className="bg-white border-zinc-200 font-bold"
-                                  />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-zinc-900 truncate">{city}</p>
+                                  {country && <p className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wide">{country}</p>}
                                 </div>
                               </div>
-                              <div className="md:col-span-2 space-y-1">
-                                <Label className="text-xs font-black text-zinc-400 uppercase tracking-widest">Description / Overlay Details</Label>
-                                <Input 
-                                  value={hub.desc} 
+                              {/* Description input */}
+                              <div className="flex-[2] space-y-1">
+                                <Label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Overlay / Description</Label>
+                                <Input
+                                  value={hub.desc}
                                   onChange={(e) => {
                                     const updated = [...hubsList];
-                                    updated[absoluteIdx].desc = e.target.value;
+                                    if (absoluteIdx !== -1) updated[absoluteIdx].desc = e.target.value;
                                     setHubsList(updated);
                                   }}
-                                  placeholder="Brief information popup content..." 
-                                  className="bg-white border-zinc-200 font-medium text-zinc-700"
+                                  placeholder="e.g. Main Distribution Center & HQ, Mombasa Road..."
+                                  className="bg-white border-zinc-200 font-medium text-zinc-700 h-9 text-sm"
                                 />
                               </div>
                             </CardContent>
@@ -783,7 +946,7 @@ export default function AdminSettingsPage() {
                       setCurrentPage={setHubsPage}
                       pageSize={hubsPageSize}
                       setPageSize={(size: number) => { setHubsPageSize(size); setHubsPage(1); }}
-                      totalItems={hubsList.length}
+                      totalItems={filteredHubs.length}
                       itemName="hubs"
                       pageSizeOptions={[5, 10, 20, 50]}
                     />

@@ -614,8 +614,20 @@ export default function AdminOrdersPage() {
       return;
     }
     try {
-      await api.put(`/orders/${id}`, { status });
+      const res = await api.put(`/orders/${id}`, { status });
       toast.success(`Order marked as ${status}`);
+
+      // Check SMS logs
+      if (res.data?.sms_logs && res.data.sms_logs.length > 0) {
+        res.data.sms_logs.forEach((log: any) => {
+          if (!log.success) {
+            toast.error(`SMS to ${log.phone} failed: ${log.error}`, { duration: 6000, icon: '⚠️' });
+          } else {
+            toast.success(`SMS alert sent to ${log.phone}!`);
+          }
+        });
+      }
+
       fetchOrders();
     } catch (err) {
       console.error("Failed to update status", err);
@@ -654,6 +666,18 @@ export default function AdminOrdersPage() {
       });
       const updated = res.data?.updated ?? eligibleIds.length;
       toast.success(`${updated} order(s) marked as ${status}.${skipped > 0 ? ` ${skipped} skipped (already Delivered/Cancelled).` : ""}`);
+
+      // Check SMS logs
+      if (res.data?.sms_logs && res.data.sms_logs.length > 0) {
+        res.data.sms_logs.forEach((log: any) => {
+          if (!log.success) {
+            toast.error(`SMS to ${log.phone} failed: ${log.error}`, { duration: 6000, icon: '⚠️' });
+          } else {
+            toast.success(`SMS alert sent to ${log.phone}!`);
+          }
+        });
+      }
+
       setSelectedOrderIds([]);
       fetchOrders();
     } catch (err) {
@@ -1025,22 +1049,31 @@ export default function AdminOrdersPage() {
                   disabled={isBulkProcessing}
                   onClick={() => handleBulkStatusChange('Processing')}
                   variant="outline"
-                  className="bg-white hover:bg-zinc-50 font-bold text-[10px] uppercase tracking-wider border-zinc-200"
+                  className="bg-white hover:bg-zinc-50 font-bold text-[10px] uppercase tracking-wider border-zinc-200 min-w-[140px]"
                 >
-                  Mark Processing
+                  {isBulkProcessing ? (
+                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                  ) : (
+                    "Mark Processing"
+                  )}
                 </Button>
                 <Button 
                   size="sm" 
                   disabled={isBulkProcessing}
                   onClick={() => handleBulkStatusChange('Shipped')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
                 >
-                  Mark Shipped
+                  {isBulkProcessing ? (
+                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                  ) : (
+                    "Mark Shipped"
+                  )}
                 </Button>
                 <Button 
                   size="sm" 
                   variant="ghost" 
                   onClick={() => setSelectedOrderIds([])}
+                  disabled={isBulkProcessing}
                   className="text-zinc-500 hover:text-zinc-900 font-bold text-[10px] uppercase tracking-wider"
                 >
                   Cancel

@@ -732,14 +732,14 @@ export default function AdminLogisticsPage() {
     const payload = {
       product_id: zoneFormData.product_id || null,
       warehouse_id: zoneFormData.warehouse_id || null,
-      weight: currentWeight,
-      distance: zoneFormData.distance || 0,
+      weight: zoneFormData.product_id ? currentWeight : 0,
+      distance: zoneFormData.product_id ? (zoneFormData.distance || 0) : 0,
       country: zoneFormData.country,
       city: zoneFormData.city,
-      standard_fee: calculatedStandardFee,
-      express_fee: calculatedExpressFee,
-      weight_rate: zoneFormData.weight_rate || 0,
-      distance_rate: zoneFormData.distance_rate || 0,
+      standard_fee: zoneFormData.product_id ? calculatedStandardFee : (zoneFormData.standard_fee || 0),
+      express_fee: zoneFormData.product_id ? calculatedExpressFee : (zoneFormData.express_fee || 0),
+      weight_rate: zoneFormData.product_id ? (zoneFormData.weight_rate || 0) : 0,
+      distance_rate: zoneFormData.product_id ? (zoneFormData.distance_rate || 0) : 0,
       is_active: zoneFormData.is_active
     };
 
@@ -1688,16 +1688,16 @@ export default function AdminLogisticsPage() {
                         </div>
                       </TableCell>
                       <TableCell className="font-bold text-zinc-700 text-sm">
-                        {parseFloat(dest.weight || 0).toFixed(2)} KG
+                        {dest.product_id ? `${parseFloat(dest.weight || 0).toFixed(2)} KG` : "—"}
                       </TableCell>
                       <TableCell className="font-bold text-indigo-600 text-sm">
-                        Ksh {parseFloat(dest.weight_rate || 0).toLocaleString()}/KG
+                        {dest.product_id ? `Ksh ${parseFloat(dest.weight_rate || 0).toLocaleString()}/KG` : "—"}
                       </TableCell>
                       <TableCell className="font-bold text-zinc-700 text-sm">
-                        {parseFloat(dest.distance || 0).toLocaleString()} KM
+                        {dest.product_id ? `${parseFloat(dest.distance || 0).toLocaleString()} KM` : "—"}
                       </TableCell>
                       <TableCell className="font-bold text-emerald-600 text-sm">
-                        Ksh {parseFloat(dest.distance_rate || 0).toLocaleString()}/KM
+                        {dest.product_id ? `Ksh ${parseFloat(dest.distance_rate || 0).toLocaleString()}/KM` : "—"}
                       </TableCell>
                       <TableCell className="font-black text-[#0052cc]">Ksh {parseFloat(dest.standard_fee).toLocaleString()}</TableCell>
                       <TableCell className="font-black text-amber-600">Ksh {parseFloat(dest.express_fee).toLocaleString()}</TableCell>
@@ -1987,7 +1987,7 @@ export default function AdminLogisticsPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Applicable Product *</label>
                   <SearchableDropdown 
-                    items={zoneFormData.id ? [{id: "", name: "All Products"}, ...products.map(p => ({id: p.id, name: `${p.name} (${p.sku})`}))] : products.map(p => ({id: p.id, name: `${p.name} (${p.sku})`}))}
+                    items={[{id: "", name: "All Products"}, ...products.map(p => ({id: p.id.toString(), name: p.sku ? `${p.name} (${p.sku})` : p.name}))]}
                     value={zoneFormData.product_id?.toString() || ""}
                     onChange={(val) => setZoneFormData({...zoneFormData, product_id: val})}
                     placeholder="Select product..."
@@ -1996,7 +1996,7 @@ export default function AdminLogisticsPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Origin (Warehouse) *</label>
                   <SearchableDropdown 
-                    items={zoneFormData.id ? [{id: "", name: "Any Warehouse"}, ...warehousesData.map(w => ({id: w.id, name: w.name}))] : warehousesData.map(w => ({id: w.id, name: w.name}))}
+                    items={[{id: "", name: "Any Warehouse"}, ...warehousesData.map(w => ({id: w.id.toString(), name: w.name}))]}
                     value={zoneFormData.warehouse_id?.toString() || ""}
                     onChange={(val) => setZoneFormData({...zoneFormData, warehouse_id: val})}
                     placeholder="Select origin..."
@@ -2025,50 +2025,54 @@ export default function AdminLogisticsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Weight (KG) [Read-Only] *</label>
-                  <Input 
-                    type="text"
-                    readOnly
-                    className="h-10 border-zinc-200 rounded-lg font-bold bg-zinc-50" 
-                    value={`${currentWeight} KG`}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                   <label className="text-xs font-semibold text-zinc-500">Weight Rate (Ksh/KG) *</label>
-                   <Input 
-                     type="number"
-                     placeholder="e.g. 50.00" 
-                     className="h-10 border-zinc-200 rounded-lg font-bold text-indigo-600" 
-                     value={zoneFormData.weight_rate || ""}
-                     onChange={(e) => setZoneFormData({...zoneFormData, weight_rate: parseFloat(e.target.value) || 0})}
-                   />
-                 </div>
-              </div>
+              {zoneFormData.product_id && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Weight (KG) [Read-Only] *</label>
+                      <Input 
+                        type="text"
+                        readOnly
+                        className="h-10 border-zinc-200 rounded-lg font-bold bg-zinc-50" 
+                        value={`${currentWeight} KG`}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-xs font-semibold text-zinc-500">Weight Rate (Ksh/KG) *</label>
+                       <Input 
+                         type="number"
+                         placeholder="e.g. 50.00" 
+                         className="h-10 border-zinc-200 rounded-lg font-bold text-indigo-600" 
+                         value={zoneFormData.weight_rate || ""}
+                         onChange={(e) => setZoneFormData({...zoneFormData, weight_rate: parseFloat(e.target.value) || 0})}
+                       />
+                     </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Distance (KM) *</label>
-                  <Input 
-                    type="number"
-                    placeholder="e.g. 120" 
-                    className="h-10 border-zinc-200 rounded-lg font-bold text-zinc-800" 
-                    value={zoneFormData.distance || ""}
-                    onChange={(e) => setZoneFormData({...zoneFormData, distance: parseFloat(e.target.value) || 0})}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Distance Rate (Ksh/KM) *</label>
-                  <Input 
-                    type="number"
-                    placeholder="e.g. 2.50" 
-                    className="h-10 border-zinc-200 rounded-lg font-bold text-emerald-600" 
-                    value={zoneFormData.distance_rate || ""}
-                    onChange={(e) => setZoneFormData({...zoneFormData, distance_rate: parseFloat(e.target.value) || 0})}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Distance (KM) *</label>
+                      <Input 
+                        type="number"
+                        placeholder="e.g. 120" 
+                        className="h-10 border-zinc-200 rounded-lg font-bold text-zinc-800" 
+                        value={zoneFormData.distance || ""}
+                        onChange={(e) => setZoneFormData({...zoneFormData, distance: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Distance Rate (Ksh/KM) *</label>
+                      <Input 
+                        type="number"
+                        placeholder="e.g. 2.50" 
+                        className="h-10 border-zinc-200 rounded-lg font-bold text-emerald-600" 
+                        value={zoneFormData.distance_rate || ""}
+                        onChange={(e) => setZoneFormData({...zoneFormData, distance_rate: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -2086,21 +2090,27 @@ export default function AdminLogisticsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Standard Fee (Ksh) [Read-Only]</label>
+                  <label className="text-xs font-semibold text-zinc-500">
+                    {zoneFormData.product_id ? "Standard Fee (Ksh) [Read-Only]" : "Standard Flat Fee (Ksh) *"}
+                  </label>
                   <Input 
-                    type="text"
-                    readOnly
-                    className="h-10 border-zinc-200 rounded-lg font-bold bg-zinc-50 text-blue-700" 
-                    value={`Ksh ${calculatedStandardFee.toLocaleString()}`}
+                    type={zoneFormData.product_id ? "text" : "number"}
+                    readOnly={!!zoneFormData.product_id}
+                    className={cn("h-10 border-zinc-200 rounded-lg font-bold text-blue-700", zoneFormData.product_id ? "bg-zinc-50" : "bg-white")} 
+                    value={zoneFormData.product_id ? `Ksh ${calculatedStandardFee.toLocaleString()}` : (zoneFormData.standard_fee || "")}
+                    onChange={zoneFormData.product_id ? undefined : (e) => setZoneFormData({...zoneFormData, standard_fee: parseFloat(e.target.value) || 0})}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Express Fee (Ksh) [Read-Only]</label>
+                  <label className="text-xs font-semibold text-zinc-500">
+                    {zoneFormData.product_id ? "Express Fee (Ksh) [Read-Only]" : "Express Flat Fee (Ksh) *"}
+                  </label>
                   <Input 
-                    type="text"
-                    readOnly
-                    className="h-10 border-zinc-200 rounded-lg font-bold text-amber-600 bg-zinc-50" 
-                    value={`Ksh ${calculatedExpressFee.toLocaleString()}`}
+                    type={zoneFormData.product_id ? "text" : "number"}
+                    readOnly={!!zoneFormData.product_id}
+                    className={cn("h-10 border-zinc-200 rounded-lg font-bold text-amber-600", zoneFormData.product_id ? "bg-zinc-50" : "bg-white")} 
+                    value={zoneFormData.product_id ? `Ksh ${calculatedExpressFee.toLocaleString()}` : (zoneFormData.express_fee || "")}
+                    onChange={zoneFormData.product_id ? undefined : (e) => setZoneFormData({...zoneFormData, express_fee: parseFloat(e.target.value) || 0})}
                   />
                 </div>
               </div>

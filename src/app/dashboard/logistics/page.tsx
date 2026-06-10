@@ -812,7 +812,14 @@ export default function AdminLogisticsPage() {
   };
 
   const handleBulkRouteChange = (idx: number, field: keyof BulkRoute, value: number) => {
-    setBulkZoneRoutes(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+    setBulkZoneRoutes(prev => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const updated = { ...r, [field]: value };
+      if (field === "standard_fee") {
+        updated.express_fee = parseFloat((value * 1.5).toFixed(2));
+      }
+      return updated;
+    }));
   };
 
   const handleSaveBulkZones = async () => {
@@ -2035,14 +2042,24 @@ export default function AdminLogisticsPage() {
                     placeholder="e.g. 350"
                     className="h-10 border-zinc-200 rounded-lg font-bold text-blue-700 bg-white"
                     value={zoneFormData.standard_fee || ""}
-                    onChange={(e) => setZoneFormData({...zoneFormData, standard_fee: parseFloat(e.target.value) || 0})}
+                    onChange={(e) => {
+                      const std = parseFloat(e.target.value) || 0;
+                      setZoneFormData(prev => ({
+                        ...prev,
+                        standard_fee: std,
+                        express_fee: parseFloat((std * 1.5).toFixed(2))
+                      }));
+                    }}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Express Fee (Ksh) *</label>
+                  <label className="text-xs font-semibold text-zinc-500">
+                    Express Fee (Ksh) *
+                    <span className="ml-1.5 text-[10px] font-bold text-amber-500 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Auto: Std × 1.5</span>
+                  </label>
                   <Input 
                     type="number"
-                    placeholder="e.g. 550"
+                    placeholder="e.g. 525"
                     className="h-10 border-zinc-200 rounded-lg font-bold text-amber-600 bg-white"
                     value={zoneFormData.express_fee || ""}
                     onChange={(e) => setZoneFormData({...zoneFormData, express_fee: parseFloat(e.target.value) || 0})}
@@ -2235,10 +2252,11 @@ export default function AdminLogisticsPage() {
                                       type="number"
                                       min={0}
                                       step="0.01"
-                                      placeholder="0.00"
+                                      placeholder="auto"
                                       value={route.express_fee || ""}
                                       onChange={e => handleBulkRouteChange(globalIdx, "express_fee", parseFloat(e.target.value) || 0)}
-                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200 bg-white text-center"
+                                      className="w-full h-8 px-2 border border-amber-200 rounded-lg text-xs font-bold text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200 bg-amber-50/30 text-center"
+                                      title="Auto-set to Std × 1.5. You can override manually."
                                     />
                                   </td>
                                 </tr>

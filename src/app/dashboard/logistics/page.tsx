@@ -64,9 +64,8 @@ interface BulkRoute {
   country: string;
   city: string;
   weight: number;
-  weight_rate: number;
-  distance: number;
-  distance_rate: number;
+  standard_fee: number;
+  express_fee: number;
 }
 
 export default function AdminLogisticsPage() {
@@ -728,18 +727,22 @@ export default function AdminLogisticsPage() {
       return toast.error("Please fill in Country and City.");
     }
     setIsSaving(true);
+    
+    const prod = products.find(p => p.id.toString() === zoneFormData.product_id?.toString());
+    const weight = prod ? parseFloat(prod.weight || 0) : 0;
+
     // Sanitize data payload
     const payload = {
       product_id: zoneFormData.product_id || null,
       warehouse_id: zoneFormData.warehouse_id || null,
-      weight: zoneFormData.product_id ? currentWeight : 0,
-      distance: zoneFormData.product_id ? (zoneFormData.distance || 0) : 0,
+      weight,
+      distance: 0,
       country: zoneFormData.country,
       city: zoneFormData.city,
-      standard_fee: zoneFormData.product_id ? calculatedStandardFee : (zoneFormData.standard_fee || 0),
-      express_fee: zoneFormData.product_id ? calculatedExpressFee : (zoneFormData.express_fee || 0),
-      weight_rate: zoneFormData.product_id ? (zoneFormData.weight_rate || 0) : 0,
-      distance_rate: zoneFormData.product_id ? (zoneFormData.distance_rate || 0) : 0,
+      standard_fee: zoneFormData.standard_fee || 0,
+      express_fee: zoneFormData.express_fee || 0,
+      weight_rate: 0,
+      distance_rate: 0,
       is_active: zoneFormData.is_active
     };
 
@@ -798,9 +801,8 @@ export default function AdminLogisticsPage() {
               country: country.name,
               city: city.name,
               weight,
-              weight_rate: 0,
-              distance: 0,
-              distance_rate: 0,
+              standard_fee: 0,
+              express_fee: 0,
             });
           }
         });
@@ -814,11 +816,9 @@ export default function AdminLogisticsPage() {
   };
 
   const handleSaveBulkZones = async () => {
-    const routesToSave = bulkZoneRoutes.filter(
-      r => r.weight_rate > 0 || r.distance > 0 || r.distance_rate > 0
-    );
+    const routesToSave = bulkZoneRoutes.filter(r => r.standard_fee > 0);
     if (routesToSave.length === 0) {
-      return toast.error("Please fill in at least one route before saving.");
+      return toast.error("Please fill in at least one Standard Fee before saving.");
     }
     setIsSavingBulk(true);
     let saved = 0;
@@ -826,8 +826,6 @@ export default function AdminLogisticsPage() {
     const prod = products.find(p => p.id.toString() === bulkZoneProductId);
     const weight = prod ? parseFloat(prod.weight || 0) : 0;
     for (const route of routesToSave) {
-      const standardFee = route.weight_rate * weight * route.distance_rate;
-      const expressFee = standardFee * 1.5;
       try {
         await api.post("/shipping-destinations", {
           product_id: bulkZoneProductId || null,
@@ -835,11 +833,11 @@ export default function AdminLogisticsPage() {
           country: route.country,
           city: route.city,
           weight,
-          distance: route.distance,
-          standard_fee: standardFee,
-          express_fee: expressFee,
-          weight_rate: route.weight_rate,
-          distance_rate: route.distance_rate,
+          distance: 0,
+          standard_fee: route.standard_fee,
+          express_fee: route.express_fee,
+          weight_rate: 0,
+          distance_rate: 0,
           is_active: true,
         });
         saved++;
@@ -933,22 +931,6 @@ export default function AdminLogisticsPage() {
 
   
   // Dynamic weight and calculated fees for the currently selected product/route
-  const currentWeight = useMemo(() => {
-    if (!zoneFormData.product_id) return 0;
-    const prod = products.find(p => p.id.toString() === zoneFormData.product_id.toString());
-    return prod ? parseFloat(prod.weight || 0) : 0;
-  }, [zoneFormData.product_id, products]);
-
-
-
-  const calculatedStandardFee = useMemo(() => {
-    // Standard Fee = Weight Rate * Weight * Distance Rate
-    return (zoneFormData.weight_rate || 0) * currentWeight * (zoneFormData.distance_rate || 0);
-  }, [zoneFormData.weight_rate, currentWeight, zoneFormData.distance_rate]);
-
-  const calculatedExpressFee = useMemo(() => {
-    return calculatedStandardFee * 1.5;
-  }, [calculatedStandardFee]);
 
   // Dynamic searchable and scrollable options for country and city
   const modalCountryOptions = useMemo(() => {
@@ -1645,15 +1627,10 @@ export default function AdminLogisticsPage() {
               <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
                 <TableRow>
                   <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Product Application</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Route (Origin → Destination)</TableHead>
                   <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Weight (KG)</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Weight Rate (Ksh/KG)</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Distance (KM)</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Distance Rate (Ksh/KM)</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Standard (3-5d)</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Express (1-2d)</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Country</TableHead>
-                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">City</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Route (Origin → Destination)</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px] text-[#0052cc]">Standard Fee</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px] text-amber-600">Express Fee</TableHead>
                   <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Status</TableHead>
                   <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px] text-right">Action</TableHead>
                 </TableRow>
@@ -1661,7 +1638,7 @@ export default function AdminLogisticsPage() {
               <TableBody>
                 {filteredDestinations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-48 text-center text-zinc-500 font-medium">No shipping zones defined matching the filter parameters.</TableCell>
+                    <TableCell colSpan={7} className="h-48 text-center text-zinc-500 font-medium">No shipping zones defined matching the filter parameters.</TableCell>
                   </TableRow>
                 ) : (
                   paginatedFilteredDestinations.map((dest) => (
@@ -1670,16 +1647,21 @@ export default function AdminLogisticsPage() {
                         {dest.product ? (
                           <div className="flex flex-col">
                             <span className="font-bold text-zinc-900 text-xs">{dest.product.name}</span>
-                            <span className="text-[10px] text-zinc-500 font-medium uppercase">SKU: {dest.product.sku}</span>
+                            {dest.product.sku && <span className="text-[10px] text-zinc-500 font-medium uppercase">SKU: {dest.product.sku}</span>}
                           </div>
                         ) : (
-                          <Badge variant="outline" className="bg-zinc-50 text-zinc-500 border-zinc-200 text-[10px] font-bold uppercase tracking-wider">All Products</Badge>
+                          <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 text-[10px] font-bold uppercase tracking-wider">All Products</Badge>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-bold text-zinc-700 text-xs">
+                          {dest.product ? `${parseFloat(dest.product.weight || 0).toFixed(2)} KG` : "—"}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
-                            {dest.warehouse?.name || "Any"}
+                            {dest.warehouse?.name || "Any Warehouse"}
                           </div>
                           <ArrowRightLeft className="h-3 w-3 text-zinc-300" />
                           <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
@@ -1687,22 +1669,12 @@ export default function AdminLogisticsPage() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="font-bold text-zinc-700 text-sm">
-                        {dest.product_id ? `${parseFloat(dest.weight || 0).toFixed(2)} KG` : "—"}
+                      <TableCell>
+                        <span className="font-black text-[#0052cc] text-sm">Ksh {parseFloat(dest.standard_fee || 0).toLocaleString()}</span>
                       </TableCell>
-                      <TableCell className="font-bold text-indigo-600 text-sm">
-                        {dest.product_id ? `Ksh ${parseFloat(dest.weight_rate || 0).toLocaleString()}/KG` : "—"}
+                      <TableCell>
+                        <span className="font-black text-amber-600 text-sm">Ksh {parseFloat(dest.express_fee || 0).toLocaleString()}</span>
                       </TableCell>
-                      <TableCell className="font-bold text-zinc-700 text-sm">
-                        {dest.product_id ? `${parseFloat(dest.distance || 0).toLocaleString()} KM` : "—"}
-                      </TableCell>
-                      <TableCell className="font-bold text-emerald-600 text-sm">
-                        {dest.product_id ? `Ksh ${parseFloat(dest.distance_rate || 0).toLocaleString()}/KM` : "—"}
-                      </TableCell>
-                      <TableCell className="font-black text-[#0052cc]">Ksh {parseFloat(dest.standard_fee).toLocaleString()}</TableCell>
-                      <TableCell className="font-black text-amber-600">Ksh {parseFloat(dest.express_fee).toLocaleString()}</TableCell>
-                      <TableCell className="text-xs font-semibold text-zinc-700">{dest.country}</TableCell>
-                      <TableCell className="text-xs font-semibold text-zinc-700">{dest.city}</TableCell>
                       <TableCell>
                         <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
                           dest.is_active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
@@ -1980,7 +1952,7 @@ export default function AdminLogisticsPage() {
           <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
             <DialogHeader className="p-6 border-b bg-white">
               <DialogTitle className="text-xl font-bold text-zinc-900">{zoneFormData.id ? "Edit Shipping Zone" : "Add New Shipping Zone"}</DialogTitle>
-              <p className="text-sm text-zinc-500 mt-1">Define shipping rates for Standard and Express delivery.</p>
+              <p className="text-sm text-zinc-500 mt-1">Set flat Standard and Express delivery fees for this route.</p>
             </DialogHeader>
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
@@ -2003,6 +1975,22 @@ export default function AdminLogisticsPage() {
                   />
                 </div>
               </div>
+
+              {zoneFormData.product_id && (() => {
+                const prod = products.find(p => p.id.toString() === zoneFormData.product_id?.toString());
+                return prod ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Selected Product Weight</p>
+                      <p className="text-xs font-bold text-zinc-700 max-w-[285px] truncate">{prod.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-black text-[#0052cc]">{parseFloat(prod.weight || 0).toFixed(2)} KG</p>
+                      <p className="text-[10px] font-bold text-blue-500">Read-Only</p>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Destination Country *</label>
@@ -2025,55 +2013,6 @@ export default function AdminLogisticsPage() {
                 </div>
               </div>
 
-              {zoneFormData.product_id && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Weight (KG) [Read-Only] *</label>
-                      <Input 
-                        type="text"
-                        readOnly
-                        className="h-10 border-zinc-200 rounded-lg font-bold bg-zinc-50" 
-                        value={`${currentWeight} KG`}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                       <label className="text-xs font-semibold text-zinc-500">Weight Rate (Ksh/KG) *</label>
-                       <Input 
-                         type="number"
-                         placeholder="e.g. 50.00" 
-                         className="h-10 border-zinc-200 rounded-lg font-bold text-indigo-600" 
-                         value={zoneFormData.weight_rate || ""}
-                         onChange={(e) => setZoneFormData({...zoneFormData, weight_rate: parseFloat(e.target.value) || 0})}
-                       />
-                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Distance (KM) *</label>
-                      <Input 
-                        type="number"
-                        placeholder="e.g. 120" 
-                        className="h-10 border-zinc-200 rounded-lg font-bold text-zinc-800" 
-                        value={zoneFormData.distance || ""}
-                        onChange={(e) => setZoneFormData({...zoneFormData, distance: parseFloat(e.target.value) || 0})}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Distance Rate (Ksh/KM) *</label>
-                      <Input 
-                        type="number"
-                        placeholder="e.g. 2.50" 
-                        className="h-10 border-zinc-200 rounded-lg font-bold text-emerald-600" 
-                        value={zoneFormData.distance_rate || ""}
-                        onChange={(e) => setZoneFormData({...zoneFormData, distance_rate: parseFloat(e.target.value) || 0})}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Zone Status</label>
@@ -2090,27 +2029,23 @@ export default function AdminLogisticsPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">
-                    {zoneFormData.product_id ? "Standard Fee (Ksh) [Read-Only]" : "Standard Flat Fee (Ksh) *"}
-                  </label>
+                  <label className="text-xs font-semibold text-zinc-500">Standard Fee (Ksh) *</label>
                   <Input 
-                    type={zoneFormData.product_id ? "text" : "number"}
-                    readOnly={!!zoneFormData.product_id}
-                    className={cn("h-10 border-zinc-200 rounded-lg font-bold text-blue-700", zoneFormData.product_id ? "bg-zinc-50" : "bg-white")} 
-                    value={zoneFormData.product_id ? `Ksh ${calculatedStandardFee.toLocaleString()}` : (zoneFormData.standard_fee || "")}
-                    onChange={zoneFormData.product_id ? undefined : (e) => setZoneFormData({...zoneFormData, standard_fee: parseFloat(e.target.value) || 0})}
+                    type="number"
+                    placeholder="e.g. 350"
+                    className="h-10 border-zinc-200 rounded-lg font-bold text-blue-700 bg-white"
+                    value={zoneFormData.standard_fee || ""}
+                    onChange={(e) => setZoneFormData({...zoneFormData, standard_fee: parseFloat(e.target.value) || 0})}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">
-                    {zoneFormData.product_id ? "Express Fee (Ksh) [Read-Only]" : "Express Flat Fee (Ksh) *"}
-                  </label>
+                  <label className="text-xs font-semibold text-zinc-500">Express Fee (Ksh) *</label>
                   <Input 
-                    type={zoneFormData.product_id ? "text" : "number"}
-                    readOnly={!!zoneFormData.product_id}
-                    className={cn("h-10 border-zinc-200 rounded-lg font-bold text-amber-600", zoneFormData.product_id ? "bg-zinc-50" : "bg-white")} 
-                    value={zoneFormData.product_id ? `Ksh ${calculatedExpressFee.toLocaleString()}` : (zoneFormData.express_fee || "")}
-                    onChange={zoneFormData.product_id ? undefined : (e) => setZoneFormData({...zoneFormData, express_fee: parseFloat(e.target.value) || 0})}
+                    type="number"
+                    placeholder="e.g. 550"
+                    className="h-10 border-zinc-200 rounded-lg font-bold text-amber-600 bg-white"
+                    value={zoneFormData.express_fee || ""}
+                    onChange={(e) => setZoneFormData({...zoneFormData, express_fee: parseFloat(e.target.value) || 0})}
                   />
                 </div>
               </div>
@@ -2207,7 +2142,7 @@ export default function AdminLogisticsPage() {
                 <ArrowRightLeft className="h-5 w-5 text-[#0052cc]" />
                 Bulk Shipping Fee Entry
               </DialogTitle>
-              <p className="text-sm text-zinc-500 mt-1">Select a product — all Origin × Destination routes are auto-generated. Fill in the rates and save.</p>
+              <p className="text-sm text-zinc-500 mt-1">Select a product — all Origin × Destination routes are auto-generated. Enter Standard and Express fees directly and save.</p>
             </DialogHeader>
 
             <div className="p-6 space-y-5">
@@ -2264,14 +2199,10 @@ export default function AdminLogisticsPage() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="bg-zinc-50 border-b border-zinc-100">
-                              <th className="text-left px-3 py-2 font-bold text-zinc-500 w-[140px]">Dest. Country</th>
-                              <th className="text-left px-3 py-2 font-bold text-zinc-500 w-[130px]">Dest. City</th>
-                              <th className="text-center px-2 py-2 font-bold text-zinc-400 w-[90px]">Weight (KG)</th>
-                              <th className="text-center px-2 py-2 font-bold text-zinc-500 w-[110px]">Weight Rate<br/><span className="text-[9px] font-normal">(Ksh/KG)</span></th>
-                              <th className="text-center px-2 py-2 font-bold text-zinc-500 w-[100px]">Distance<br/><span className="text-[9px] font-normal">(KM)</span></th>
-                              <th className="text-center px-2 py-2 font-bold text-zinc-500 w-[110px]">Distance Rate<br/><span className="text-[9px] font-normal">(Ksh/KM)</span></th>
-                              <th className="text-center px-2 py-2 font-bold text-blue-500 w-[100px]">Std. Fee</th>
-                              <th className="text-center px-2 py-2 font-bold text-amber-500 w-[100px]">Exp. Fee</th>
+                              <th className="text-left px-3 py-2 font-bold text-zinc-500 w-[160px]">Dest. Country</th>
+                              <th className="text-left px-3 py-2 font-bold text-zinc-500 w-[150px]">Dest. City</th>
+                              <th className="text-center px-2 py-2 font-bold text-blue-500 w-[140px]">Std. Fee (Ksh)</th>
+                              <th className="text-center px-2 py-2 font-bold text-amber-500 w-[140px]">Exp. Fee (Ksh)</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2279,8 +2210,6 @@ export default function AdminLogisticsPage() {
                               const globalIdx = bulkZoneRoutes.findIndex(
                                 r => r.warehouse_id === route.warehouse_id && r.country === route.country && r.city === route.city
                               );
-                              const stdFee = route.weight_rate * route.weight * route.distance_rate;
-                              const expFee = stdFee * 1.5;
                               return (
                                 <tr key={`${route.warehouse_id}-${route.country}-${route.city}`}
                                   className="border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors">
@@ -2290,14 +2219,15 @@ export default function AdminLogisticsPage() {
                                   <td className="px-3 py-1.5">
                                     <span className="font-semibold text-zinc-600">{route.city}</span>
                                   </td>
-                                  <td className="px-2 py-1.5 text-center">
+                                  <td className="px-2 py-1.5">
                                     <input
-                                      type="text"
-                                      readOnly
-                                      tabIndex={-1}
-                                      value={`${route.weight} KG`}
-                                      className="w-full h-8 px-2 border border-zinc-100 rounded-lg text-[11px] font-black text-zinc-500 bg-zinc-100 text-center cursor-default"
-                                      aria-label="Product weight (read-only)"
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={route.standard_fee || ""}
+                                      onChange={e => handleBulkRouteChange(globalIdx, "standard_fee", parseFloat(e.target.value) || 0)}
+                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
                                     />
                                   </td>
                                   <td className="px-2 py-1.5">
@@ -2306,48 +2236,10 @@ export default function AdminLogisticsPage() {
                                       min={0}
                                       step="0.01"
                                       placeholder="0.00"
-                                      value={route.weight_rate || ""}
-                                      onChange={e => handleBulkRouteChange(globalIdx, "weight_rate", parseFloat(e.target.value) || 0)}
-                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
+                                      value={route.express_fee || ""}
+                                      onChange={e => handleBulkRouteChange(globalIdx, "express_fee", parseFloat(e.target.value) || 0)}
+                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200 bg-white text-center"
                                     />
-                                  </td>
-                                  <td className="px-2 py-1.5">
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step="1"
-                                      placeholder="0"
-                                      value={route.distance || ""}
-                                      onChange={e => handleBulkRouteChange(globalIdx, "distance", parseFloat(e.target.value) || 0)}
-                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-zinc-700 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
-                                    />
-                                  </td>
-                                  <td className="px-2 py-1.5">
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step="0.01"
-                                      placeholder="0.00"
-                                      value={route.distance_rate || ""}
-                                      onChange={e => handleBulkRouteChange(globalIdx, "distance_rate", parseFloat(e.target.value) || 0)}
-                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-emerald-600 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
-                                    />
-                                  </td>
-                                  <td className="px-2 py-1.5 text-center">
-                                    <span className={cn(
-                                      "text-xs font-black px-2 py-0.5 rounded",
-                                      stdFee > 0 ? "text-blue-700 bg-blue-50" : "text-zinc-300 bg-zinc-50"
-                                    )}>
-                                      {stdFee > 0 ? `Ksh ${stdFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
-                                    </span>
-                                  </td>
-                                  <td className="px-2 py-1.5 text-center">
-                                    <span className={cn(
-                                      "text-xs font-black px-2 py-0.5 rounded",
-                                      expFee > 0 ? "text-amber-700 bg-amber-50" : "text-zinc-300 bg-zinc-50"
-                                    )}>
-                                      {expFee > 0 ? `Ksh ${expFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "—"}
-                                    </span>
                                   </td>
                                 </tr>
                               );
@@ -2374,9 +2266,9 @@ export default function AdminLogisticsPage() {
 
             <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-between gap-3">
               <div className="text-xs text-zinc-400 font-medium">
-                {bulkZoneRoutes.filter(r => r.weight_rate > 0 || r.distance > 0 || r.distance_rate > 0).length > 0 && (
+                {bulkZoneRoutes.filter(r => r.standard_fee > 0).length > 0 && (
                   <span className="text-emerald-600 font-bold">
-                    {bulkZoneRoutes.filter(r => r.weight_rate > 0 || r.distance > 0 || r.distance_rate > 0).length} routes ready to save
+                    {bulkZoneRoutes.filter(r => r.standard_fee > 0).length} routes ready to save
                   </span>
                 )}
               </div>

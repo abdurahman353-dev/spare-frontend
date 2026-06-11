@@ -33,6 +33,9 @@ interface Inventory {
 interface Product {
   id: number;
   sku: string;
+  part_number?: string;
+  suitable_vehicle?: string;
+  engine_model?: string;
   name: string;
   price: number;
   category: { name: string; id: number };
@@ -139,7 +142,7 @@ function ProductCard({ product, priority = false }: { product: Product, priority
         product.status === "Inactive" && "opacity-75 grayscale-[0.5]"
       )}
     >
-      <div 
+      <div
         onClick={() => setIsViewModalOpen(true)}
         className="h-48 bg-zinc-50 flex items-center justify-center p-6 relative cursor-pointer"
       >
@@ -317,14 +320,14 @@ export default function PublicProductsPage() {
     }
   }, []);
 
-  const bizName     = settings.store_name       || "our store";
-  const bizTagline  = settings.store_tagline    || "";
-  const bizCurrency = settings.currency         || "Ksh";
-  const bizPhone    = settings.contact_phone    || "";
-  const bizWA       = settings.contact_whatsapp || "";
-  const bizBranch   = settings.store_branch     || "";
-  const bizWebsite  = settings.store_website    || "";
-  const bizHours    = settings.working_hours    || "";
+  const bizName = settings.store_name || "our store";
+  const bizTagline = settings.store_tagline || "";
+  const bizCurrency = settings.currency || "Ksh";
+  const bizPhone = settings.contact_phone || "";
+  const bizWA = settings.contact_whatsapp || "";
+  const bizBranch = settings.store_branch || "";
+  const bizWebsite = settings.store_website || "";
+  const bizHours = settings.working_hours || "";
 
   const productTourSteps: Step[] = [
     {
@@ -410,6 +413,9 @@ export default function PublicProductsPage() {
         !query ||
         product.name.toLowerCase().includes(query) ||
         product.sku.toLowerCase().includes(query) ||
+        (product.part_number || "").toLowerCase().includes(query) ||
+        (product.suitable_vehicle || "").toLowerCase().includes(query) ||
+        (product.engine_model || "").toLowerCase().includes(query) ||
         (product.brand?.name || "").toLowerCase().includes(query);
 
       const matchesCategory =
@@ -514,7 +520,7 @@ export default function PublicProductsPage() {
                     onChange={(e) => setCategorySearch(e.target.value)}
                   />
                 </div>
-                 <div 
+                <div
                   className="space-y-2 max-h-[220px] overflow-y-auto pr-2 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >

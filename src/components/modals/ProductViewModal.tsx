@@ -115,6 +115,18 @@ export function ProductViewModal({ isOpen, onClose, product }: ProductViewModalP
               <p className="text-sm font-semibold text-zinc-900">{product.brand?.name || "N/A"}</p>
             </div>
             <div className="space-y-1">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Part Number (OEM)</span>
+              <p className="text-sm font-bold text-[#0052cc]">{product.part_number || "—"}</p>
+            </div>
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Engine Model</span>
+              <p className="text-sm font-semibold text-zinc-900">{product.engine_model || "—"}</p>
+            </div>
+            <div className="space-y-1 col-span-2 bg-[#f8fafc] p-2.5 rounded-lg border border-zinc-100">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Suitable Vehicle</span>
+              <p className="text-sm font-semibold text-zinc-800 mt-0.5">{product.suitable_vehicle || "—"}</p>
+            </div>
+            <div className="space-y-1">
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Price</span>
               <p className="text-lg font-black text-primary">{currency} {Number(product.price).toLocaleString()}</p>
             </div>

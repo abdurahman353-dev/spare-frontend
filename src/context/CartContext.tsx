@@ -9,6 +9,9 @@ interface Product {
   price: number;
   weight: number;
   brand: { name: string };
+  part_number?: string;
+  suitable_vehicle?: string;
+  engine_model?: string;
 }
 
 interface CartItem extends Product {

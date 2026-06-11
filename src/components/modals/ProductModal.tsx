@@ -26,6 +26,9 @@ interface ProductModalProps {
 
 const emptyForm = {
   sku: "",
+  part_number: "",
+  suitable_vehicle: "",
+  engine_model: "",
   name: "",
   category_id: "",
   brand_id: "",
@@ -58,6 +61,9 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
       if (product) {
         setFormData({
           sku: product.sku || "",
+          part_number: product.part_number || "",
+          suitable_vehicle: product.suitable_vehicle || "",
+          engine_model: product.engine_model || "",
           name: product.name || "",
           category_id: product.category_id?.toString() || "",
           brand_id: product.brand_id?.toString() || "",
@@ -213,6 +219,9 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
     try {
       const payload = {
         sku: formData.sku.trim(),
+        part_number: formData.part_number.trim() || null,
+        suitable_vehicle: formData.suitable_vehicle.trim() || null,
+        engine_model: formData.engine_model.trim() || null,
         name: formData.name.trim(),
         category_id: Number(formData.category_id),
         brand_id: Number(formData.brand_id),
@@ -342,6 +351,36 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
               </div>
 
               <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-500">Part Number (OEM)</Label>
+                <Input
+                  value={formData.part_number}
+                  onChange={(e) => setFormData({ ...formData, part_number: e.target.value })}
+                  placeholder="e.g. A271 180 0109"
+                  className="h-10 border-zinc-200 rounded-lg"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-500">Suitable Vehicle</Label>
+                <Input
+                  value={formData.suitable_vehicle}
+                  onChange={(e) => setFormData({ ...formData, suitable_vehicle: e.target.value })}
+                  placeholder="e.g. W203, W204, W211"
+                  className="h-10 border-zinc-200 rounded-lg"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-500">Engine Model</Label>
+                <Input
+                  value={formData.engine_model}
+                  onChange={(e) => setFormData({ ...formData, engine_model: e.target.value })}
+                  placeholder="e.g. M271"
+                  className="h-10 border-zinc-200 rounded-lg"
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-2">
                 <Label className="text-xs font-semibold text-zinc-500">Product Name *</Label>
                 <Input
                   value={formData.name}

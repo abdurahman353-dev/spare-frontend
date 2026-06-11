@@ -116,11 +116,17 @@ export default function ProductsPage() {
       const name = product.name || "";
       const sku = product.sku || "";
       const brand = product.brand?.name || "";
+      const partNumber = product.part_number || "";
+      const suitableVehicle = product.suitable_vehicle || "";
+      const engineModel = product.engine_model || "";
       
       const matchesSearch = 
         name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        brand.toLowerCase().includes(searchQuery.toLowerCase());
+        brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        partNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        suitableVehicle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        engineModel.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesCategory = !selectedCategoryId || product.category?.id.toString() === selectedCategoryId;
       const matchesName = !selectedName || product.name === selectedName;

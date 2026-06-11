@@ -327,14 +327,14 @@ export const exportProductsPDF = async (
   const name = storeName || "";
   addHeader(doc, name, "Genuine Parts Catalog Report", name, logoBase64);
 
-  const tableColumn = ["SKU", "Part Name", "Category", "Brand", "Weight", "Status", "Unit Price"];
+  const tableColumn = ["SKU", "Part No", "Part Name", "Suitable Vehicle", "Engine", "Brand", "Unit Price"];
   const tableRows = products.map((p) => [
     p.sku || "N/A",
+    p.part_number || "—",
     p.name || "N/A",
-    p.category?.name || "N/A",
+    p.suitable_vehicle || "—",
+    p.engine_model || "—",
     p.brand?.name || "N/A",
-    p.weight ? `${parseFloat(p.weight).toFixed(2)} KG` : "1.00 KG",
-    p.status || "Active",
     `${currency} ${Number(p.price).toLocaleString()}`,
   ]);
 
@@ -347,11 +347,20 @@ export const exportProductsPDF = async (
       fillColor: [0, 82, 204], // AutoSpare Primary Blue
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 9,
+      fontSize: 8.5,
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7.5,
       textColor: [51, 65, 85], // Slate-700
+    },
+    columnStyles: {
+      0: { cellWidth: 22 }, // SKU
+      1: { cellWidth: 24 }, // Part No
+      2: { cellWidth: 42, overflow: "linebreak" }, // Part Name
+      3: { cellWidth: 32, overflow: "linebreak" }, // Suitable Vehicle
+      4: { cellWidth: 20 }, // Engine Model
+      5: { cellWidth: 22 }, // Brand
+      6: { cellWidth: 20, halign: "right" } // Unit Price
     },
     margin: { top: 37, left: 14, right: 14 },
     didDrawPage: (data: any) => addFooter(doc, data, name),
@@ -563,7 +572,8 @@ export const exportOrdersPDF = async (
     const productNames = (o.items || [])
       .map((item: any) => {
         const qty = item.quantity || 1;
-        return `${item.product?.name || "—"} (Qty: ${qty})`;
+        const partNo = item.product?.part_number ? ` [${item.product.part_number}]` : "";
+        return `${item.product?.name || "—"}${partNo} (Qty: ${qty})`;
       })
       .filter(Boolean)
       .join(", ") || "—";
@@ -832,7 +842,8 @@ export const exportWaybillManifestPDF = async (
     const productNames = items
       .map((item: any) => {
         const qty = item.quantity || 1;
-        return `${item.product?.name || "—"} (Qty: ${qty})`;
+        const partNo = item.product?.part_number ? ` [${item.product.part_number}]` : "";
+        return `${item.product?.name || "—"}${partNo} (Qty: ${qty})`;
       })
       .join(", ") || "—";
 
@@ -1393,15 +1404,26 @@ export const exportSingleOrderInvoicePDF = async (
   // ── 6. ITEM MANIFEST TABLE ──────────────────────────────────────────────────
   const items = order?.items || [];
   const tableHead = [["#", "Product Description", "Origin Warehouse", "SKU / Part Code", "Qty", `Unit Price (${currency})`, `Line Total (${currency})`]];
-  const tableBody = items.map((item: any, idx: number) => [
-    idx + 1,
-    item.product?.name || `Product ID: ${item.product_id}`,
-    item.warehouse?.name || "Main Warehouse",
-    item.product?.sku   || "N/A",
-    item.quantity,
-    `${currency} ${Number(item.price).toLocaleString()}`,
-    `${currency} ${(Number(item.price) * item.quantity).toLocaleString()}`,
-  ]);
+  const tableBody = items.map((item: any, idx: number) => {
+    const productDesc = item.product?.name || `Product ID: ${item.product_id}`;
+    const extraDetails = [];
+    if (item.product?.part_number) extraDetails.push(`Part No: ${item.product.part_number}`);
+    if (item.product?.suitable_vehicle) extraDetails.push(`Suitable: ${item.product.suitable_vehicle}`);
+    if (item.product?.engine_model) extraDetails.push(`Engine: ${item.product.engine_model}`);
+    const displayDesc = extraDetails.length > 0
+      ? `${productDesc}\n(${extraDetails.join(" | ")})`
+      : productDesc;
+
+    return [
+      idx + 1,
+      displayDesc,
+      item.warehouse?.name || "Main Warehouse",
+      item.product?.sku   || "N/A",
+      item.quantity,
+      `${currency} ${Number(item.price).toLocaleString()}`,
+      `${currency} ${(Number(item.price) * item.quantity).toLocaleString()}`,
+    ];
+  });
 
   autoTable(doc, {
     head: tableHead,
@@ -1593,7 +1615,11 @@ export const exportCustomerLedgerPDF = async (
   const tableBody = orders.map((o: any) => {
     const subtotal = Math.max(0, Number(o.total_amount || 0) - Number(o.shipping_fee || 0));
     const productNames = (o.items || [])
-      .map((item: any) => `${item.product?.name || "Genuine Spare Part"} (Qty: ${item.quantity || 1})`)
+      .map((item: any) => {
+        const name = item.product?.name || "Genuine Spare Part";
+        const partNo = item.product?.part_number ? ` [${item.product.part_number}]` : "";
+        return `${name}${partNo} (Qty: ${item.quantity || 1})`;
+      })
       .filter(Boolean)
       .join(", ") || "Genuine Spare Part";
     const totalQty = (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);

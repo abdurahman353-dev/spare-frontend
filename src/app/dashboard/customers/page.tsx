@@ -230,7 +230,29 @@ export default function AdminCustomersPage() {
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
-      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const sq = searchQuery.toLowerCase();
+      
+      const matchesProducts = (c as any).orders?.some((order: any) => {
+        return order.items?.some((item: any) => {
+          const prod = item.product;
+          if (!prod) return false;
+          return (
+            (prod.part_number || "").toLowerCase().includes(sq) ||
+            (prod.suitable_vehicle || "").toLowerCase().includes(sq) ||
+            (prod.engine_model || "").toLowerCase().includes(sq) ||
+            (prod.name || "").toLowerCase().includes(sq) ||
+            (prod.sku || "").toLowerCase().includes(sq)
+          );
+        });
+      });
+
+      const matchesSearch = 
+        c.name.toLowerCase().includes(sq) || 
+        c.email.toLowerCase().includes(sq) ||
+        (c.phone || "").toLowerCase().includes(sq) ||
+        (c.company_name || "").toLowerCase().includes(sq) ||
+        matchesProducts;
+
       const matchesType = typeFilter === "All Types" || c.type === typeFilter;
       return matchesSearch && matchesType;
     });

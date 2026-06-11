@@ -776,13 +776,25 @@ export default function AdminOrdersPage() {
       // ── Walk-In filters — completely isolated ──────────────────────────────
       const sq = walkInSearchQuery.toLowerCase();
       return walkInOrders.filter(order => {
+        const matchesProducts = order.items?.some((item: any) => {
+          const prod = item.product;
+          if (!prod) return false;
+          return (
+            (prod.part_number || "").toLowerCase().includes(sq) ||
+            (prod.suitable_vehicle || "").toLowerCase().includes(sq) ||
+            (prod.engine_model || "").toLowerCase().includes(sq) ||
+            (prod.name || "").toLowerCase().includes(sq) ||
+            (prod.sku || "").toLowerCase().includes(sq)
+          );
+        });
         const matchesSearch = !sq || (
           (order.tracking_number || "").toLowerCase().includes(sq) ||
           (order.customer?.name || "").toLowerCase().includes(sq) ||
           (order.customer?.email || "").toLowerCase().includes(sq) ||
           (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
           getWalkInDestinationLabel(order).toLowerCase().includes(sq) ||
-          (order.payment_method || "cash").toLowerCase().includes(sq)
+          (order.payment_method || "cash").toLowerCase().includes(sq) ||
+          matchesProducts
         );
         const matchesPayStatus = walkInPayStatusFilter === "All" ||
           (walkInPayStatusFilter === "Cancelled / Refunded"
@@ -802,13 +814,25 @@ export default function AdminOrdersPage() {
     // ── Shipment filters — completely isolated ─────────────────────────────
     const sq = shipmentSearchQuery.toLowerCase();
     return shipmentOrders.filter(order => {
+      const matchesProducts = order.items?.some((item: any) => {
+        const prod = item.product;
+        if (!prod) return false;
+        return (
+          (prod.part_number || "").toLowerCase().includes(sq) ||
+          (prod.suitable_vehicle || "").toLowerCase().includes(sq) ||
+          (prod.engine_model || "").toLowerCase().includes(sq) ||
+          (prod.name || "").toLowerCase().includes(sq) ||
+          (prod.sku || "").toLowerCase().includes(sq)
+        );
+      });
       const matchesSearch = !sq || (
         (order.tracking_number || "").toLowerCase().includes(sq) ||
         (order.customer?.name || "").toLowerCase().includes(sq) ||
         (order.customer?.email || "").toLowerCase().includes(sq) ||
         (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
         (order.shipping_city || "").toLowerCase().includes(sq) ||
-        (order.shipping_address || "").toLowerCase().includes(sq)
+        (order.shipping_address || "").toLowerCase().includes(sq) ||
+        matchesProducts
       );
       const matchesWarehouse = warehouseFilter === "all" ||
         order.items?.some((i: any) => i.warehouse_id?.toString() === warehouseFilter);

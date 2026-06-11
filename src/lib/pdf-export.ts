@@ -387,7 +387,7 @@ export const exportInventoryPDF = async (
   const name = storeName || "";
   addHeader(doc, name, "Inventory Stock Balance & Warehouse Distribution Report", name, logoBase64);
 
-  const tableColumn = ["SKU", "Product Name", "Brand", "Warehouse Location", "Quantity", "Min Stock", "Status"];
+  const tableColumn = ["SKU", "Part No", "Product Name", "Brand", "Suitable Vehicle", "Engine", "Warehouse Location", "Quantity", "Min Stock", "Status"];
 
   const getStatus = (item: any) => {
     if (item.warehouse_id === null) return "Unassigned";
@@ -398,8 +398,11 @@ export const exportInventoryPDF = async (
 
   const tableRows = inventory.map((item) => [
     item.product?.sku || "N/A",
+    item.product?.part_number || "—",
     item.product?.name || "N/A",
     item.product?.brand?.name || "N/A",
+    item.product?.suitable_vehicle || "—",
+    item.product?.engine_model || "—",
     item.warehouse?.name || "Pending Assignment",
     `${item.quantity} PCS`,
     `${item.min_stock || 5} PCS`,
@@ -557,6 +560,9 @@ export const exportOrdersPDF = async (
     "Order Ref",
     "Customer / Phone",
     "Products",
+    "Part No",
+    "Engine",
+    "Suitable",
     "Items / Units",
     "Origin Warehouse",
     isWalkIn ? "Destination / Address" : "Destination",
@@ -575,6 +581,21 @@ export const exportOrdersPDF = async (
         const partNo = item.product?.part_number ? ` [${item.product.part_number}]` : "";
         return `${item.product?.name || "—"}${partNo} (Qty: ${qty})`;
       })
+      .filter(Boolean)
+      .join(", ") || "—";
+
+    const partNumbers = (o.items || [])
+      .map((item: any) => item.product?.part_number || "—")
+      .filter(Boolean)
+      .join(", ") || "—";
+
+    const engines = (o.items || [])
+      .map((item: any) => item.product?.engine_model || "—")
+      .filter(Boolean)
+      .join(", ") || "—";
+
+    const suitableVehicles = (o.items || [])
+      .map((item: any) => item.product?.suitable_vehicle || "—")
       .filter(Boolean)
       .join(", ") || "—";
 
@@ -607,6 +628,9 @@ export const exportOrdersPDF = async (
       o.tracking_number || `ORD-${o.id}`,
       customerDisplay,
       productNames,
+      partNumbers,
+      engines,
+      suitableVehicles,
       itemsUnitsDisplay,
       o.items?.[0]?.warehouse?.name || "N/A",
       destDisplay,
@@ -623,6 +647,9 @@ export const exportOrdersPDF = async (
   tableRows.push([
     "TOTALS",
     `${orders.length} order(s)`,
+    "",
+    "",
+    "",
     "",
     `${totalItems} item(s) (${totalUnits} unit${totalUnits !== 1 ? 's' : ''})`,
     "",
@@ -655,18 +682,21 @@ export const exportOrdersPDF = async (
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0:  { cellWidth: w * 0.09, fontStyle: "bold" },
-      1:  { cellWidth: w * 0.09, overflow: "linebreak" },
-      2:  { cellWidth: w * 0.17, overflow: "linebreak" },
-      3:  { cellWidth: w * 0.08, overflow: "linebreak" },
-      4:  { cellWidth: w * 0.08, overflow: "linebreak" },
-      5:  { cellWidth: w * 0.08, overflow: "linebreak" },
-      6:  { cellWidth: w * 0.06, halign: "center" },
-      7:  { cellWidth: w * 0.08, halign: "right" },
-      8:  { cellWidth: w * 0.06, halign: "right" },
-      9:  { cellWidth: w * 0.08, halign: "right", fontStyle: "bold" },
-      10: { cellWidth: w * 0.07, halign: "center" },
-      11: { cellWidth: w * 0.06, halign: "center" },
+      0:  { cellWidth: w * 0.07, fontStyle: "bold" },
+      1:  { cellWidth: w * 0.07, overflow: "linebreak" },
+      2:  { cellWidth: w * 0.11, overflow: "linebreak" },
+      3:  { cellWidth: w * 0.07, overflow: "linebreak" },
+      4:  { cellWidth: w * 0.05, overflow: "linebreak" },
+      5:  { cellWidth: w * 0.07, overflow: "linebreak" },
+      6:  { cellWidth: w * 0.07, overflow: "linebreak" },
+      7:  { cellWidth: w * 0.07, overflow: "linebreak" },
+      8:  { cellWidth: w * 0.07, overflow: "linebreak" },
+      9:  { cellWidth: w * 0.05, halign: "center" },
+      10: { cellWidth: w * 0.07, halign: "right" },
+      11: { cellWidth: w * 0.05, halign: "right" },
+      12: { cellWidth: w * 0.07, halign: "right", fontStyle: "bold" },
+      13: { cellWidth: w * 0.06, halign: "center" },
+      14: { cellWidth: w * 0.05, halign: "center" },
     },
     margin: { top: 37, left: marginL, right: marginR },
     didParseCell: (data: any) => {
@@ -821,6 +851,9 @@ export const exportWaybillManifestPDF = async (
     "Order Ref",
     "Customer / Phone",
     "Products",
+    "Part No",
+    "Engine",
+    "Suitable",
     "Items / Units",
     "Subtotal",
     "Shipping",
@@ -847,6 +880,18 @@ export const exportWaybillManifestPDF = async (
       })
       .join(", ") || "—";
 
+    const partNumbers = items
+      .map((item: any) => item.product?.part_number || "—")
+      .join(", ") || "—";
+
+    const engines = items
+      .map((item: any) => item.product?.engine_model || "—")
+      .join(", ") || "—";
+
+    const suitableVehicles = items
+      .map((item: any) => item.product?.suitable_vehicle || "—")
+      .join(", ") || "—";
+
     const itemsCount = items.length;
     const unitsCount = items.reduce((s: number, i: any) => s + (i.quantity || 0), 0);
     const itemsUnitsDisplay = `${itemsCount} Item${itemsCount !== 1 ? "s" : ""} (${unitsCount} Unit${unitsCount !== 1 ? "s" : ""})`;
@@ -866,6 +911,9 @@ export const exportWaybillManifestPDF = async (
       orderRef,
       customerDisplay,
       productNames,
+      partNumbers,
+      engines,
+      suitableVehicles,
       itemsUnitsDisplay,
       fmt(subtotal),
       fmt(shippingFee),
@@ -879,7 +927,7 @@ export const exportWaybillManifestPDF = async (
 
   if (tableRows.length === 0) {
     tableRows.push([
-      "—", "—", "No products assigned to this shipment", "—",
+      "—", "—", "No products assigned to this shipment", "—", "—", "—", "—",
       fmt(0), fmt(0), fmt(0), "—", "—", "—", "—",
     ]);
   }
@@ -888,6 +936,9 @@ export const exportWaybillManifestPDF = async (
   tableRows.push([
     "SHIPMENT TOTALS",
     `${orderCount} order(s)`,
+    "",
+    "",
+    "",
     "",
     `${totalItems} item(s) (${totalUnits} unit${totalUnits !== 1 ? "s" : ""})`,
     fmt(shipmentProductSubtotal),
@@ -900,17 +951,20 @@ export const exportWaybillManifestPDF = async (
   ]);
 
   const col = {
-    orderRef:    printableWidth * 0.09,
-    customer:    printableWidth * 0.10,
-    products:    printableWidth * 0.22,
-    itemsUnits:  printableWidth * 0.09,
-    subtotal:    printableWidth * 0.08,
-    shipping:    printableWidth * 0.07,
-    grandTotal:  printableWidth * 0.09,
-    shipMethod:  printableWidth * 0.08,
-    orderStatus: printableWidth * 0.07,
+    orderRef:    printableWidth * 0.07,
+    customer:    printableWidth * 0.08,
+    products:    printableWidth * 0.13,
+    partNo:      printableWidth * 0.07,
+    engine:      printableWidth * 0.05,
+    suitable:    printableWidth * 0.07,
+    itemsUnits:  printableWidth * 0.07,
+    subtotal:    printableWidth * 0.07,
+    shipping:    printableWidth * 0.06,
+    grandTotal:  printableWidth * 0.08,
+    shipMethod:  printableWidth * 0.07,
+    orderStatus: printableWidth * 0.06,
     payment:     printableWidth * 0.06,
-    payMethod:   printableWidth * 0.065,
+    payMethod:   printableWidth * 0.06,
   };
 
   autoTable(doc, {
@@ -1105,6 +1159,9 @@ export const exportCustomerStatementPDF = async (
     "Date",
     "Reference",
     "Items Summary",
+    "Part No",
+    "Engine",
+    "Suitable",
     "Fulfillment Route",
     "Payment / Ref",
     "Fee",
@@ -1118,6 +1175,18 @@ export const exportCustomerStatementPDF = async (
     
     const items = order.items || [];
     const itemsSummary = items.map((i: any) => `${i.product?.name || "Part"} (Qty: ${i.quantity})`).join(", ") || "No parts listed";
+
+    const partNumbers = items
+      .map((i: any) => i.product?.part_number || "—")
+      .join(", ") || "—";
+
+    const engines = items
+      .map((i: any) => i.product?.engine_model || "—")
+      .join(", ") || "—";
+
+    const suitableVehicles = items
+      .map((i: any) => i.product?.suitable_vehicle || "—")
+      .join(", ") || "—";
 
     const isPickup = order.shipping_method === "Pickup";
     const route = isPickup 
@@ -1133,6 +1202,9 @@ export const exportCustomerStatementPDF = async (
       formattedDate,
       trackingRef,
       itemsSummary,
+      partNumbers,
+      engines,
+      suitableVehicles,
       route,
       pay,
       fee,
@@ -1142,13 +1214,16 @@ export const exportCustomerStatementPDF = async (
   });
 
   if (tableRows.length === 0) {
-    tableRows.push(["—", "—", "No recorded transactions for this customer", "—", "—", `${currency} 0`, `${currency} 0`, "—"]);
+    tableRows.push(["—", "—", "No recorded transactions for this customer", "—", "—", "—", "—", "—", `${currency} 0`, `${currency} 0`, "—"]);
   }
 
   // Grand totals row
   tableRows.push([
     "TOTALS",
     `${totalOrdersCount} order(s)`,
+    "",
+    "",
+    "",
     "",
     "",
     "",
@@ -1177,14 +1252,17 @@ export const exportCustomerStatementPDF = async (
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      0: { cellWidth: printableWidth * 0.10 },
-      1: { cellWidth: printableWidth * 0.12, fontStyle: "bold" },
-      2: { cellWidth: printableWidth * 0.28, overflow: "linebreak" },
-      3: { cellWidth: printableWidth * 0.17, overflow: "linebreak" },
-      4: { cellWidth: printableWidth * 0.14, overflow: "linebreak" },
-      5: { cellWidth: printableWidth * 0.08, halign: "right" },
-      6: { cellWidth: printableWidth * 0.07, halign: "right", fontStyle: "bold" },
-      7: { cellWidth: printableWidth * 0.04, halign: "center" }
+      0: { cellWidth: printableWidth * 0.08 },
+      1: { cellWidth: printableWidth * 0.10, fontStyle: "bold" },
+      2: { cellWidth: printableWidth * 0.15, overflow: "linebreak" },
+      3: { cellWidth: printableWidth * 0.08, overflow: "linebreak" },
+      4: { cellWidth: printableWidth * 0.06, overflow: "linebreak" },
+      5: { cellWidth: printableWidth * 0.08, overflow: "linebreak" },
+      6: { cellWidth: printableWidth * 0.13, overflow: "linebreak" },
+      7: { cellWidth: printableWidth * 0.10, overflow: "linebreak" },
+      8: { cellWidth: printableWidth * 0.08, halign: "right" },
+      9: { cellWidth: printableWidth * 0.09, halign: "right", fontStyle: "bold" },
+      10: { cellWidth: printableWidth * 0.05, halign: "center" }
     },
     margin: { top: 32, right: marginR, bottom: 18, left: marginL },
     didParseCell: (data: any) => {
@@ -1403,22 +1481,28 @@ export const exportSingleOrderInvoicePDF = async (
 
   // ── 6. ITEM MANIFEST TABLE ──────────────────────────────────────────────────
   const items = order?.items || [];
-  const tableHead = [["#", "Product Description", "Origin Warehouse", "SKU / Part Code", "Qty", `Unit Price (${currency})`, `Line Total (${currency})`]];
+  const tableHead = [[
+    "#",
+    "Product Description",
+    "Origin Warehouse",
+    "SKU / Part Code",
+    "Part No (OEM)",
+    "Engine",
+    "Suitable Vehicle",
+    "Qty",
+    `Unit Price (${currency})`,
+    `Line Total (${currency})`
+  ]];
   const tableBody = items.map((item: any, idx: number) => {
     const productDesc = item.product?.name || `Product ID: ${item.product_id}`;
-    const extraDetails = [];
-    if (item.product?.part_number) extraDetails.push(`Part No: ${item.product.part_number}`);
-    if (item.product?.suitable_vehicle) extraDetails.push(`Suitable: ${item.product.suitable_vehicle}`);
-    if (item.product?.engine_model) extraDetails.push(`Engine: ${item.product.engine_model}`);
-    const displayDesc = extraDetails.length > 0
-      ? `${productDesc}\n(${extraDetails.join(" | ")})`
-      : productDesc;
-
     return [
       idx + 1,
-      displayDesc,
+      productDesc,
       item.warehouse?.name || "Main Warehouse",
-      item.product?.sku   || "N/A",
+      item.product?.sku || "N/A",
+      item.product?.part_number || "—",
+      item.product?.engine_model || "—",
+      item.product?.suitable_vehicle || "—",
       item.quantity,
       `${currency} ${Number(item.price).toLocaleString()}`,
       `${currency} ${(Number(item.price) * item.quantity).toLocaleString()}`,
@@ -1443,9 +1527,15 @@ export const exportSingleOrderInvoicePDF = async (
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: { 
       0: { cellWidth: 8, halign: "center" }, 
-      4: { cellWidth: 10, halign: "center" },
-      5: { halign: "right" },
-      6: { halign: "right", fontStyle: "bold" }
+      1: { cellWidth: 30, overflow: "linebreak" }, 
+      2: { cellWidth: 20, overflow: "linebreak" }, 
+      3: { cellWidth: 20, overflow: "linebreak" }, 
+      4: { cellWidth: 22, overflow: "linebreak" }, 
+      5: { cellWidth: 15, overflow: "linebreak" }, 
+      6: { cellWidth: 25, overflow: "linebreak" }, 
+      7: { cellWidth: 8, halign: "center" },
+      8: { cellWidth: 17, halign: "right" },
+      9: { cellWidth: 17, halign: "right", fontStyle: "bold" }
     },
     margin: { left: marginL, right: marginR },
     didDrawPage: () => {
@@ -1599,6 +1689,9 @@ export const exportCustomerLedgerPDF = async (
     "Order Ref",
     "Order Date",
     "Main Product Reference",
+    "Part No",
+    "Engine",
+    "Suitable",
     "Items Count",
     "Origin Warehouse",
     "Fulfillment Destination",
@@ -1622,11 +1715,30 @@ export const exportCustomerLedgerPDF = async (
       })
       .filter(Boolean)
       .join(", ") || "Genuine Spare Part";
+
+    const partNumbers = (o.items || [])
+      .map((item: any) => item.product?.part_number || "—")
+      .filter(Boolean)
+      .join(", ") || "—";
+
+    const engines = (o.items || [])
+      .map((item: any) => item.product?.engine_model || "—")
+      .filter(Boolean)
+      .join(", ") || "—";
+
+    const suitableVehicles = (o.items || [])
+      .map((item: any) => item.product?.suitable_vehicle || "—")
+      .filter(Boolean)
+      .join(", ") || "—";
+
     const totalQty = (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
     return [
       o.tracking_number || `ORD-${o.id}`,
       new Date(o.created_at).toLocaleDateString("en-KE"),
       productNames,
+      partNumbers,
+      engines,
+      suitableVehicles,
       `${o.items?.length || 0} Item(s) (${totalQty} Unit${totalQty !== 1 ? 's' : ''})`,
       o.items?.[0]?.warehouse?.name || "Main Warehouse Hub",
       o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}` : "In-Store Collection",
@@ -1642,6 +1754,9 @@ export const exportCustomerLedgerPDF = async (
   tableBody.push([
     "TOTALS",
     `${orders.length} order(s)`,
+    "",
+    "",
+    "",
     "",
     `${grandTotalItemsCount} item(s) (${grandTotalUnitsCount} unit${grandTotalUnitsCount !== 1 ? 's' : ''})`,
     "",
@@ -1671,13 +1786,20 @@ export const exportCustomerLedgerPDF = async (
     alternateRowStyles: { fillColor: [248, 250, 252] },
     margin: { left: marginL, right: marginR, top: 32, bottom: 18 },
     columnStyles: {
-      0: { cellWidth: 28, fontStyle: "bold" },
-      3: { cellWidth: 16, halign: "center" },
-      6: { halign: "right" },
-      7: { halign: "right" },
-      8: { halign: "right", fontStyle: "bold" },
-      9: { cellWidth: 20, halign: "center" },
-      10: { cellWidth: 22, halign: "center" },
+      0: { cellWidth: 22, fontStyle: "bold" },
+      1: { cellWidth: 15 },
+      2: { cellWidth: 35, overflow: "linebreak" },
+      3: { cellWidth: 20, overflow: "linebreak" },
+      4: { cellWidth: 15, overflow: "linebreak" },
+      5: { cellWidth: 20, overflow: "linebreak" },
+      6: { cellWidth: 15, halign: "center" },
+      7: { cellWidth: 20, overflow: "linebreak" },
+      8: { cellWidth: 25, overflow: "linebreak" },
+      9: { halign: "right" },
+      10: { halign: "right" },
+      11: { halign: "right", fontStyle: "bold" },
+      12: { cellWidth: 16, halign: "center" },
+      13: { cellWidth: 15, halign: "center" },
     },
     didParseCell: (data: any) => {
       // Bold + highlight totals row

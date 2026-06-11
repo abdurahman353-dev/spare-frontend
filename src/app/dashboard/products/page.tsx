@@ -285,7 +285,10 @@ export default function ProductsPage() {
                 />
               </TableHead>
               <TableHead className="px-6 font-semibold text-zinc-900">SKU</TableHead>
+              <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
               <TableHead className="font-semibold text-zinc-900">Name</TableHead>
+              <TableHead className="font-semibold text-zinc-900">Engine Model</TableHead>
+              <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
               <TableHead className="font-semibold text-zinc-900">Category</TableHead>
               <TableHead className="font-semibold text-zinc-900">Brand</TableHead>
               <TableHead className="font-semibold text-zinc-900">Weight (KG)</TableHead>
@@ -328,7 +331,10 @@ export default function ProductsPage() {
                     />
                   </TableCell>
                   <TableCell className="px-6 font-bold text-zinc-900">{product.sku}</TableCell>
+                  <TableCell className="font-bold text-[#0052cc] text-xs">{product.part_number || "—"}</TableCell>
                   <TableCell className="font-semibold text-zinc-700">{product.name}</TableCell>
+                  <TableCell className="font-semibold text-zinc-600 text-xs">{product.engine_model || "—"}</TableCell>
+                  <TableCell className="font-semibold text-zinc-600 text-xs max-w-[150px] truncate" title={product.suitable_vehicle}>{product.suitable_vehicle || "—"}</TableCell>
                   <TableCell className="text-zinc-500 text-xs font-bold uppercase tracking-tight">
                     <Badge 
                       variant="outline" 

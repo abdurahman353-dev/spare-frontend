@@ -177,6 +177,21 @@ function ProductCard({ product, priority = false }: { product: Product, priority
         </h3>
         <p className="text-sm text-[#64748b] mt-1 font-medium">SKU: {product.sku}</p>
 
+        <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs border-t border-[#f1f5f9] pt-2">
+          <div>
+            <span className="text-[#94a3b8] font-bold block uppercase tracking-wider text-[9px]">Part No (OEM)</span>
+            <span className="font-semibold text-zinc-700">{product.part_number || "—"}</span>
+          </div>
+          <div>
+            <span className="text-[#94a3b8] font-bold block uppercase tracking-wider text-[9px]">Engine</span>
+            <span className="font-semibold text-zinc-700">{product.engine_model || "—"}</span>
+          </div>
+          <div className="col-span-2">
+            <span className="text-[#94a3b8] font-bold block uppercase tracking-wider text-[9px]">Suitable Vehicle</span>
+            <span className="font-semibold text-zinc-700 line-clamp-1" title={product.suitable_vehicle}>{product.suitable_vehicle || "—"}</span>
+          </div>
+        </div>
+
         <div className="mt-4 flex items-center justify-between">
           {product.is_on_offer ? (
             <div className="flex flex-col">

@@ -1417,6 +1417,9 @@ export default function AdminLogisticsPage() {
                   <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
                   <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
                   <TableHead className="font-semibold text-zinc-900">Main Product</TableHead>
+                  <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
                   <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
                   <TableHead className="font-semibold text-zinc-900">Product Cost</TableHead>
                   <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
@@ -1491,6 +1494,33 @@ export default function AdminLogisticsPage() {
                           {order.items && order.items.length > 1 && (
                             <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>
                           )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          {order.items?.map((item: any, i: number) => (
+                            <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                              {item.product?.part_number || "—"}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          {order.items?.map((item: any, i: number) => (
+                            <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                              {item.product?.engine_model || "—"}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          {order.items?.map((item: any, i: number) => (
+                            <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                              {item.product?.suitable_vehicle || "—"}
+                            </span>
+                          ))}
                         </div>
                       </TableCell>
                       <TableCell className="text-center">

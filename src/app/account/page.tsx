@@ -567,6 +567,9 @@ function AccountPortalInner() {
                               <th className="px-6 py-4">Order Ref</th>
                               <th className="px-6 py-4">Date</th>
                               <th className="px-6 py-4">Main Products</th>
+                              <th className="px-6 py-4 text-[#0052cc]">Part No (OEM)</th>
+                              <th className="px-6 py-4">Engine</th>
+                              <th className="px-6 py-4">Suitable Vehicle</th>
                               <th className="px-6 py-4 text-center">Items</th>
                               <th className="px-6 py-4">Products Costs</th>
                               <th className="px-6 py-4">Shipment Fee</th>
@@ -597,6 +600,33 @@ function AccountPortalInner() {
                                       {order.items && order.items.length > 1 && (
                                         <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
                                       )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col gap-0.5">
+                                      {order.items?.map((item: any, i: number) => (
+                                        <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                          {item.product?.part_number || "—"}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col gap-0.5">
+                                      {order.items?.map((item: any, i: number) => (
+                                        <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                          {item.product?.engine_model || "—"}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col gap-0.5">
+                                      {order.items?.map((item: any, i: number) => (
+                                        <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                          {item.product?.suitable_vehicle || "—"}
+                                        </span>
+                                      ))}
                                     </div>
                                   </td>
                                   <td className="px-6 py-4">
@@ -733,6 +763,9 @@ function AccountPortalInner() {
                               <th className="px-6 py-4">Order Ref</th>
                               <th className="px-6 py-4">Date</th>
                               <th className="px-6 py-4">Main Products</th>
+                              <th className="px-6 py-4 text-[#0052cc]">Part No (OEM)</th>
+                              <th className="px-6 py-4">Engine</th>
+                              <th className="px-6 py-4">Suitable Vehicle</th>
                               <th className="px-6 py-4 text-center">Items</th>
                               <th className="px-6 py-4">Products Costs</th>
                               <th className="px-6 py-4">Shipment Fee</th>
@@ -760,6 +793,33 @@ function AccountPortalInner() {
                                       {order.items && order.items.length > 1 && (
                                         <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
                                       )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col gap-0.5">
+                                      {order.items?.map((item: any, i: number) => (
+                                        <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                          {item.product?.part_number || "—"}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col gap-0.5">
+                                      {order.items?.map((item: any, i: number) => (
+                                        <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                          {item.product?.engine_model || "—"}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col gap-0.5">
+                                      {order.items?.map((item: any, i: number) => (
+                                        <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                          {item.product?.suitable_vehicle || "—"}
+                                        </span>
+                                      ))}
                                     </div>
                                   </td>
                                   <td className="px-6 py-4">
@@ -965,9 +1025,18 @@ function AccountPortalInner() {
                   <div key={idx} className="flex justify-between items-center pb-4 border-b border-[#f1f5f9] last:border-0 last:pb-0">
                     <div className="space-y-1">
                       <p className="font-semibold text-[#1e293b] text-[14px]">{item.product?.name || `Product ID: ${item.product_id}`}</p>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
                         <span className="text-[11px] font-semibold text-slate-700">Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                        {item.product?.part_number && (
+                          <span className="text-xs font-bold text-[#0052cc]">Part No: {item.product.part_number}</span>
+                        )}
+                        {item.product?.engine_model && (
+                          <span className="text-xs text-zinc-500 font-medium">Engine: {item.product.engine_model}</span>
+                        )}
+                        {item.product?.suitable_vehicle && (
+                          <span className="text-xs text-zinc-500 font-medium">Suitable: {item.product.suitable_vehicle}</span>
+                        )}
                       </div>
                     </div>
                     <p className="font-bold text-[#1e293b] text-[14px]">Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>

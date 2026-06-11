@@ -1117,6 +1117,9 @@ export default function AdminOrdersPage() {
                 <TableHead className="font-semibold text-zinc-900">Customer Profile</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
+                <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Source Warehouse</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Destination / Address</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Fulfillment</TableHead>
@@ -1157,11 +1160,38 @@ export default function AdminOrdersPage() {
                       <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
                       <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                     </TableCell>
-                    <TableCell>
+                     <TableCell>
                       <div className="space-y-0.5">
                         <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{order.items?.[0]?.product?.name || "Spare Part"}</p>
                         {order.items?.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{order.items.length - 1} more</p>}
                         <p className="text-[10px] text-zinc-500">{order.items?.length || 0} item(s)</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        {order.items?.map((item: any, i: number) => (
+                          <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                            {item.product?.part_number || "—"}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        {order.items?.map((item: any, i: number) => (
+                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                            {item.product?.engine_model || "—"}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        {order.items?.map((item: any, i: number) => (
+                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                            {item.product?.suitable_vehicle || "—"}
+                          </span>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -1343,6 +1373,9 @@ export default function AdminOrdersPage() {
                 <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Main Products</TableHead>
+                <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
+                <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
                 <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Products Costs</TableHead>
                 <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
@@ -1381,6 +1414,33 @@ export default function AdminOrdersPage() {
                     </TableCell>
                     <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
                     <TableCell><div className="space-y-0.5 max-w-[150px]"><p className="text-xs font-bold text-zinc-800 truncate">{order.items?.[0]?.product?.name || "Genuine Spare Part"}</p>{order.items && order.items.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>}</div></TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        {order.items?.map((item: any, i: number) => (
+                          <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                            {item.product?.part_number || "—"}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        {order.items?.map((item: any, i: number) => (
+                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                            {item.product?.engine_model || "—"}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5">
+                        {order.items?.map((item: any, i: number) => (
+                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                            {item.product?.suitable_vehicle || "—"}
+                          </span>
+                        ))}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
                     <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
                     <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
@@ -1512,7 +1572,24 @@ export default function AdminOrdersPage() {
                 <div key={idx} className="flex justify-between items-center py-3 border-b last:border-0">
                   <div className="space-y-1">
                     <p className="font-bold text-zinc-900 text-sm">{item.product?.name || `Part ID: ${item.product_id}`}</p>
-                    <p className="text-xs text-zinc-500 font-medium">Qty: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</p>
+                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-zinc-500 font-medium">
+                      <span>Qty: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                      {item.product?.part_number && (
+                        <>
+                          <span>|</span>
+                          <span className="font-semibold text-[#0052cc]">Part No: {item.product.part_number}</span>
+                        </>
+                      )}
+                      {item.product?.engine_model && (
+                        <>
+                          <span>|</span>
+                          <span>Engine: {item.product.engine_model}</span>
+                        </>
+                      )}
+                    </div>
+                    {item.product?.suitable_vehicle && (
+                      <p className="text-[11px] text-zinc-500 font-medium">Suitable: {item.product.suitable_vehicle}</p>
+                    )}
                   </div>
                   <p className="font-bold text-zinc-900">Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>
                 </div>

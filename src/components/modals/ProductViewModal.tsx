@@ -40,13 +40,23 @@ export function ProductViewModal({ isOpen, onClose, product }: ProductViewModalP
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[600px] bg-white rounded-xl shadow-lg border border-zinc-200 p-0 overflow-hidden">
-        <DialogHeader className="p-6 border-b border-zinc-100 bg-zinc-50 relative">
-          <DialogTitle className="text-xl font-bold text-zinc-900">{product.name}</DialogTitle>
+      <DialogContent className="sm:max-w-[600px] bg-white rounded-xl shadow-lg border border-zinc-200 p-0 overflow-hidden max-h-[90dvh] flex flex-col">
+        {/* Header with pinned close button */}
+        <DialogHeader className="p-6 border-b border-zinc-100 bg-zinc-50 relative shrink-0 pr-16">
+          <DialogTitle className="text-xl font-bold text-zinc-900 pr-2">{product.name}</DialogTitle>
           <p className="text-sm text-zinc-500 font-medium mt-1">SKU: {product.sku}</p>
+          {/* Explicit close button — always visible on mobile */}
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 h-9 w-9 flex items-center justify-center rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-600 transition-colors z-10"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </DialogHeader>
 
-        <div className="p-6 space-y-6">
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1 p-6 space-y-6">
           {/* Images Section */}
           <div className="relative h-64 bg-zinc-100 rounded-lg overflow-hidden flex items-center justify-center border border-zinc-200">
             {product.images && product.images.length > 0 ? (
@@ -132,7 +142,8 @@ export function ProductViewModal({ isOpen, onClose, product }: ProductViewModalP
           </div>
         </div>
 
-        <div className="p-4 border-t border-zinc-100 flex justify-end">
+        {/* Sticky footer close button */}
+        <div className="p-4 border-t border-zinc-100 flex justify-end shrink-0">
           <Button onClick={onClose} variant="outline" className="rounded-lg font-bold">Close</Button>
         </div>
       </DialogContent>

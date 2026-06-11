@@ -14,7 +14,7 @@ export const Hero = () => {
   const description = settings.store_description || "";
 
   return (
-    <section className="relative h-[90vh] flex items-center bg-zinc-950 overflow-hidden">
+    <section className="relative min-h-[90vh] md:h-[90vh] flex items-center bg-zinc-950 overflow-hidden py-20 md:py-0">
       {/* Background Video Layer */}
       <div className="absolute inset-0 z-0">
         <video 
@@ -39,14 +39,14 @@ export const Hero = () => {
           className="max-w-4xl"
         >
           {brandName && (
-            <div className="flex items-center gap-2 mb-8">
+            <div className="flex items-center gap-2 mb-6 md:mb-8">
               <span className="h-px w-12 bg-[#0052cc]"></span>
               <span className="text-[#0052cc] font-bold tracking-[0.2em] text-sm uppercase">{brandName}</span>
             </div>
           )}
           
           {tagline && (
-            <h1 className="text-6xl md:text-8xl font-black text-white mb-8 leading-[0.95] tracking-tight">
+            <h1 className="text-4xl sm:text-6xl md:text-8xl font-black text-white mb-6 md:mb-8 leading-[0.95] tracking-tight">
               {tagline.toUpperCase() === "GENUINE PRECISION." || tagline.toUpperCase() === "GENUINE PRECISION" ? (
                 <>
                   GENUINE <br/>
@@ -57,35 +57,35 @@ export const Hero = () => {
           )}
           
           {description && (
-            <p className="text-xl md:text-2xl text-zinc-400 mb-12 max-w-2xl font-medium leading-relaxed">
+            <p className="text-base sm:text-lg md:text-2xl text-zinc-400 mb-8 md:mb-12 max-w-2xl font-medium leading-relaxed">
               {description}
             </p>
           )}
           
-          <div className="flex flex-wrap gap-6">
+          <div className="flex flex-wrap gap-4 md:gap-6">
             <Link 
               href="/products" 
-              className={cn(buttonVariants({ size: "lg" }), "h-16 px-10 text-lg font-black rounded-sm bg-[#0052cc] text-white hover:bg-white hover:text-black transition-all duration-300 shadow-2xl shadow-blue-500/20")}
+              className={cn(buttonVariants({ size: "lg" }), "h-14 md:h-16 px-8 md:px-10 text-base md:text-lg font-black rounded-sm bg-[#0052cc] text-white hover:bg-white hover:text-black transition-all duration-300 shadow-2xl shadow-blue-500/20")}
             >
               EXPLORE CATALOG
             </Link>
             <Link 
               href="/contact" 
-              className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-16 px-10 text-lg font-bold rounded-sm border-white/20 bg-white/5 text-white backdrop-blur-xl hover:bg-white hover:text-black transition-all duration-300")}
+              className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-14 md:h-16 px-8 md:px-10 text-base md:text-lg font-bold rounded-sm border-white/20 bg-white/5 text-white backdrop-blur-xl hover:bg-white hover:text-black transition-all duration-300")}
             >
               PARTNER PORTAL
             </Link>
           </div>
-
-          <div className="mt-16 flex items-center gap-12 text-zinc-500">
+ 
+          <div className="mt-10 md:mt-16 flex items-center gap-8 md:gap-12 text-zinc-500">
             <div className="flex flex-col">
-              <span className="text-2xl font-bold text-white">10K+</span>
-              <span className="text-xs uppercase tracking-widest font-bold">SKUs In Stock</span>
+              <span className="text-xl md:text-2xl font-bold text-white">10K+</span>
+              <span className="text-[10px] md:text-xs uppercase tracking-widest font-bold">SKUs In Stock</span>
             </div>
             <div className="h-8 w-px bg-zinc-800"></div>
             <div className="flex flex-col">
-              <span className="text-2xl font-bold text-white">24H</span>
-              <span className="text-xs uppercase tracking-widest font-bold">Rapid Dispatch</span>
+              <span className="text-xl md:text-2xl font-bold text-white">24H</span>
+              <span className="text-[10px] md:text-xs uppercase tracking-widest font-bold">Rapid Dispatch</span>
             </div>
           </div>
         </motion.div>

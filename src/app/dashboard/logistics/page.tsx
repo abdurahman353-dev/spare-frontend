@@ -272,11 +272,26 @@ export default function AdminLogisticsPage() {
   const filteredShipments = useMemo(() => {
     return shipments.filter(shipment => {
       const q = shipmentSearchQuery.toLowerCase();
+      const matchesProducts = shipment.orders?.some((order: any) =>
+        order.items?.some((item: any) => {
+          const prod = item.product;
+          if (!prod) return false;
+          return (
+            (prod.part_number || "").toLowerCase().includes(q) ||
+            (prod.suitable_vehicle || "").toLowerCase().includes(q) ||
+            (prod.engine_model || "").toLowerCase().includes(q) ||
+            (prod.name || "").toLowerCase().includes(q) ||
+            (prod.sku || "").toLowerCase().includes(q)
+          );
+        })
+      );
+
       const matchesSearch = !q || 
         shipment.waybill?.toLowerCase().includes(q) ||
         shipment.carrier?.toLowerCase().includes(q) ||
         shipment.origin?.toLowerCase().includes(q) ||
-        shipment.destination?.toLowerCase().includes(q);
+        shipment.destination?.toLowerCase().includes(q) ||
+        matchesProducts;
 
       const matchesOrigin = shipmentOriginFilter === "all" || (() => {
         const selectedWh = warehousesData.find(w => w.id.toString() === shipmentOriginFilter);
@@ -313,10 +328,24 @@ export default function AdminLogisticsPage() {
       // Only include orders that are in "Shipped" status
       if (order.status !== "Shipped") return false;
 
-      const matchesSearch = !searchQuery || 
-        (order.tracking_number?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (order.customer?.name?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (order.shipping_city?.toLowerCase().includes(searchQuery.toLowerCase()));
+      const q = searchQuery.toLowerCase();
+      const matchesProducts = order.items?.some((item: any) => {
+        const prod = item.product;
+        if (!prod) return false;
+        return (
+          (prod.part_number || "").toLowerCase().includes(q) ||
+          (prod.suitable_vehicle || "").toLowerCase().includes(q) ||
+          (prod.engine_model || "").toLowerCase().includes(q) ||
+          (prod.name || "").toLowerCase().includes(q) ||
+          (prod.sku || "").toLowerCase().includes(q)
+        );
+      });
+
+      const matchesSearch = !q || 
+        (order.tracking_number?.toLowerCase().includes(q)) ||
+        (order.customer?.name?.toLowerCase().includes(q)) ||
+        (order.shipping_city?.toLowerCase().includes(q)) ||
+        matchesProducts;
 
       const matchesWarehouse = warehouseFilter === "all" || order.items?.[0]?.warehouse_id.toString() === warehouseFilter;
       const matchesCountry = unassignedCountryFilter === "all" || order.shipping_country?.toLowerCase() === unassignedCountryFilter.toLowerCase();

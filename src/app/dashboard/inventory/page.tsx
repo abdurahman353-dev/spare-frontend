@@ -96,11 +96,19 @@ export default function InventoryPage() {
     return inventory.filter(item => {
       const name = item.product?.name || "";
       const sku = item.product?.sku || "";
+      const partNumber = item.product?.part_number || "";
+      const engineModel = item.product?.engine_model || "";
+      const suitableVehicle = item.product?.suitable_vehicle || "";
+      const brand = item.product?.brand?.name || "";
       const warehouse = item.warehouse?.name || "";
       
       const matchesSearch = 
         name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sku.toLowerCase().includes(searchQuery.toLowerCase());
+        sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        partNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        engineModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        suitableVehicle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        brand.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesWarehouse = !selectedWarehouseId || item.warehouse?.id.toString() === selectedWarehouseId;
       const matchesName = !selectedName || item.product?.name === selectedName;

@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "react-hot-toast";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { exportSingleOrderInvoicePDF, exportCustomerLedgerPDF } from "@/lib/pdf-export";
@@ -643,14 +644,16 @@ function AccountPortalInner() {
                                   </td>
                                   <td className="px-6 py-4 text-[14px] font-black text-[#1e293b] text-right pr-10">Ksh {Number(order.total_amount).toLocaleString()}</td>
                                   <td className="px-6 py-4 text-center">
-                                    <span className={cn(
-                                      "text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider",
-                                      order.status === "Pending" ? "bg-[#fffbeb] text-[#92400e]" : 
-                                      (order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") ? "bg-[#eff6ff] text-[#1e40af]" : 
-                                      "bg-[#f0fdf4] text-[#166534]"
+                                    <Badge className={cn(
+                                      "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+                                      order.status === "Processing" ? "bg-orange-500 text-white" :
+                                      (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
+                                      order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                                      "bg-zinc-200 text-zinc-700"
                                     )}>
-                                      {order.status === "In Transit" ? "Shipped" : order.status}
-                                    </span>
+                                      {order.status === "In Transit" ? "SHIPPED" : order.status}
+                                    </Badge>
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                     <button 
@@ -836,14 +839,16 @@ function AccountPortalInner() {
                                   </td>
                                   <td className="px-6 py-4 text-[14px] font-black text-[#1e293b] text-right pr-10">Ksh {Number(order.total_amount).toLocaleString()}</td>
                                   <td className="px-6 py-4 text-center">
-                                    <span className={cn(
-                                      "text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider",
-                                      order.status === "Pending" ? "bg-[#fffbeb] text-[#92400e]" : 
-                                      (order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") ? "bg-[#eff6ff] text-[#1e40af]" : 
-                                      "bg-[#f0fdf4] text-[#166534]"
+                                    <Badge className={cn(
+                                      "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+                                      order.status === "Processing" ? "bg-orange-500 text-white" :
+                                      (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
+                                      order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                                      "bg-zinc-200 text-zinc-700"
                                     )}>
-                                      {order.status === "In Transit" ? "Shipped" : order.status}
-                                    </span>
+                                      {order.status === "In Transit" ? "SHIPPED" : order.status}
+                                    </Badge>
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                     <Button 
@@ -956,11 +961,23 @@ function AccountPortalInner() {
       {/* Reusable Modals - Matching Clean Style */}
       <Dialog open={isOrderModalOpen} onOpenChange={setIsOrderModalOpen}>
         <DialogContent className="sm:max-w-[550px] p-0 rounded-lg overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="p-6 bg-white border-b border-[#e2e8f0]">
-             <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
-             <DialogDescription className="text-[#64748b] font-medium text-sm">
-               Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
-             </DialogDescription>
+          <DialogHeader className="p-6 bg-white border-b border-[#e2e8f0] flex flex-row items-center justify-between">
+             <div className="space-y-1 text-left">
+               <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
+               <DialogDescription className="text-[#64748b] font-medium text-sm">
+                 Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
+               </DialogDescription>
+             </div>
+             <Badge className={cn(
+               "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
+               selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+               selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
+               selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
+               selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+               "bg-zinc-200 text-zinc-700"
+             )}>
+               {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
+             </Badge>
           </DialogHeader>
           <div className="p-6 max-h-[60vh] overflow-y-auto space-y-6">
              <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">

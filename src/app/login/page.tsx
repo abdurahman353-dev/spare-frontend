@@ -58,7 +58,7 @@ export default function LoginPage() {
       >
         <Card className="border-none shadow-[0_20px_60px_rgba(0,0,0,0.1)] bg-white overflow-hidden rounded-2xl">
           <div className="h-2 bg-primary w-full" />
-          <CardHeader className="space-y-4 text-center pt-12 pb-8">
+          <CardHeader className="space-y-4 text-center pt-8 sm:pt-12 pb-6 sm:pb-8">
             <div className="mx-auto h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
               <ShieldCheck className="h-8 w-8 text-primary" />
             </div>
@@ -70,7 +70,7 @@ export default function LoginPage() {
             </div>
           </CardHeader>
           
-          <CardContent className="space-y-6 px-10">
+          <CardContent className="space-y-6 px-6 sm:px-10">
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-zinc-700 ml-1">Email Address</label>
@@ -142,7 +142,7 @@ export default function LoginPage() {
             </form>
           </CardContent>
 
-          <CardFooter className="flex flex-col space-y-6 pb-12 pt-6">
+          <CardFooter className="flex flex-col space-y-6 pb-8 sm:pb-12 pt-6">
             <div className="text-sm text-zinc-500 text-center space-y-3 font-medium">
               <div>
                 Don't have an account?{" "}

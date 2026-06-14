@@ -196,10 +196,10 @@ function ProductCard({ product, priority = false }: { product: Product, priority
           {product.is_on_offer ? (
             <div className="flex flex-col">
               <span className="line-through text-xs font-bold text-zinc-400">
-                {currency} {Number(product.original_price).toLocaleString()}
+                {currency} {Number(product.price).toLocaleString()}
               </span>
               <span className="text-xl font-black text-rose-600 tracking-tight flex items-center gap-1 animate-pulse">
-                {currency} {Number(product.price).toLocaleString()}
+                {currency} {Number(product.offer_price).toLocaleString()}
               </span>
             </div>
           ) : (

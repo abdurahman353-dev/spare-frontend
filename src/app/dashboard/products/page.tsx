@@ -360,10 +360,10 @@ export default function ProductsPage() {
                         </span>
                         <div className="flex items-center gap-1.5 mt-0.5 justify-end">
                           <span className="line-through text-[11px] text-zinc-400 font-bold">
-                            {currency} {Number(product.original_price).toLocaleString()}
+                            {currency} {Number(product.price).toLocaleString()}
                           </span>
                           <span className="font-black text-rose-600">
-                            {currency} {Number(product.price).toLocaleString()}
+                            {currency} {Number(product.offer_price).toLocaleString()}
                           </span>
                         </div>
                       </div>

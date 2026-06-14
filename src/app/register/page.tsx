@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import toast from "react-hot-toast";
+import { getPasswordStrength, isValidEmail } from "@/lib/validation";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -53,8 +54,8 @@ export default function RegisterPage() {
   // Sync selected phone country with global settings business country
   useEffect(() => {
     if (settings && settings.store_country) {
-      const match = countries.find(c => 
-        c.name.toLowerCase() === settings.store_country.toLowerCase() || 
+      const match = countries.find(c =>
+        c.name.toLowerCase() === settings.store_country.toLowerCase() ||
         c.code.toLowerCase() === settings.store_country.toLowerCase()
       );
       if (match) {
@@ -69,18 +70,17 @@ export default function RegisterPage() {
 
   const brandName = settings.store_name || "Portal";
 
-  const filteredCountries = countries.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredCountries = countries.filter(c =>
+    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.prefix.includes(searchQuery) ||
     c.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-    if (!emailRegex.test(formData.email)) {
-      toast.error("Please enter a valid Gmail address ending in @gmail.com");
+
+    if (!isValidEmail(formData.email)) {
+      toast.error("Please enter a valid email address.");
       return;
     }
 
@@ -94,7 +94,7 @@ export default function RegisterPage() {
       toast.error("Passwords do not match.");
       return;
     }
-    
+
     setLoading(true);
 
     // Format phone to include prefix
@@ -106,7 +106,7 @@ export default function RegisterPage() {
     } else {
       formattedPhone = selectedCountry.prefix + formattedPhone;
     }
-    
+
     try {
       await register({
         ...formData,
@@ -127,7 +127,7 @@ export default function RegisterPage() {
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="black" strokeWidth="1"/>
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="black" strokeWidth="1" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
@@ -143,7 +143,7 @@ export default function RegisterPage() {
         </Link>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-lg z-10"
@@ -162,11 +162,11 @@ export default function RegisterPage() {
                 <label className="text-sm font-bold text-zinc-700 ml-1">Full Name</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
-                  <Input 
-                    placeholder="Enter your name" 
+                  <Input
+                    placeholder="Enter your name"
                     className="h-14 pl-12 bg-zinc-50 border-zinc-200 rounded-xl font-medium"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
                   />
                 </div>
@@ -175,12 +175,12 @@ export default function RegisterPage() {
                 <label className="text-sm font-bold text-zinc-700 ml-1">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
-                  <Input 
-                    type="email" 
-                    placeholder="you@example.com" 
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
                     className="h-14 pl-12 bg-zinc-50 border-zinc-200 rounded-xl font-medium"
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     required
                   />
                 </div>
@@ -201,22 +201,22 @@ export default function RegisterPage() {
                       onClick={() => setDropdownOpen(!dropdownOpen)}
                       className="h-14 px-4 bg-zinc-50 border border-zinc-200 rounded-xl font-black text-zinc-800 text-sm hover:bg-zinc-100 transition-all flex items-center gap-2 cursor-pointer outline-none min-w-[110px] justify-between shadow-sm"
                     >
-                      <img 
-                        src={`https://flagcdn.com/w40/${selectedCountry.code.toLowerCase()}.png`} 
-                        className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0" 
-                        alt={selectedCountry.name} 
+                      <img
+                        src={`https://flagcdn.com/w40/${selectedCountry.code.toLowerCase()}.png`}
+                        className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0"
+                        alt={selectedCountry.name}
                       />
                       <span>{selectedCountry.prefix}</span>
                       <svg className="fill-current h-4 w-4 text-zinc-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                       </svg>
                     </button>
 
                     {dropdownOpen && (
                       <>
-                        <div 
-                          className="fixed inset-0 z-20" 
-                          onClick={() => { setDropdownOpen(false); setSearchQuery(""); }} 
+                        <div
+                          className="fixed inset-0 z-20"
+                          onClick={() => { setDropdownOpen(false); setSearchQuery(""); }}
                         />
                         <div className="absolute left-0 mt-2 w-64 bg-white border border-zinc-200 rounded-xl shadow-xl z-30 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                           <div className="p-2 border-b border-zinc-100">
@@ -246,10 +246,10 @@ export default function RegisterPage() {
                                   }}
                                   className={`w-full px-4 py-2.5 text-left text-sm flex items-center gap-2.5 hover:bg-zinc-50 transition-colors font-semibold ${selectedCountry.code === c.code ? 'bg-primary/5 text-primary font-bold' : 'text-zinc-700'}`}
                                 >
-                                  <img 
-                                    src={`https://flagcdn.com/w40/${c.code.toLowerCase()}.png`} 
-                                    className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0" 
-                                    alt={c.name} 
+                                  <img
+                                    src={`https://flagcdn.com/w40/${c.code.toLowerCase()}.png`}
+                                    className="w-5 h-3.5 object-cover rounded-xs border border-zinc-200 shrink-0"
+                                    alt={c.name}
                                   />
                                   <span className="truncate flex-1">{c.name}</span>
                                   <span className="text-zinc-400 font-bold text-xs shrink-0">{c.prefix}</span>
@@ -264,9 +264,9 @@ export default function RegisterPage() {
 
                   <div className="relative flex-1">
                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
-                    <Input 
+                    <Input
                       type="tel"
-                      placeholder={selectedCountry.placeholder} 
+                      placeholder={selectedCountry.placeholder}
                       className="h-14 pl-12 bg-zinc-50 border-zinc-200 rounded-xl font-medium"
                       value={phoneVal}
                       onChange={(e) => {
@@ -290,15 +290,15 @@ export default function RegisterPage() {
                   <label className="text-sm font-bold text-zinc-700 ml-1">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
-                    <Input 
-                      type={showPassword ? "text" : "password"} 
-                      placeholder="••••••••" 
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
                       className="h-14 pl-12 pr-12 bg-zinc-50 border-zinc-200 rounded-xl font-medium"
                       value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required
                     />
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600 transition-colors"
@@ -306,20 +306,37 @@ export default function RegisterPage() {
                       {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
                   </div>
+                  {/* Password strength indicator */}
+                  {formData.password && (() => {
+                    const strength = getPasswordStrength(formData.password);
+                    return (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className="h-1.5 flex-1 rounded-full transition-all"
+                              style={{ backgroundColor: i <= strength.score ? strength.color : '#e4e4e7' }} />
+                          ))}
+                        </div>
+                        <p className="text-xs font-bold" style={{ color: strength.color }}>
+                          {strength.label}{strength.score < 5 && ' — Add uppercase, numbers & symbols'}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-zinc-700 ml-1">Confirm</label>
                   <div className="relative">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
-                    <Input 
-                      type={showPassword ? "text" : "password"} 
-                      placeholder="••••••••" 
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
                       className="h-14 pl-12 pr-12 bg-zinc-50 border-zinc-200 rounded-xl font-medium"
                       value={formData.password_confirmation}
-                      onChange={(e) => setFormData({...formData, password_confirmation: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })}
                       required
                     />
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-300 hover:text-zinc-600 transition-colors"
@@ -330,8 +347,8 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={loading}
                 className="w-full h-16 text-lg font-black rounded-xl shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all group mt-4 cursor-pointer"
               >

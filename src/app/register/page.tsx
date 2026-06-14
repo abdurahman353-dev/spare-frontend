@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,12 +9,15 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/components/providers/SettingsProvider";
+import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { getPasswordStrength, isValidEmail } from "@/lib/validation";
 
-export default function RegisterPage() {
+function RegisterPageInner() {
   const { register } = useAuth();
   const { settings } = useSettings();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "";
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -112,7 +115,7 @@ export default function RegisterPage() {
         ...formData,
         phone: formattedPhone,
         country: selectedCountry.name,
-      });
+      }, redirect);
       toast.success("Account created successfully!");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Registration failed. Please check your details.");
@@ -366,7 +369,7 @@ export default function RegisterPage() {
           <CardFooter className="flex flex-col space-y-6 pb-12 pt-8">
             <div className="text-sm text-zinc-500 text-center font-medium">
               Already have an account?{" "}
-              <Link href="/login" className="text-primary hover:underline font-black uppercase tracking-tighter">
+              <Link href={redirect ? `/login?redirect=${encodeURIComponent(redirect)}` : "/login"} className="text-primary hover:underline font-black uppercase tracking-tighter">
                 SIGN IN
               </Link>
             </div>
@@ -374,5 +377,17 @@ export default function RegisterPage() {
         </Card>
       </motion.div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-[#0052cc]" />
+      </div>
+    }>
+      <RegisterPageInner />
+    </Suspense>
   );
 }

@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ShieldCheck, Truck, CreditCard, ArrowRight, CheckCircle2,
-  Loader2, Smartphone, AlertCircle, RefreshCw, Building2, Copy, Check
+  Loader2, Smartphone, AlertCircle, RefreshCw, Building2, Copy, Check,
+  ShoppingBag
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -38,6 +39,11 @@ export default function CheckoutPage() {
   const [completed, setCompleted] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderRefs, setOrderRefs] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Shipping
   const [destinations, setDestinations] = useState<any[]>([]);
@@ -440,6 +446,31 @@ export default function CheckoutPage() {
 
   // ── Paybill number from settings or fallback ─────────────────────────────────
   const paybillNumber = (settings as any)?.mpesa_paybill_number || "400200";
+
+  // ── Empty Cart protection ────────────────────────────────────────────────────
+  if (mounted && cart.length === 0 && !completed) {
+    return (
+      <div className="flex flex-col min-h-screen bg-white">
+        <Navbar />
+        <main className="flex-1 flex flex-col items-center justify-center p-4">
+          <div className="bg-[#f8fafc] border border-zinc-200 p-12 rounded-full mb-8 shadow-sm animate-bounce">
+            <ShoppingBag className="h-16 w-16 text-zinc-400" />
+          </div>
+          <h1 className="text-3xl font-black tracking-tighter mb-4 uppercase text-[#1e293b]">YOUR CART IS EMPTY</h1>
+          <p className="text-[#64748b] mb-8 text-center max-w-md text-[15px] leading-relaxed">
+            You cannot proceed to checkout with an empty cart. Please add some genuine parts to your selection first.
+          </p>
+          <Link 
+            href="/products" 
+            className={cn(buttonVariants({ size: "lg" }), "h-14 px-10 font-bold rounded-sm bg-[#0052cc] text-white hover:bg-[#0747a6] transition-colors")}
+          >
+            GO TO CATALOG
+          </Link>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   // ── Success screen ────────────────────────────────────────────────────────────
   if (completed) {

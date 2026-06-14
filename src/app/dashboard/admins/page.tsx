@@ -127,18 +127,19 @@ export default function AdminsAndAuditsPage() {
       return;
     }
 
-    // Gmail format validation
-    const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-    if (!gmailRegex.test(editFormData.email)) {
-      toast.error("Admin email must be a valid Gmail address (e.g. name@gmail.com).");
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editFormData.email)) {
+      toast.error("Please enter a valid email address.");
       return;
     }
 
-    // Strict Kenyan phone format validation (requiring +254 prefix and 9 digits starting with 7 or 1)
+    // Phone format validation (flexible for international/E.164 and local formats)
     if (editFormData.phone) {
-      const phoneRegex = /^\+254\s?[71]\d{8}$/;
-      if (!phoneRegex.test(editFormData.phone)) {
-        toast.error("Phone number must be in the format: +254 7XXXXXXXX or +254 1XXXXXXXX.");
+      const cleanedPhone = editFormData.phone.replace(/[\s\-\(\)]/g, "");
+      const phoneRegex = /^\+?[0-9]{7,15}$/;
+      if (!phoneRegex.test(cleanedPhone)) {
+        toast.error("Phone number must be valid (e.g., +254 7XXXXXXXX or 07XXXXXXXX).");
         return;
       }
     }
@@ -196,10 +197,10 @@ export default function AdminsAndAuditsPage() {
       return;
     }
 
-    // Gmail format validation
-    const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-    if (!gmailRegex.test(formData.email)) {
-      toast.error("Admin email must be a valid Gmail address (e.g. name@gmail.com).");
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address.");
       return;
     }
 
@@ -213,11 +214,12 @@ export default function AdminsAndAuditsPage() {
       return;
     }
 
-    // Strict Kenyan phone format validation (requiring +254 prefix and 9 digits starting with 7 or 1)
+    // Phone format validation (flexible for international/E.164 and local formats)
     if (formData.phone) {
-      const phoneRegex = /^\+254\s?[71]\d{8}$/;
-      if (!phoneRegex.test(formData.phone)) {
-        toast.error("Phone number must be in the format: +254 7XXXXXXXX or +254 1XXXXXXXX.");
+      const cleanedPhone = formData.phone.replace(/[\s\-\(\)]/g, "");
+      const phoneRegex = /^\+?[0-9]{7,15}$/;
+      if (!phoneRegex.test(cleanedPhone)) {
+        toast.error("Phone number must be valid (e.g., +254 7XXXXXXXX or 07XXXXXXXX).");
         return;
       }
     }

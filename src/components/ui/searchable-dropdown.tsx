@@ -174,7 +174,7 @@ export function SearchableDropdown({
 
       {/* Dropdown Panel */}
       {open && (
-        <div className="absolute z-50 mt-1 left-0 min-w-full w-max max-w-[400px] rounded-xl border border-zinc-200 bg-white shadow-xl overflow-hidden">
+        <div className="absolute z-50 mt-1 left-0 right-0 md:right-auto min-w-full md:w-max max-w-full md:max-w-[400px] rounded-xl border border-zinc-200 bg-white shadow-xl overflow-hidden">
           {/* Search Input */}
           <div className="flex items-center border-b border-zinc-100 px-3 py-2 gap-2">
             <Search className="h-4 w-4 text-zinc-400 flex-shrink-0" />

@@ -20,8 +20,8 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (credentials: any) => Promise<void>;
-  register: (data: any) => Promise<void>;
+  login: (credentials: any, redirectUrl?: string) => Promise<void>;
+  register: (data: any, redirectUrl?: string) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (data: any) => Promise<void>;
   /** Re-fetch live user profile (total_spent, etc.) from /user */
@@ -97,11 +97,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
-  const login = async (credentials: any) => {
+  const login = async (credentials: any, redirectUrl?: string) => {
     const res = await api.post("/login", credentials);
     const { user: loginUser, token } = res.data;
     localStorage.setItem("auth_token", token);
-    setCookie("auth_token", token);
+    
+    const days = credentials.remember ? 30 : 7;
+    setCookie("auth_token", token, days);
+    
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     // Set from login response immediately (already contains total_spent from backend)
     setUser(loginUser);
@@ -112,19 +115,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push("/change-password");
     } else if (loginUser.role === "admin" || loginUser.role === "superadmin") {
       router.push("/dashboard");
+    } else if (redirectUrl) {
+      router.push(redirectUrl);
     } else {
       router.push("/products");
     }
   };
 
-  const register = async (data: any) => {
+  const register = async (data: any, redirectUrl?: string) => {
     const res = await api.post("/register", data);
     const { user: regUser, token } = res.data;
     localStorage.setItem("auth_token", token);
     setCookie("auth_token", token);
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     setUser(regUser);
-    router.push("/");
+    if (redirectUrl) {
+      router.push(redirectUrl);
+    } else {
+      router.push("/");
+    }
   };
 
   const changePassword = async (data: any) => {

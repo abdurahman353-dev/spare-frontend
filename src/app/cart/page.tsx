@@ -78,7 +78,8 @@ export default function CartPage() {
                         onClick={() => {
                           updateQuantity(item.id, item.warehouse_id, item.quantity - 1);
                         }}
-                        className="p-2 hover:bg-zinc-100 transition-colors"
+                        disabled={item.quantity <= 1}
+                        className="p-2 hover:bg-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Minus className="h-4 w-4" />
                       </button>

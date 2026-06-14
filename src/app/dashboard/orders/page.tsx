@@ -185,6 +185,48 @@ export default function AdminOrdersPage() {
   });
   const [isSavingEditWalkIn, setIsSavingEditWalkIn] = useState(false);
 
+  // Cancellation and Refund Admin State
+  const [isApproveCancelModalOpen, setIsApproveCancelModalOpen] = useState(false);
+  const [isCompleteRefundModalOpen, setIsCompleteRefundModalOpen] = useState(false);
+  const [refundTransactionId, setRefundTransactionId] = useState("");
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  const handleApproveCancel = async () => {
+    if (!currentSelectedOrder) return;
+    setIsProcessingAction(true);
+    try {
+      const res = await api.post(`/orders/${currentSelectedOrder.id}/approve-cancel`);
+      toast.success(res.data.message || "Cancellation approved. Refund marked as pending.");
+      setIsApproveCancelModalOpen(false);
+      fetchOrders(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to approve cancellation");
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleCompleteRefund = async () => {
+    if (!currentSelectedOrder || !refundTransactionId.trim()) {
+      toast.error("Transaction ID is required");
+      return;
+    }
+    setIsProcessingAction(true);
+    try {
+      const res = await api.post(`/orders/${currentSelectedOrder.id}/complete-refund`, {
+        refund_transaction_id: refundTransactionId
+      });
+      toast.success(res.data.message || "Refund marked as completed.");
+      setIsCompleteRefundModalOpen(false);
+      setRefundTransactionId("");
+      fetchOrders(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to complete refund");
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
   const handleOpenEditWalkIn = (order: any) => {
     setEditWalkInTarget(order);
     setEditWalkInForm({
@@ -375,15 +417,16 @@ export default function AdminOrdersPage() {
         toast.error("Customer Name and Email are required.");
         return;
       }
-      const gmailRx = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
-      if (!gmailRx.test(newCustomerData.email)) {
-        toast.error("Email must be a valid Gmail address (e.g. name@gmail.com).");
+      const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRx.test(newCustomerData.email)) {
+        toast.error("Please enter a valid email address.");
         return;
       }
       if (newCustomerData.phone) {
-        const phoneRx = /^0[71]\d{8}$/;
-        if (!phoneRx.test(newCustomerData.phone.replace(/\s/g, ""))) {
-          toast.error("Phone must be 10 digits starting with 07 or 01 (e.g. 0712345678).");
+        const cleanedPhone = newCustomerData.phone.replace(/[\s\-\(\)]/g, "");
+        const phoneRx = /^\+?[0-9]{7,15}$/;
+        if (!phoneRx.test(cleanedPhone)) {
+          toast.error("Phone number must be valid (e.g., +254 7XXXXXXXX or 07XXXXXXXX).");
           return;
         }
       }
@@ -866,7 +909,7 @@ export default function AdminOrdersPage() {
     return filteredOrders.slice(startIndex, startIndex + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
 
-  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
+  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Delivered", "Cancelled", "Cancellation Requested"];
 
   return (
     <div className="space-y-4 p-3 sm:p-6">
@@ -1449,8 +1492,9 @@ export default function AdminOrdersPage() {
                       <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
                         order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : order.status === "Processing" ? "bg-orange-500 text-white" :
                         order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white" :
-                        order.status === "Delivered" ? "bg-emerald-500 text-white" : "bg-zinc-200 text-zinc-700"
-                      )}>{order.status === "In Transit" ? "SHIPPED" : order.status}</Badge>
+                        order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                        (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
+                      )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
                     </TableCell>
                     <TableCell className="px-6 text-right">
                       <DropdownMenu>
@@ -1462,7 +1506,28 @@ export default function AdminOrdersPage() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm"><RefreshCw className="mr-2 h-4 w-4 text-indigo-500" /> Mark Processing</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm"><Truck className="mr-2 h-4 w-4 text-blue-500" /> Mark Shipped</DropdownMenuItem>
-                            {!isOrderVoided(order) && (
+                            
+                            {order.status === "Cancellation Requested" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="text-[10px] font-black text-red-400 uppercase px-2 py-1.5">Cancellation</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsApproveCancelModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-red-600">
+                                  <CheckCircle2 className="mr-2 h-4 w-4" /> Approve Cancellation
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            
+                            {order.status === "Cancelled" && order.refund_status === "Pending" && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
+                                  <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
+                                </DropdownMenuItem>
+                              </>
+                            )}
+
+                            {!isOrderVoided(order) && order.status !== "Cancellation Requested" && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -1596,6 +1661,21 @@ export default function AdminOrdersPage() {
               ))}
             </div>
             
+            {(currentSelectedOrder?.status === "Cancelled" || currentSelectedOrder?.status === "Cancellation Requested") && (
+              <div className="mt-6 bg-red-50 p-4 rounded-xl border border-red-200">
+                <h4 className="text-[11px] font-bold text-red-800 uppercase tracking-widest mb-2">Cancellation Details</h4>
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Reason:</span> {currentSelectedOrder.cancellation_reason || 'N/A'}</p>
+                  <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Refund Status:</span> <span className="uppercase tracking-wider font-black">{currentSelectedOrder.refund_status || 'Pending'}</span></p>
+                  {currentSelectedOrder.refund_transaction_id && (
+                    <p className="text-[11px] font-black text-green-700 bg-green-50 px-2.5 py-1 inline-block rounded border border-green-200 uppercase tracking-wider mt-1">
+                      Tx Ref: {currentSelectedOrder.refund_transaction_id}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="mt-6 pt-4 border-t border-zinc-100 space-y-2">
               <div className="flex justify-between items-center text-zinc-500 font-bold text-[11px] uppercase tracking-tight">
                 <span>Shipping ({currentSelectedOrder?.shipping_method})</span>
@@ -2124,8 +2204,71 @@ export default function AdminOrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
 
+      {/* Approve Cancellation Modal */}
+      <Dialog open={isApproveCancelModalOpen} onOpenChange={setIsApproveCancelModalOpen}>
+        <DialogContent className="rounded-lg shadow-xl sm:max-w-[450px] bg-white border-none p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle className="font-bold text-zinc-900">Approve Cancellation</DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500">
+              Approving this will cancel the order, restore inventory to the warehouse, and mark the refund as pending.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6">
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <p className="text-xs font-semibold text-red-700 mb-1">Customer Reason:</p>
+              <p className="text-sm text-red-900 italic">"{currentSelectedOrder?.cancellation_reason || 'No reason provided'}"</p>
+            </div>
+            <p className="text-sm font-semibold text-zinc-700 mt-4">
+              Total Refund Amount: Ksh {parseFloat(currentSelectedOrder?.total_amount || 0).toLocaleString()}
+            </p>
+          </div>
+          <DialogFooter className="p-4 bg-zinc-50 border-t">
+            <Button variant="outline" className="font-bold" onClick={() => setIsApproveCancelModalOpen(false)}>Cancel</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleApproveCancel} disabled={isProcessingAction}>
+              {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Approve & Restock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Complete Refund Modal */}
+      <Dialog open={isCompleteRefundModalOpen} onOpenChange={setIsCompleteRefundModalOpen}>
+        <DialogContent className="rounded-lg shadow-xl sm:max-w-[450px] bg-white border-none p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle className="font-bold text-zinc-900">Complete Manual Refund</DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500">
+              Record the transaction ID after you have manually refunded the customer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+              <p className="text-sm font-bold text-amber-800">
+                Refund Amount: Ksh {parseFloat(currentSelectedOrder?.total_amount || 0).toLocaleString()}
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Please transfer this amount manually (e.g. M-Pesa or Bank) to {currentSelectedOrder?.customer?.name || "the customer"}.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-700 uppercase">Refund Transaction ID *</label>
+              <Input 
+                placeholder="e.g. MPESA-ABC123XYZ" 
+                value={refundTransactionId}
+                onChange={(e) => setRefundTransactionId(e.target.value)}
+                className="h-10 border-zinc-200"
+              />
+            </div>
+          </div>
+          <DialogFooter className="p-4 bg-zinc-50 border-t">
+            <Button variant="outline" className="font-bold" onClick={() => setIsCompleteRefundModalOpen(false)}>Cancel</Button>
+            <Button className="bg-amber-600 hover:bg-amber-700 text-white font-bold" onClick={handleCompleteRefund} disabled={isProcessingAction || !refundTransactionId.trim()}>
+              {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Submit Refund Ref
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

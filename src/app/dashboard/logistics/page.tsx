@@ -1929,7 +1929,7 @@ export default function AdminLogisticsPage() {
               </p>
             </DialogHeader>
             <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Waybill ID *</label>
                   <Input 
@@ -1954,7 +1954,7 @@ export default function AdminLogisticsPage() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Origin Node *</label>
                   <Input 
@@ -1976,7 +1976,7 @@ export default function AdminLogisticsPage() {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">ETA</label>
                   <Input 
@@ -2021,7 +2021,7 @@ export default function AdminLogisticsPage() {
               <p className="text-sm text-zinc-500 mt-1">Set flat Standard and Express delivery fees for this route.</p>
             </DialogHeader>
             <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Applicable Product *</label>
                   <SearchableDropdown 
@@ -2057,7 +2057,7 @@ export default function AdminLogisticsPage() {
                   </div>
                 ) : null;
               })()}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Destination Country *</label>
                   <SearchableDropdown 
@@ -2079,7 +2079,7 @@ export default function AdminLogisticsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Zone Status</label>
                   <select 
@@ -2093,7 +2093,7 @@ export default function AdminLogisticsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Standard Fee (Ksh) *</label>
                   <Input 

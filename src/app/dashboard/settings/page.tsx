@@ -413,19 +413,19 @@ export default function AdminSettingsPage() {
   };
 
   const handleSave = async () => {
-    // Validate Kenyan phone/whatsapp format
-    const phoneRegex = /^(?:\+254|0)?([71])\d{8}$/;
+    // Validate phone/whatsapp format (flexible for international/E.164 and local formats)
+    const phoneRegex = /^\+?[0-9]{7,15}$/;
     if (settings.contact_phone) {
-      const cleanPhone = settings.contact_phone.replace(/\s+/g, "");
+      const cleanPhone = settings.contact_phone.replace(/[\s\-\(\)]/g, "");
       if (!phoneRegex.test(cleanPhone)) {
-        showAlert("Invalid Phone Number", "The support phone number must be a valid Kenyan number (e.g. +254 7XXXXXXXX or 07XXXXXXXX).", "error");
+        showAlert("Invalid Phone Number", "The support phone number must be a valid phone number (e.g. +254 7XXXXXXXX or 07XXXXXXXX).", "error");
         return;
       }
     }
     if (settings.contact_whatsapp) {
-      const cleanPhone = settings.contact_whatsapp.replace(/\s+/g, "");
+      const cleanPhone = settings.contact_whatsapp.replace(/[\s\-\(\)]/g, "");
       if (!phoneRegex.test(cleanPhone)) {
-        showAlert("Invalid WhatsApp Number", "The WhatsApp contact must be a valid Kenyan number (e.g. +254 7XXXXXXXX or 07XXXXXXXX).", "error");
+        showAlert("Invalid WhatsApp Number", "The WhatsApp contact must be a valid phone number (e.g. +254 7XXXXXXXX or 07XXXXXXXX).", "error");
         return;
       }
     }

@@ -33,7 +33,7 @@ function AccountPortalInner() {
   const { settings } = useSettings();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [orders, setOrders] = useState([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("Dashboard");
 
@@ -149,6 +149,9 @@ function AccountPortalInner() {
   // Modals state
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDeleteAddressModalOpen, setIsDeleteAddressModalOpen] = useState(false);
   const [hiddenAddresses, setHiddenAddresses] = useState<string[]>([]);
@@ -279,8 +282,33 @@ function AccountPortalInner() {
     exportSingleOrderInvoicePDF(order, settings, user).catch(() => toast.error("Failed to generate invoice PDF"));
   };
 
-  const totalSpent = orders.reduce((sum: number, order: any) => sum + Number(order.total_amount), 0);
-  const activeOrders = orders.filter((o: any) => o.status !== "Delivered").length;
+  const handleRequestCancel = async () => {
+    if (!cancelReason.trim()) {
+      toast.error("Please provide a reason for cancellation");
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const res = await api.post(`/orders/${selectedOrder.id}/request-cancel`, { reason: cancelReason });
+      toast.success(res.data.message || "Cancellation requested successfully");
+      setIsCancelModalOpen(false);
+      setCancelReason("");
+      setSelectedOrder(res.data.order);
+      // Update the local orders list
+      setOrders(orders.map((o: any) => o.id === res.data.order.id ? res.data.order : o));
+      // Re-open the order detail modal so the customer can see the updated status
+      setIsOrderModalOpen(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to request cancellation");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const totalSpent = orders
+    .filter((o: any) => o.status !== "Cancelled")
+    .reduce((sum: number, order: any) => sum + Number(order.total_amount), 0);
+  const activeOrders = orders.filter((o: any) => o.status !== "Delivered" && o.status !== "Cancelled").length;
 
   const tabs = [
     { name: "Dashboard", icon: Package },
@@ -650,6 +678,7 @@ function AccountPortalInner() {
                                       order.status === "Processing" ? "bg-orange-500 text-white" :
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                                      (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
                                       {order.status === "In Transit" ? "SHIPPED" : order.status}
@@ -845,6 +874,7 @@ function AccountPortalInner() {
                                       order.status === "Processing" ? "bg-orange-500 text-white" :
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                                      (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
                                       {order.status === "In Transit" ? "SHIPPED" : order.status}
@@ -974,6 +1004,7 @@ function AccountPortalInner() {
                selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
                selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
                selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+               (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                "bg-zinc-200 text-zinc-700"
              )}>
                {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
@@ -1060,6 +1091,38 @@ function AccountPortalInner() {
                   </div>
                ))}
              </div>
+             
+             {(selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") && (
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200 mt-4 mb-4">
+                  <h4 className="text-[13px] font-bold text-red-800 flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4" /> {selectedOrder.status === "Cancellation Requested" ? "Cancellation Requested" : "Order Cancelled"}
+                  </h4>
+                  {selectedOrder.status === "Cancellation Requested" ? (
+                    <div className="space-y-2">
+                      <p className="text-[12px] text-red-700 font-medium leading-relaxed">
+                        You have requested to cancel this order. The cancellation is pending approval by the administration. You will be notified once it is approved.
+                      </p>
+                      {selectedOrder.cancellation_reason && (
+                        <p className="text-[11px] text-red-700/80 bg-white/60 p-2 rounded-md border border-red-100">
+                          <strong>Reason for cancellation:</strong> {selectedOrder.cancellation_reason}
+                        </p>
+                      )}
+                    </div>
+                  ) : selectedOrder.refund_status === "Completed" ? (
+                    <div className="space-y-1">
+                      <p className="text-[12px] text-red-700 font-medium">Your refund has been completed manually.</p>
+                      <p className="text-[13px] font-black text-[#1e293b] bg-white px-3 py-2 rounded-md border border-zinc-200 inline-block mt-2">
+                        Transaction ID: <span className="text-green-700">{selectedOrder.refund_transaction_id}</span>
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[12px] text-red-700 font-medium leading-relaxed">
+                      Your order has been cancelled. Your refund is being processed manually and will be sent to you within 3-5 business days. If you do not receive it, please call us with your Order Reference.
+                    </p>
+                  )}
+                </div>
+             )}
+
               <div className="pt-6 border-t border-[#f1f5f9] space-y-2">
                 <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
                   <span>Logistics Fee ({selectedOrder?.shipping_method || 'Standard'})</span>
@@ -1071,10 +1134,49 @@ function AccountPortalInner() {
                 </div>
               </div>
           </div>
-          <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0]">
-            <Button variant="outline" className="text-[12px] font-bold border-[#e2e8f0] h-9" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
-            <Button className="bg-[#0052cc] hover:bg-[#0747a6] text-white text-[12px] font-bold h-9" onClick={() => selectedOrder && downloadInvoice(selectedOrder)}>
-              <FileText className="h-4 w-4 mr-2" /> Download Invoice PDF
+          <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
+            <div className="flex gap-2">
+              {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing") && (
+                <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700" onClick={() => { setIsOrderModalOpen(false); setIsCancelModalOpen(true); }}>
+                  Request Cancellation
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="text-[12px] font-bold border-[#e2e8f0] h-9" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
+              <Button className="bg-[#0052cc] hover:bg-[#0747a6] text-white text-[12px] font-bold h-9" onClick={() => selectedOrder && downloadInvoice(selectedOrder)}>
+                <FileText className="h-4 w-4 mr-2" /> Download Invoice PDF
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Order Modal */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
+        <DialogContent className="rounded-lg border-[#e2e8f0] shadow-xl sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="font-bold text-[#1e293b]">Request Order Cancellation</DialogTitle>
+            <DialogDescription className="text-xs text-[#64748b]">
+              Please provide a reason for cancelling this order. Once approved, your refund will be processed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Cancellation Reason *</label>
+              <textarea 
+                rows={4}
+                placeholder="e.g., I ordered the wrong item, or I changed my mind..."
+                className="w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc]"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="font-bold" onClick={() => setIsCancelModalOpen(false)}>Back</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleRequestCancel} disabled={isCancelling}>
+              {isCancelling ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Submit Request
             </Button>
           </DialogFooter>
         </DialogContent>

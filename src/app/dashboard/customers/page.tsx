@@ -113,16 +113,17 @@ export default function AdminCustomersPage() {
     const newErrors = { email: "", phone: "", password: "", confirmPassword: "" };
 
     // Email validation
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      newErrors.email = "Email must be a valid @gmail.com address";
+      newErrors.email = "Please enter a valid email address";
       isValid = false;
     }
 
-    // Phone validation
-    const phoneRegex = /^(07|01)\d{8}$/;
-    if (!phoneRegex.test(formData.phone)) {
-      newErrors.phone = "Phone must be 10 digits starting with 07 or 01";
+    // Phone validation (flexible for international/E.164 and local formats)
+    const cleanedPhone = formData.phone.replace(/[\s\-\(\)]/g, "");
+    const phoneRegex = /^\+?[0-9]{7,15}$/;
+    if (!phoneRegex.test(cleanedPhone)) {
+      newErrors.phone = "Please enter a valid phone number";
       isValid = false;
     }
 
@@ -201,6 +202,16 @@ export default function AdminCustomersPage() {
   const handleSaveEdit = async () => {
     if (!editTarget) return;
     if (!editFormData.name.trim()) return toast.error("Name is required.");
+    
+    // Optional phone validation for edited details
+    if (editFormData.phone) {
+      const cleanedPhone = editFormData.phone.replace(/[\s\-\(\)]/g, "");
+      const phoneRegex = /^\+?[0-9]{7,15}$/;
+      if (!phoneRegex.test(cleanedPhone)) {
+        return toast.error("Please enter a valid phone number.");
+      }
+    }
+
     setIsSavingEdit(true);
     try {
       await api.put(`/customers/${editTarget.id}`, editFormData);

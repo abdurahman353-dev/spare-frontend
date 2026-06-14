@@ -1,6 +1,6 @@
 "use client";
-
-import { useState } from "react";
+ 
+import { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,9 +9,10 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/components/providers/SettingsProvider";
+import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
-
-export default function LoginPage() {
+ 
+function LoginPageInner() {
   const { login } = useAuth();
   const { settings } = useSettings();
   const [email, setEmail] = useState("");
@@ -19,15 +20,17 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get("redirect") || "";
+ 
   const brandName = settings.store_name || "Portal";
-
+ 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      await login({ email, password });
+      await login({ email, password, remember: rememberMe }, redirect);
       toast.success("Welcome back!");
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Invalid credentials. Please try again.");
@@ -35,7 +38,7 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
-
+ 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 relative overflow-hidden font-sans">
       {/* Background patterns */}
@@ -49,8 +52,7 @@ export default function LoginPage() {
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
       </div>
-
-
+ 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -86,7 +88,7 @@ export default function LoginPage() {
                   />
                 </div>
               </div>
-
+ 
               <div className="space-y-2">
                 <div className="flex justify-between items-center ml-1">
                   <label className="text-sm font-bold text-zinc-700">Password</label>
@@ -111,7 +113,7 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
-
+ 
               <div className="flex items-center space-x-2 ml-1">
                 <input 
                   type="checkbox" 
@@ -124,7 +126,7 @@ export default function LoginPage() {
                   Remember me for 30 days
                 </label>
               </div>
-
+ 
               <Button 
                 type="submit" 
                 disabled={loading}
@@ -141,12 +143,12 @@ export default function LoginPage() {
               </Button>
             </form>
           </CardContent>
-
+ 
           <CardFooter className="flex flex-col space-y-6 pb-8 sm:pb-12 pt-6">
             <div className="text-sm text-zinc-500 text-center space-y-3 font-medium">
               <div>
                 Don't have an account?{" "}
-                <Link href="/register" className="text-primary hover:underline font-black uppercase tracking-tighter">
+                <Link href={redirect ? `/register?redirect=${encodeURIComponent(redirect)}` : "/register"} className="text-primary hover:underline font-black uppercase tracking-tighter">
                   Create Account
                 </Link>
               </div>
@@ -159,5 +161,17 @@ export default function LoginPage() {
         </Card>
       </motion.div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-[#0052cc]" />
+      </div>
+    }>
+      <LoginPageInner />
+    </Suspense>
   );
 }

@@ -538,27 +538,27 @@ export default function AdminCustomersPage() {
 
       {/* Customer Insights & History Modal */}
       <Dialog open={isHistoryModalOpen} onOpenChange={setIsHistoryModalOpen}>
-        <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
-          <DialogHeader className="p-6 border-b bg-white flex flex-row items-center justify-between">
+        <DialogContent className="max-w-[95vw] sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+          <DialogHeader className="p-6 border-b bg-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
             <div className="flex flex-col gap-1">
               <DialogTitle className="text-2xl font-black text-zinc-900 leading-none">{selectedCustomer?.name}</DialogTitle>
-              <div className="flex items-center gap-3 mt-1">
+              <div className="flex flex-wrap items-center gap-3 mt-1">
                 <Badge className="bg-[#0052cc] text-white font-bold text-[10px] uppercase tracking-wider">{selectedCustomer?.type}</Badge>
-                <div className="flex items-center gap-1.5 text-zinc-400 text-xs font-semibold border-l pl-3">
+                <div className="flex items-center gap-1.5 text-zinc-400 text-xs font-semibold sm:border-l sm:pl-3">
                   <Mail className="h-3 w-3" /> {selectedCustomer?.email}
                 </div>
-                <div className="flex items-center gap-1.5 text-zinc-400 text-xs font-semibold border-l pl-3">
+                <div className="flex items-center gap-1.5 text-zinc-400 text-xs font-semibold sm:border-l sm:pl-3">
                   <Phone className="h-3 w-3" /> {selectedCustomer?.phone}
                 </div>
               </div>
             </div>
-            <div className="text-right">
+            <div className="text-left sm:text-right shrink-0">
               <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Lifetime Value (LTV)</div>
-              <div className="text-3xl font-black text-[#0052cc]">KSh {parseFloat(selectedCustomer?.orders_sum_total_amount || "0").toLocaleString()}</div>
+              <div className="text-2xl sm:text-3xl font-black text-[#0052cc]">KSh {parseFloat(selectedCustomer?.orders_sum_total_amount || "0").toLocaleString()}</div>
             </div>
           </DialogHeader>
-          <div className="p-6 max-h-[70vh] overflow-y-auto space-y-8">
-             <div className="grid grid-cols-3 gap-6">
+          <div className="p-6 flex-1 overflow-y-auto space-y-8">
+             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Total Purchases</div>
                  <div className="text-2xl font-black text-zinc-900">{selectedCustomer?.orders_count || 0} <span className="text-xs text-zinc-400 font-bold uppercase ml-1">Orders</span></div>
@@ -687,7 +687,7 @@ export default function AdminCustomersPage() {
              </div>
 
              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
                     <Plus className="h-4 w-4 text-[#0052cc]" /> Precision Order History
                     <button
@@ -715,13 +715,13 @@ export default function AdminCustomersPage() {
                         });
                       }
                     }}
-                    className="h-8 bg-[#0052cc] hover:bg-[#0747a6] text-white text-xs font-bold gap-1.5 rounded-lg shadow-sm"
+                    className="h-8 bg-[#0052cc] hover:bg-[#0747a6] text-white text-xs font-bold gap-1.5 rounded-lg shadow-sm w-full sm:w-auto"
                   >
                     <FileText className="h-3.5 w-3.5" /> Export B2B Statement
                   </Button>
                 </div>
-                <div className="border rounded-2xl overflow-hidden shadow-sm">
-                  <Table>
+                <div className="border rounded-2xl overflow-x-auto custom-scrollbar shadow-sm">
+                  <Table className="min-w-[700px]">
                     <TableHeader className="bg-zinc-50/50 border-b">
                       <TableRow>
                         <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4 h-12">Reference</TableHead>
@@ -796,7 +796,7 @@ export default function AdminCustomersPage() {
                 </div>
               </div>
           </div>
-          <DialogFooter className="p-4 border-t bg-white">
+          <DialogFooter className="p-4 border-t bg-white m-0 shrink-0">
             <Button variant="outline" className="w-full h-10 border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-bold text-sm rounded-lg" onClick={() => setIsHistoryModalOpen(false)}>
               Close
             </Button>
@@ -887,7 +887,7 @@ export default function AdminCustomersPage() {
               </p>
             </div>
           </div>
-          <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
+          <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3 m-0">
             <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
             <Button
               className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm"
@@ -1049,7 +1049,7 @@ export default function AdminCustomersPage() {
                </div>
             </div>
           </div>
-          <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
+          <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3 m-0">
             <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>
             <Button 
               className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" 

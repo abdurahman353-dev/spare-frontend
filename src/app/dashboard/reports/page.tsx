@@ -453,21 +453,22 @@ export default function AdminReportsPage() {
       doc.setFontSize(9);
       doc.setTextColor(30, 41, 59);
 
-      const totalStatementVal = customerOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
-      const totalStatementFees = customerOrders.reduce((s, o) => s + Number(o.shipping_fee || 0), 0);
-      const totalStatementItems = customerOrders.reduce((s, o) => s + (o.items?.length || 0), 0);
-      const totalStatementUnits = customerOrders.reduce((s, o) => s + (o.items || []).reduce((acc: number, i: any) => acc + (i.quantity || 0), 0), 0);
+      const activeCustomerOrders = customerOrders.filter(o => o.status?.toLowerCase() !== "cancelled");
+      const totalStatementVal = activeCustomerOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+      const totalStatementFees = activeCustomerOrders.reduce((s, o) => s + Number(o.shipping_fee || 0), 0);
+      const totalStatementItems = activeCustomerOrders.reduce((s, o) => s + (o.items?.length || 0), 0);
+      const totalStatementUnits = activeCustomerOrders.reduce((s, o) => s + (o.items || []).reduce((acc: number, i: any) => acc + (i.quantity || 0), 0), 0);
 
       doc.text(`Account: ${selectedCustomer.name}`, 16, currentY + 10);
       doc.text(`Tier: ${selectedCustomerRank?.name || "Bronze"}`, 85, currentY + 10);
-      doc.text(`Orders: ${customerOrders.length}`, 145, currentY + 10);
+      doc.text(`Orders: ${activeCustomerOrders.length}`, 145, currentY + 10);
       doc.text(`LTV: ${fmt(totalStatementVal)}`, 195, currentY + 10);
 
       currentY += 22;
 
       // ── CUSTOMER ACCOUNT STATEMENT & LEDGER table (identical to exportCustomerLedgerPDF) ──
-      const grandTotalItemsCount = customerOrders.reduce((s: number, o: any) => s + (o.items?.length || 0), 0);
-      const grandTotalUnitsCount = customerOrders.reduce((s: number, o: any) => s + (o.items || []).reduce((acc: number, i: any) => acc + (i.quantity || 0), 0), 0);
+      const grandTotalItemsCount = activeCustomerOrders.reduce((s: number, o: any) => s + (o.items?.length || 0), 0);
+      const grandTotalUnitsCount = activeCustomerOrders.reduce((s: number, o: any) => s + (o.items || []).reduce((acc: number, i: any) => acc + (i.quantity || 0), 0), 0);
 
       const statementHead = [
         "Order Ref",
@@ -483,7 +484,7 @@ export default function AdminReportsPage() {
         "Payment Mode",
       ];
 
-      const statementRows: string[][] = customerOrders.map((o: any) => {
+      const statementRows: string[][] = activeCustomerOrders.map((o: any) => {
         const subtotal = Math.max(0, Number(o.total_amount || 0) - Number(o.shipping_fee || 0));
         const productNames = (o.items || [])
           .map((item: any) => `${item.product?.name || "Genuine Spare Part"} (Qty: ${item.quantity || 1})`)
@@ -508,7 +509,7 @@ export default function AdminReportsPage() {
       // Grand totals row
       statementRows.push([
         "TOTALS",
-        `${customerOrders.length} order(s)`,
+        `${activeCustomerOrders.length} order(s)`,
         "",
         `${grandTotalItemsCount} item(s) (${grandTotalUnitsCount} unit${grandTotalUnitsCount !== 1 ? "s" : ""})`,
         "", "",
@@ -1128,7 +1129,7 @@ export default function AdminReportsPage() {
                         <TableRow className="bg-[#0052cc]/5">
                           <TableCell colSpan={4} className="px-6 font-black text-[#0052cc] text-sm tracking-widest">TOTAL ACCOUNT VALUE</TableCell>
                           <TableCell className="text-right font-black text-[#0052cc] text-base">
-                            Ksh {customerOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0).toLocaleString()}
+                            Ksh {selectedCustomerLtv.toLocaleString()}
                           </TableCell>
                         </TableRow>
                       )}

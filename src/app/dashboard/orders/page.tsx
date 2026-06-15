@@ -1704,7 +1704,7 @@ export default function AdminOrdersPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="p-4 bg-zinc-50 border-t flex justify-end gap-3">
+          <DialogFooter className="p-4 bg-zinc-50 border-t flex justify-end gap-3 m-0 shrink-0">
             <Button variant="outline" className="font-bold" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
@@ -1885,8 +1885,8 @@ export default function AdminOrdersPage() {
 
                 {/* Items Added Table */}
                 {orderItems.length > 0 ? (
-                  <div className="border border-zinc-200 rounded-xl overflow-hidden bg-zinc-50/50 mt-3">
-                    <Table>
+                  <div className="border border-zinc-200 rounded-xl overflow-x-auto custom-scrollbar bg-zinc-50/50 mt-3">
+                    <Table className="min-w-[600px]">
                       <TableHeader className="bg-zinc-50">
                         <TableRow>
                           <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600">Product</TableHead>
@@ -1909,7 +1909,7 @@ export default function AdminOrdersPage() {
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItemFromOrder(idx)}
-                                className="text-red-500 hover:text-red-700 text-xs font-bold"
+                                className="text-red-500 hover:text-red-700 text-xs font-bold whitespace-nowrap"
                               >
                                 Remove
                               </button>
@@ -2020,7 +2020,7 @@ export default function AdminOrdersPage() {
               </div>
             </div>
             
-            <DialogFooter className="p-4 bg-zinc-50 border-t flex justify-end gap-3">
+            <DialogFooter className="p-4 bg-zinc-50 border-t flex justify-end gap-3 m-0 shrink-0">
               <Button
                 type="button"
                 variant="outline"
@@ -2093,7 +2093,7 @@ export default function AdminOrdersPage() {
             
             <p className="text-[10px] text-zinc-400 font-medium text-center">This action cannot be undone.</p>
           </div>
-          <DialogFooter className="px-6 pb-6 flex gap-3">
+          <DialogFooter className="px-6 pb-6 flex gap-3 m-0 shrink-0">
             <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200 h-10 text-xs"
               onClick={() => { setIsVoidDialogOpen(false); setVoidOrderTarget(null); }}>
               Cancel
@@ -2228,7 +2228,7 @@ export default function AdminOrdersPage() {
               </>
             )}
           </div>
-          <DialogFooter className="px-6 pb-6 pt-4 border-t border-zinc-100 flex gap-3">
+          <DialogFooter className="px-6 pb-6 pt-4 border-t border-zinc-100 flex gap-3 m-0 shrink-0">
             <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200"
               onClick={() => { setIsEditWalkInModalOpen(false); setEditWalkInTarget(null); }}>
               Cancel
@@ -2263,7 +2263,7 @@ export default function AdminOrdersPage() {
               Total Refund Amount: Ksh {parseFloat(currentSelectedOrder?.total_amount || 0).toLocaleString()}
             </p>
           </div>
-          <DialogFooter className="p-4 bg-zinc-50 border-t">
+          <DialogFooter className="p-4 bg-zinc-50 border-t m-0 shrink-0">
             <Button variant="outline" className="font-bold" onClick={() => setIsApproveCancelModalOpen(false)}>Cancel</Button>
             <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleApproveCancel} disabled={isProcessingAction}>
               {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Approve Cancellation
@@ -2300,7 +2300,7 @@ export default function AdminOrdersPage() {
               />
             </div>
           </div>
-          <DialogFooter className="p-4 bg-zinc-50 border-t">
+          <DialogFooter className="p-4 bg-zinc-50 border-t m-0 shrink-0">
             <Button variant="outline" className="font-bold" onClick={() => setIsCompleteRefundModalOpen(false)}>Cancel</Button>
             <Button className="bg-amber-600 hover:bg-amber-700 text-white font-bold" onClick={handleCompleteRefund} disabled={isProcessingAction || !refundTransactionId.trim()}>
               {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Submit Refund Ref

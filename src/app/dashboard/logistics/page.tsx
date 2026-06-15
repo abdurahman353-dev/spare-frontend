@@ -1089,28 +1089,28 @@ export default function AdminLogisticsPage() {
         )}
       </div>
 
-      <div className="flex border-b border-zinc-200">
+      <div className="flex border-b border-zinc-200 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <button 
           onClick={() => setActiveTab("Active Shipments")}
-          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors", activeTab === "Active Shipments" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex-shrink-0", activeTab === "Active Shipments" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
         >
           Active Shipments
         </button>
         <button 
           onClick={() => { setActiveTab("Unassigned Orders"); setSelectedOrders([]); }}
-          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors", activeTab === "Unassigned Orders" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex-shrink-0", activeTab === "Unassigned Orders" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
         >
           Unassigned Orders
         </button>
         <button 
           onClick={() => setActiveTab("Shipping Fee")}
-          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors", activeTab === "Shipping Fee" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex-shrink-0", activeTab === "Shipping Fee" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
         >
           Shipping Fee
         </button>
         <button 
           onClick={() => setActiveTab("Shipping Zones")}
-          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors", activeTab === "Shipping Zones" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex-shrink-0", activeTab === "Shipping Zones" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700")}
         >
           Shipping Zones
         </button>
@@ -2015,12 +2015,12 @@ export default function AdminLogisticsPage() {
 
         {/* Shipping Zone Modal */}
         <Dialog open={isZoneModalOpen} onOpenChange={setIsZoneModalOpen}>
-          <DialogContent className="max-w-[95vw] sm:max-w-[500px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
-            <DialogHeader className="p-6 border-b bg-white">
+          <DialogContent className="max-w-[95vw] sm:max-w-[500px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200 max-h-[90vh] flex flex-col">
+            <DialogHeader className="p-6 border-b bg-white flex-shrink-0">
               <DialogTitle className="text-xl font-bold text-zinc-900">{zoneFormData.id ? "Edit Shipping Zone" : "Add New Shipping Zone"}</DialogTitle>
               <p className="text-sm text-zinc-500 mt-1">Set flat Standard and Express delivery fees for this route.</p>
             </DialogHeader>
-            <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+            <div className="p-6 space-y-6 flex-1 overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Applicable Product *</label>
@@ -2126,7 +2126,7 @@ export default function AdminLogisticsPage() {
                 </div>
               </div>
             </div>
-            <DialogFooter className="p-4 border-t bg-zinc-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <DialogFooter className="p-4 border-t bg-zinc-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 m-0 flex-shrink-0">
               <Button variant="outline" className="w-full sm:w-auto h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsZoneModalOpen(false)}>Cancel</Button>
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 {!zoneFormData.id && (
@@ -2212,8 +2212,8 @@ export default function AdminLogisticsPage() {
 
         {/* ── Bulk Shipping Zone Modal ─────────────────────────────────── */}
         <Dialog open={isBulkZoneModalOpen} onOpenChange={(open) => { setIsBulkZoneModalOpen(open); if (!open) { setBulkZoneProductId(""); setBulkZoneRoutes([]); } }}>
-          <DialogContent className="max-w-[96vw] w-full md:max-w-[900px] p-0 overflow-hidden bg-white rounded-2xl shadow-2xl border border-zinc-200">
-            <DialogHeader className="p-6 border-b bg-gradient-to-r from-[#0052cc]/5 to-white">
+          <DialogContent className="max-w-[96vw] w-full md:max-w-[900px] p-0 overflow-hidden bg-white rounded-2xl shadow-2xl border border-zinc-200 max-h-[90vh] flex flex-col">
+            <DialogHeader className="p-6 border-b bg-gradient-to-r from-[#0052cc]/5 to-white flex-shrink-0">
               <DialogTitle className="text-xl font-bold text-zinc-900 flex items-center gap-2">
                 <ArrowRightLeft className="h-5 w-5 text-[#0052cc]" />
                 Bulk Shipping Fee Entry
@@ -2221,7 +2221,7 @@ export default function AdminLogisticsPage() {
               <p className="text-sm text-zinc-500 mt-1">Select a product — all Origin × Destination routes are auto-generated. Enter Standard and Express fees directly and save.</p>
             </DialogHeader>
 
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-5 flex-1 overflow-y-auto">
               {/* Product Selector */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <div className="flex-1 space-y-1.5">
@@ -2341,7 +2341,7 @@ export default function AdminLogisticsPage() {
               )}
             </div>
 
-            <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-between gap-3">
+            <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-between gap-3 m-0 flex-shrink-0">
               <div className="text-xs text-zinc-400 font-medium">
                 {bulkZoneRoutes.filter(r => r.standard_fee > 0).length > 0 && (
                   <span className="text-emerald-600 font-bold">

@@ -101,7 +101,7 @@ function AccountPortalInner() {
       target: "#tour-stepper",
       placement: "top" as const,
       title: "🚚 Logistics Lifecycle — How Your Order Moves",
-      content: `Your order moves through 4 key stages: Pending → Hub Processing → Shipped → Delivered. ${bizName} sends you automated email notifications at each stage (Processing, Shipped, and Delivered) to keep you fully informed.${bizHours ? ` Our team operates: ${bizHours}.` : ""}`,
+      content: `Your order moves through 4 key stages: Pending → Hub Processing → Shipped → Delivered. Note that an order that is in pending or processing will only be cancelled and nothing else. ${bizName} sends you automated email notifications at each stage (Processing, Shipped, and Delivered) to keep you fully informed.${bizHours ? ` Our team operates: ${bizHours}.` : ""}`,
     },
     {
       target: "#tour-table",
@@ -309,6 +309,12 @@ function AccountPortalInner() {
     .filter((o: any) => o.status !== "Cancelled")
     .reduce((sum: number, order: any) => sum + Number(order.total_amount), 0);
   const activeOrders = orders.filter((o: any) => o.status !== "Delivered" && o.status !== "Cancelled").length;
+  const partsPurchased = orders
+    .filter((o: any) => o.status !== "Cancelled")
+    .reduce((sum: number, order: any) => {
+      const itemsCount = order.items?.reduce((itemSum: number, item: any) => itemSum + Number(item.quantity || 0), 0) || 0;
+      return sum + itemsCount;
+    }, 0);
 
   const tabs = [
     { name: "Dashboard", icon: Package },
@@ -483,7 +489,7 @@ function AccountPortalInner() {
                         {[
                           { label: "Active Orders", value: activeOrders.toString(), color: "text-blue-600" },
                           { label: "Total Spent", value: `Ksh ${totalSpent.toLocaleString()}`, color: "text-slate-900" },
-                          { label: "Parts Purchased", value: orders.length.toString(), color: "text-slate-900" },
+                          { label: "Parts Purchased", value: partsPurchased.toString(), color: "text-slate-900" },
                         ].map((stat, idx) => (
                           <div key={idx} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm">
                             <p className="text-[12px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">{stat.label}</p>
@@ -1111,14 +1117,26 @@ function AccountPortalInner() {
                   ) : selectedOrder.refund_status === "Completed" ? (
                     <div className="space-y-1">
                       <p className="text-[12px] text-red-700 font-medium">Your refund has been completed manually.</p>
+                      {selectedOrder.cancellation_reason && (
+                        <p className="text-[11px] text-red-700/80 bg-white/60 p-2 rounded-md border border-red-100 mb-2">
+                          <strong>Reason:</strong> {selectedOrder.cancellation_reason}
+                        </p>
+                      )}
                       <p className="text-[13px] font-black text-[#1e293b] bg-white px-3 py-2 rounded-md border border-zinc-200 inline-block mt-2">
                         Transaction ID: <span className="text-green-700">{selectedOrder.refund_transaction_id}</span>
                       </p>
                     </div>
                   ) : (
-                    <p className="text-[12px] text-red-700 font-medium leading-relaxed">
-                      Your order has been cancelled. Your refund is being processed manually and will be sent to you within 3-5 business days. If you do not receive it, please call us with your Order Reference.
-                    </p>
+                    <div className="space-y-1">
+                      <p className="text-[12px] text-red-700 font-medium leading-relaxed mb-2">
+                        Your order has been cancelled. Your refund is being processed manually and will be sent to you within 3-5 business days. If you do not receive it, please call us with your Order Reference.
+                      </p>
+                      {selectedOrder.cancellation_reason && (
+                        <p className="text-[11px] text-red-700/80 bg-white/60 p-2 rounded-md border border-red-100">
+                          <strong>Reason:</strong> {selectedOrder.cancellation_reason}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
              )}
@@ -1137,7 +1155,7 @@ function AccountPortalInner() {
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2">
               {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing") && (
-                <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700" onClick={() => { setIsOrderModalOpen(false); setIsCancelModalOpen(true); }}>
+                <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700 text-white hover:text-white border-none shadow-none" onClick={() => { setIsOrderModalOpen(false); setIsCancelModalOpen(true); }}>
                   Request Cancellation
                 </Button>
               )}
@@ -1191,13 +1209,13 @@ function AccountPortalInner() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Country</label>
+              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Destination Country</label>
               <select 
                 className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc]"
                 value={addressFormData.country}
                 onChange={(e) => handleCountryChange(e.target.value)}
               >
-                <option value="" disabled>Select Country</option>
+                <option value="" disabled>Select Destination Country</option>
                 {uniqueCountries.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -1209,7 +1227,7 @@ function AccountPortalInner() {
                 value={addressFormData.city}
                 onChange={(e) => setAddressFormData({...addressFormData, city: e.target.value})}
               >
-                <option value="" disabled>Select City</option>
+                <option value="" disabled>Select Destination City</option>
                 {availableCities.map(c => <option key={c.id} value={c.city}>{c.city}</option>)}
               </select>
             </div>

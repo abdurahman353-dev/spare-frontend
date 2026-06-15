@@ -2015,12 +2015,12 @@ export default function AdminLogisticsPage() {
 
         {/* Shipping Zone Modal */}
         <Dialog open={isZoneModalOpen} onOpenChange={setIsZoneModalOpen}>
-          <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+          <DialogContent className="max-w-[95vw] sm:max-w-[500px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
             <DialogHeader className="p-6 border-b bg-white">
               <DialogTitle className="text-xl font-bold text-zinc-900">{zoneFormData.id ? "Edit Shipping Zone" : "Add New Shipping Zone"}</DialogTitle>
               <p className="text-sm text-zinc-500 mt-1">Set flat Standard and Express delivery fees for this route.</p>
             </DialogHeader>
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Applicable Product *</label>
@@ -2034,10 +2034,10 @@ export default function AdminLogisticsPage() {
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Origin (Warehouse) *</label>
                   <SearchableDropdown 
-                    items={[{id: "", name: "Any Warehouse"}, ...warehousesData.map(w => ({id: w.id.toString(), name: w.name}))]}
+                    items={[{id: "", name: "Any Warehouse"}, ...warehousesData.map(w => ({id: w.id.toString(), name: `from ${w.name}`}))]}
                     value={zoneFormData.warehouse_id?.toString() || ""}
                     onChange={(val) => setZoneFormData({...zoneFormData, warehouse_id: val})}
-                    placeholder="Select origin..."
+                    placeholder="Choose hub..."
                   />
                 </div>
               </div>

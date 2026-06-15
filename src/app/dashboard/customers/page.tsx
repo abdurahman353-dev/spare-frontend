@@ -806,14 +806,14 @@ export default function AdminCustomersPage() {
 
       {/* Edit Customer Modal — only editable fields */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+        <DialogContent className="max-w-[95vw] sm:max-w-[560px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
             <DialogTitle className="text-xl font-bold text-zinc-900">Edit Customer Info</DialogTitle>
             <DialogDescription className="text-xs text-zinc-400 mt-1">
               Only editable fields are shown. Email and password cannot be changed here.
             </DialogDescription>
           </DialogHeader>
-          <div className="p-6 space-y-5">
+          <div className="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Contact Name *</label>
@@ -903,11 +903,11 @@ export default function AdminCustomersPage() {
 
       {/* Create Customer Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
+        <DialogContent className="max-w-[95vw] sm:max-w-[600px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
             <DialogTitle className="text-xl font-bold text-zinc-900">Add New Customer</DialogTitle>
           </DialogHeader>
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Contact Name *</label>

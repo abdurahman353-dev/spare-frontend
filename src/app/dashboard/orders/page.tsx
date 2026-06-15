@@ -170,6 +170,8 @@ export default function AdminOrdersPage() {
   const [voidOrderTarget, setVoidOrderTarget] = useState<any>(null);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidTransactionId, setVoidTransactionId] = useState("");
   const [walkInPayStatusFilter, setWalkInPayStatusFilter] = useState("All");
 
   // Edit Walk-In Order
@@ -364,20 +366,35 @@ export default function AdminOrdersPage() {
 
   const handleOpenVoidDialog = (order: any) => {
     setVoidOrderTarget(order);
+    setVoidReason("");
+    setVoidTransactionId("");
     setIsVoidDialogOpen(true);
   };
 
   const handleConfirmVoidRefund = async () => {
     if (!voidOrderTarget) return;
+    if (!voidReason.trim()) {
+      toast.error("Please enter a void/refund reason.");
+      return;
+    }
+    if (!voidTransactionId.trim()) {
+      toast.error("Please enter the refund evidence (transaction ID).");
+      return;
+    }
     setIsVoiding(true);
     try {
-      const res = await api.post(`/orders/${voidOrderTarget.id}/void-refund`);
+      const res = await api.post(`/orders/${voidOrderTarget.id}/void-refund`, {
+        reason: voidReason,
+        refund_transaction_id: voidTransactionId,
+      });
       const refunded = parseFloat(res.data?.refunded_amount ?? voidOrderTarget.total_amount ?? 0);
       toast.success(
         `Order ${voidOrderTarget.tracking_number} voided. Ksh ${refunded.toLocaleString()} refunded — stock restored to warehouse.`
       );
       setIsVoidDialogOpen(false);
       setVoidOrderTarget(null);
+      setVoidReason("");
+      setVoidTransactionId("");
       await fetchOrders(true);
       await fetchMetadata();
     } catch (err: any) {
@@ -1687,15 +1704,15 @@ export default function AdminOrdersPage() {
               </div>
             </div>
           </div>
-          <DialogFooter className="p-4 bg-zinc-50 border-t">
-            <Button variant="outline" className="font-bold text-xs rounded-lg" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
+          <DialogFooter className="p-4 bg-zinc-50 border-t flex justify-end gap-3">
+            <Button variant="outline" className="font-bold" onClick={() => setIsOrderModalOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Walk-in POS Order Creation Modal */}
       <Dialog open={isWalkInModalOpen} onOpenChange={setIsWalkInModalOpen}>
-        <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-[700px] w-full p-0 overflow-hidden bg-white rounded-2xl border-none shadow-2xl">
           <DialogHeader className="p-6 bg-white border-b">
             <DialogTitle className="text-xl font-bold text-zinc-900">Place Walk-In Store Order</DialogTitle>
             <DialogDescription className="text-zinc-400 font-medium text-xs mt-1">
@@ -1703,7 +1720,7 @@ export default function AdminOrdersPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmitWalkInOrder} className="flex flex-col">
-            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+            <div className="p-6 space-y-6 max-h-[60vh] sm:max-h-[70vh] overflow-y-auto">
               
               {/* Section 1: Customer Profile */}
               <div className="space-y-4">
@@ -1743,7 +1760,7 @@ export default function AdminOrdersPage() {
 
                 {selectedCustomerId === "new" && (
                   <div className="space-y-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
                         <Input placeholder="Customer Name" className="h-10 border-zinc-200 rounded-lg bg-white"
@@ -1780,7 +1797,7 @@ export default function AdminOrdersPage() {
                     </div>
 
                     {registerAccount && (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="text-xs font-semibold text-zinc-500">Password *</label>
                           <div className="relative">
@@ -1820,8 +1837,8 @@ export default function AdminOrdersPage() {
               {/* Section 2: Add Inventory Items */}
               <div className="space-y-4 pt-4 border-t border-zinc-100">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">2. Select & Add Spare Parts</h4>
-                <div className="grid grid-cols-12 gap-3 items-end">
-                  <div className="col-span-5 space-y-1.5">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  <div className="col-span-1 md:col-span-5 space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Product</label>
                     <SearchableDropdown
                       items={products.map(p => ({ id: p.id.toString(), name: `${p.name} — Ksh ${Number(p.price).toLocaleString()}` }))}
@@ -1831,18 +1848,18 @@ export default function AdminOrdersPage() {
                     />
                   </div>
 
-                  <div className="col-span-4 space-y-1.5">
+                  <div className="col-span-1 md:col-span-4 space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Source Warehouse</label>
                     <SearchableDropdown
-                      items={(selectedProductDetails?.inventories || []).map((inv: any) => ({ id: inv.warehouse_id.toString(), name: `${inv.warehouse?.name} (Stock: ${inv.quantity})` }))}
+                      items={(selectedProductDetails?.inventories || []).map((inv: any) => ({ id: inv.warehouse_id.toString(), name: `from ${inv.warehouse?.name} (Stock: ${inv.quantity})` }))}
                       value={selectedWarehouseId}
                       onChange={(val) => setSelectedWarehouseId(val)}
-                      placeholder={selectedProductId ? "Select warehouse..." : "Select product first..."}
+                      placeholder={selectedProductId ? "Choose hub..." : "Choose hub..."}
                       disabled={!selectedProductId}
                     />
                   </div>
 
-                  <div className="col-span-2 space-y-1.5">
+                  <div className="col-span-1 md:col-span-2 space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Qty</label>
                     <Input
                       type="number"
@@ -1854,7 +1871,7 @@ export default function AdminOrdersPage() {
                     />
                   </div>
 
-                  <div className="col-span-1">
+                  <div className="col-span-1 md:col-span-1">
                     <Button
                       type="button"
                       onClick={handleAddItemToOrder}
@@ -1912,7 +1929,7 @@ export default function AdminOrdersPage() {
               {/* Section 3: Billing & Payment */}
               <div className="space-y-4 pt-4 border-t border-zinc-100">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">3. Payment & Settlement</h4>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Payment Status</label>
                     <select
@@ -1925,7 +1942,7 @@ export default function AdminOrdersPage() {
                     </select>
                   </div>
 
-                <div className="space-y-1.5">
+                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Payment Method
                       {paymentStatus === "Pending" && <span className="ml-2 text-[10px] text-amber-500 font-bold">(Blocked — no payment received)</span>}
                     </label>
@@ -1975,7 +1992,7 @@ export default function AdminOrdersPage() {
                 )}
 
                 {shippingMethod === "Local Delivery" && (
-                  <div className="grid grid-cols-3 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Delivery Fee (Ksh)</label>
                       <Input type="number" min={0} placeholder="e.g. 500" className="h-10 border-zinc-200 rounded-lg bg-white"
@@ -2027,7 +2044,7 @@ export default function AdminOrdersPage() {
 
       {/* Void / Refund Confirmation Dialog */}
       <Dialog open={isVoidDialogOpen} onOpenChange={(open) => { if (!open) { setIsVoidDialogOpen(false); setVoidOrderTarget(null); } }}>
-        <DialogContent className="sm:max-w-[440px] bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-[95vw] sm:max-w-[440px] w-full bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="h-11 w-11 rounded-full bg-red-50 flex items-center justify-center shrink-0">
@@ -2041,26 +2058,49 @@ export default function AdminOrdersPage() {
               </div>
             </div>
           </DialogHeader>
-          <div className="px-6 pb-4 space-y-3">
+          <div className="px-6 pb-4 space-y-4">
             <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-2">
-              <p className="text-sm font-bold text-red-700">What happens when you void this order:</p>
-              <ul className="space-y-1.5 text-xs text-red-600 font-medium">
+              <p className="text-xs font-bold text-red-700">What happens when you void this order:</p>
+              <ul className="space-y-1 text-[11px] text-red-600 font-medium">
                 <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Payment of <strong>Ksh {parseFloat(voidOrderTarget?.total_amount || 0).toLocaleString()}</strong> is refunded to the customer</li>
                 <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />The amount is deducted from your revenue records</li>
-                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />All sold items are returned to their source warehouse stock</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />All sold items are returned to warehouse stock</li>
                 <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Order status is set to <strong>Cancelled / Refunded</strong></li>
               </ul>
             </div>
-            <p className="text-xs text-zinc-400 font-medium text-center">This action cannot be undone.</p>
+            
+            <div className="space-y-3">
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Void / Refund Reason *</label>
+                <textarea 
+                  rows={2}
+                  placeholder="e.g., Customer requested refund, duplicate order..."
+                  className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                  value={voidReason}
+                  onChange={(e) => setVoidReason(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Refund Evidence (Transaction ID / Reference) *</label>
+                <Input 
+                  placeholder="e.g. M-Pesa Code or Receipt Ref..."
+                  className="h-9 border-zinc-200 text-xs font-semibold"
+                  value={voidTransactionId}
+                  onChange={(e) => setVoidTransactionId(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <p className="text-[10px] text-zinc-400 font-medium text-center">This action cannot be undone.</p>
           </div>
           <DialogFooter className="px-6 pb-6 flex gap-3">
-            <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200"
+            <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200 h-10 text-xs"
               onClick={() => { setIsVoidDialogOpen(false); setVoidOrderTarget(null); }}>
               Cancel
             </Button>
             <Button
-              disabled={isVoiding}
-              className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-sm"
+              disabled={isVoiding || !voidReason.trim() || !voidTransactionId.trim()}
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-sm h-10 text-xs"
               onClick={handleConfirmVoidRefund}
             >
               {isVoiding ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
@@ -2211,7 +2251,7 @@ export default function AdminOrdersPage() {
           <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle className="font-bold text-zinc-900">Approve Cancellation</DialogTitle>
             <DialogDescription className="text-xs text-zinc-500">
-              Approving this will cancel the order, restore inventory to the warehouse, and mark the refund as pending.
+              Approving this will cancel the order, restore inventory to the warehouse, and mark the refund as cancelled.
             </DialogDescription>
           </DialogHeader>
           <div className="p-6">
@@ -2226,7 +2266,7 @@ export default function AdminOrdersPage() {
           <DialogFooter className="p-4 bg-zinc-50 border-t">
             <Button variant="outline" className="font-bold" onClick={() => setIsApproveCancelModalOpen(false)}>Cancel</Button>
             <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleApproveCancel} disabled={isProcessingAction}>
-              {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Approve & Restock
+              {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Approve Cancellation
             </Button>
           </DialogFooter>
         </DialogContent>

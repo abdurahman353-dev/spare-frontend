@@ -623,7 +623,7 @@ export default function CheckoutPage() {
                           items={locations.map(loc => ({ id: loc.name, name: loc.name }))}
                           value={shippingDetails.country}
                           onChange={handleCountryChange}
-                          placeholder="Select Country"
+                          placeholder="Select Destination Country"
                           className={cn("h-12 border-zinc-200", formErrors.country && "border-red-500")}
                         />
                         {formErrors.country && <p className="text-xs text-red-500">{formErrors.country}</p>}
@@ -633,7 +633,7 @@ export default function CheckoutPage() {
                           items={availableCities.map((city: any) => ({ id: city.name, name: city.name }))}
                           value={shippingDetails.city}
                           onChange={handleCityChange}
-                          placeholder="Select City"
+                          placeholder="Select Destination City"
                           disabled={!shippingDetails.country}
                           className={cn("h-12 border-zinc-200", formErrors.city && "border-red-500")}
                         />

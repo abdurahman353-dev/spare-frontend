@@ -26,6 +26,7 @@ import {
   validateShippingForm,
   validatePaymentPhone,
   sanitizeText,
+  formatKenyanPhone,
 } from "@/lib/validation";
 
 type PaymentMethod = "mpesa_stk" | "paybill";
@@ -385,8 +386,9 @@ export default function CheckoutPage() {
       }
 
       // 2. Initiate STK Push
+      const formattedPhone = formatKenyanPhone(mpesaPhone);
       const stkResponse = await api.post("/mpesa/stk-push", {
-        phone: mpesaPhone,
+        phone: formattedPhone,
         amount: totalAmount,
         order_ids: orderIds,
       });

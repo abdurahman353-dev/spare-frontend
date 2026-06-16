@@ -192,6 +192,7 @@ export default function AdminOrdersPage() {
   const [isCompleteRefundModalOpen, setIsCompleteRefundModalOpen] = useState(false);
   const [refundTransactionId, setRefundTransactionId] = useState("");
   const [isProcessingAction, setIsProcessingAction] = useState(false);
+  const [updatingOrderIds, setUpdatingOrderIds] = useState<Record<number, boolean>>({});
 
   const handleApproveCancel = async () => {
     if (!currentSelectedOrder) return;
@@ -673,6 +674,7 @@ export default function AdminOrdersPage() {
       toast.error(`Cannot change status from "${order?.status}" to "${status}". Orders cannot be moved backwards.`);
       return;
     }
+    setUpdatingOrderIds(prev => ({ ...prev, [id]: true }));
     try {
       const res = await api.put(`/orders/${id}`, { status });
       toast.success(`Order marked as ${status}`);
@@ -692,6 +694,8 @@ export default function AdminOrdersPage() {
     } catch (err) {
       console.error("Failed to update status", err);
       toast.error("Status update failed");
+    } finally {
+      setUpdatingOrderIds(prev => ({ ...prev, [id]: false }));
     }
   };
 
@@ -1155,6 +1159,18 @@ export default function AdminOrdersPage() {
                 </Button>
                 <Button 
                   size="sm" 
+                  disabled={isBulkProcessing}
+                  onClick={() => handleBulkStatusChange('Delivered')}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
+                >
+                  {isBulkProcessing ? (
+                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                  ) : (
+                    "Mark Delivered"
+                  )}
+                </Button>
+                <Button 
+                  size="sm" 
                   variant="ghost" 
                   onClick={() => setSelectedOrderIds([])}
                   disabled={isBulkProcessing}
@@ -1272,45 +1288,48 @@ export default function AdminOrdersPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {order.shipping_method === "Pickup" ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
-                        </span>
-                      ) : (
-                        <div className="space-y-1">
-                          {(() => {
-                            let badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200";
-                            let dotClass = "bg-yellow-500";
-                            let label = "Pending";
+                      <div className="flex items-center gap-1.5">
+                        {updatingOrderIds[order.id] && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 shrink-0" />}
+                        {order.shipping_method === "Pickup" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
+                          </span>
+                        ) : (
+                          <div className="space-y-1">
+                            {(() => {
+                              let badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200";
+                              let dotClass = "bg-yellow-500";
+                              let label = "Pending";
 
-                            if (order.status === "Processing") {
-                              badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
-                              dotClass = "bg-indigo-500";
-                              label = "Processing";
-                            } else if (order.status === "Shipped" || order.status === "In Transit") {
-                              badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
-                              dotClass = "bg-blue-500";
-                              label = "Shipped";
-                            } else if (order.status === "Delivered") {
-                              badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                              dotClass = "bg-emerald-500";
-                              label = "Delivered";
-                            } else if (order.status === "Cancelled" || isOrderVoided(order)) {
-                              badgeClass = "bg-red-50 text-red-700 border-red-200";
-                              dotClass = "bg-red-500";
-                              label = "Cancelled";
-                            }
+                              if (order.status === "Processing") {
+                                badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
+                                dotClass = "bg-indigo-500";
+                                label = "Processing";
+                              } else if (order.status === "Shipped" || order.status === "In Transit") {
+                                badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
+                                dotClass = "bg-blue-500";
+                                label = "Shipped";
+                              } else if (order.status === "Delivered") {
+                                badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                dotClass = "bg-emerald-500";
+                                label = "Delivered";
+                              } else if (order.status === "Cancelled" || isOrderVoided(order)) {
+                                badgeClass = "bg-red-50 text-red-700 border-red-200";
+                                dotClass = "bg-red-500";
+                                label = "Cancelled";
+                              }
 
-                            return (
-                              <span className={cn("inline-flex items-center gap-1 text-[10px] font-black border px-2 py-0.5 rounded-full uppercase tracking-wider", badgeClass)}>
-                                <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", dotClass)}></span>
-                                Dispatch — {label}
-                              </span>
-                            );
-                          })()}
-                          <p className="text-[10px] font-bold text-zinc-500 ml-1">{order.shipping_city}</p>
-                        </div>
-                      )}
+                              return (
+                                <span className={cn("inline-flex items-center gap-1 text-[10px] font-black border px-2 py-0.5 rounded-full uppercase tracking-wider", badgeClass)}>
+                                  <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", dotClass)}></span>
+                                  Dispatch — {label}
+                                </span>
+                              );
+                            })()}
+                            <p className="text-[10px] font-bold text-zinc-500 ml-1">{order.shipping_city}</p>
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       {(() => {
@@ -1506,12 +1525,26 @@ export default function AdminOrdersPage() {
                     <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
                     <TableCell className="text-right"><p className="text-xs font-black text-zinc-900">Ksh {parseFloat(order.total_amount || 0).toLocaleString()}</p></TableCell>
                     <TableCell className="text-center">
-                      <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                        order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : order.status === "Processing" ? "bg-orange-500 text-white" :
-                        order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white" :
-                        order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                        (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
-                      )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {updatingOrderIds[order.id] && <Loader2 className="h-3 w-3 animate-spin text-[#0052cc] shrink-0" />}
+                          <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                            order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : order.status === "Processing" ? "bg-orange-500 text-white" :
+                            order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white" :
+                            order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                            (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
+                          )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
+                        </div>
+                        <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",
+                          order.payment_status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                          order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "bg-red-100 text-red-800" :
+                          "bg-amber-100 text-amber-800"
+                        )}>
+                          {order.payment_status === "Paid" ? "✓ M-Pesa Paid" :
+                           order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "Refunded" :
+                           "Payment Pending"}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell className="px-6 text-right">
                       <DropdownMenu>
@@ -1521,8 +1554,21 @@ export default function AdminOrdersPage() {
                             <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Options</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm"><Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm"><RefreshCw className="mr-2 h-4 w-4 text-indigo-500" /> Mark Processing</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm"><Truck className="mr-2 h-4 w-4 text-blue-500" /> Mark Shipped</DropdownMenuItem>
+                            {order.status === "Pending" && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
+                              </DropdownMenuItem>
+                            )}
+                            {(order.status === "Pending" || order.status === "Processing") && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
+                                <Truck className="mr-2 h-4 w-4" /> Mark Shipped
+                              </DropdownMenuItem>
+                            )}
+                            {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") && (
+                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
+                                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
+                              </DropdownMenuItem>
+                            )}
                             
                             {order.status === "Cancellation Requested" && (
                               <>
@@ -1727,7 +1773,7 @@ export default function AdminOrdersPage() {
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">1. Customer Identification</h4>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Customer Type</label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     {(["walkin", "new"] as const).map(opt => (
                       <button
                         key={opt}
@@ -1885,40 +1931,68 @@ export default function AdminOrdersPage() {
 
                 {/* Items Added Table */}
                 {orderItems.length > 0 ? (
-                  <div className="border border-zinc-200 rounded-xl overflow-x-auto custom-scrollbar bg-zinc-50/50 mt-3">
-                    <Table className="min-w-[600px]">
-                      <TableHeader className="bg-zinc-50">
-                        <TableRow>
-                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600">Product</TableHead>
-                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600">Warehouse</TableHead>
-                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-center">Qty</TableHead>
-                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-right">Price</TableHead>
-                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-right">Subtotal</TableHead>
-                          <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 w-12"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {orderItems.map((item, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell className="py-2 text-xs font-bold text-zinc-800">{item.name}</TableCell>
-                            <TableCell className="py-2 text-xs text-zinc-500 font-medium">{item.warehouse_name}</TableCell>
-                            <TableCell className="py-2 text-xs text-center font-bold text-zinc-700">{item.quantity}</TableCell>
-                            <TableCell className="py-2 text-xs text-right text-zinc-600">Ksh {item.price.toLocaleString()}</TableCell>
-                            <TableCell className="py-2 text-xs text-right font-black text-zinc-900">Ksh {(item.price * item.quantity).toLocaleString()}</TableCell>
-                            <TableCell className="py-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItemFromOrder(idx)}
-                                className="text-red-500 hover:text-red-700 text-xs font-bold whitespace-nowrap"
-                              >
-                                Remove
-                              </button>
-                            </TableCell>
+                  <>
+                    {/* Desktop View */}
+                    <div className="hidden md:block border border-zinc-200 rounded-xl overflow-x-auto custom-scrollbar bg-zinc-50/50 mt-3">
+                      <Table className="min-w-[600px]">
+                        <TableHeader className="bg-zinc-50">
+                          <TableRow>
+                            <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600">Product</TableHead>
+                            <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600">Warehouse</TableHead>
+                            <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-center">Qty</TableHead>
+                            <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-right">Price</TableHead>
+                            <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 text-right">Subtotal</TableHead>
+                            <TableHead className="h-8 py-1.5 text-xs font-bold text-zinc-600 w-12"></TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {orderItems.map((item, idx) => (
+                            <TableRow key={idx}>
+                              <TableCell className="py-2 text-xs font-bold text-zinc-800">{item.name}</TableCell>
+                              <TableCell className="py-2 text-xs text-zinc-500 font-medium">{item.warehouse_name}</TableCell>
+                              <TableCell className="py-2 text-xs text-center font-bold text-zinc-700">{item.quantity}</TableCell>
+                              <TableCell className="py-2 text-xs text-right text-zinc-600">Ksh {item.price.toLocaleString()}</TableCell>
+                              <TableCell className="py-2 text-xs text-right font-black text-zinc-900">Ksh {(item.price * item.quantity).toLocaleString()}</TableCell>
+                              <TableCell className="py-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItemFromOrder(idx)}
+                                  className="text-red-500 hover:text-red-700 text-xs font-bold whitespace-nowrap"
+                                >
+                                  Remove
+                                </button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Mobile View */}
+                    <div className="block md:hidden space-y-2 mt-3">
+                      {orderItems.map((item, idx) => (
+                        <div key={idx} className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex flex-col gap-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-xs font-bold text-zinc-950 leading-tight">{item.name}</p>
+                              <p className="text-[10px] text-zinc-500 font-medium mt-0.5">Hub: {item.warehouse_name}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItemFromOrder(idx)}
+                              className="text-red-600 hover:text-red-800 text-xs font-black bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded shrink-0 transition-all border border-red-200"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <div className="flex justify-between items-center text-xs pt-1.5 border-t border-zinc-100 font-medium text-zinc-600">
+                            <span>Qty: <strong className="text-zinc-800">{item.quantity}</strong> × Ksh {item.price.toLocaleString()}</span>
+                            <span className="font-black text-zinc-900">Ksh {(item.price * item.quantity).toLocaleString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : (
                   <div className="p-6 text-center border-2 border-dashed border-zinc-200 rounded-xl text-zinc-400 text-xs font-bold uppercase tracking-wider bg-zinc-50/20">
                     No spare parts added to this walk-in order.
@@ -2251,16 +2325,44 @@ export default function AdminOrdersPage() {
           <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle className="font-bold text-zinc-900">Approve Cancellation</DialogTitle>
             <DialogDescription className="text-xs text-zinc-500">
-              Approving this will cancel the order, restore inventory to the warehouse, and mark the refund as cancelled.
+              Approving this will approve the cancellation request, restore inventory to the warehouse, and mark the refund as pending.
             </DialogDescription>
           </DialogHeader>
-          <div className="p-6">
+          <div className="p-6 space-y-4">
             <div className="bg-red-50 p-4 rounded-lg border border-red-200">
               <p className="text-xs font-semibold text-red-700 mb-1">Customer Reason:</p>
               <p className="text-sm text-red-900 italic">"{currentSelectedOrder?.cancellation_reason || 'No reason provided'}"</p>
             </div>
-            <p className="text-sm font-semibold text-zinc-700 mt-4">
-              Total Refund Amount: Ksh {parseFloat(currentSelectedOrder?.total_amount || 0).toLocaleString()}
+            
+            {currentSelectedOrder?.items && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Items Requested for Cancellation:</p>
+                <div className="space-y-1.5 max-h-[150px] overflow-y-auto border border-zinc-200 rounded-lg p-2.5 bg-zinc-50">
+                  {currentSelectedOrder.items
+                    .filter((item: any) => item.cancellation_status === "Pending")
+                    .map((item: any) => (
+                      <div key={item.id} className="flex justify-between items-center text-xs">
+                        <span className="font-semibold text-zinc-800 truncate max-w-[250px]">{item.product?.name || "Genuine Part"}</span>
+                        <span className="text-zinc-500 font-bold shrink-0">{item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  {currentSelectedOrder.items.filter((item: any) => item.cancellation_status === "Pending").length === 0 && (
+                    <p className="text-xs font-medium text-zinc-400 italic">All order items</p>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            <p className="text-sm font-black text-zinc-900 pt-3 border-t border-zinc-100">
+              Total Refund Value: Ksh {
+                (() => {
+                  const pendingItems = currentSelectedOrder?.items?.filter((i: any) => i.cancellation_status === "Pending") || [];
+                  const amt = pendingItems.length > 0
+                    ? pendingItems.reduce((acc: number, i: any) => acc + (Number(i.price) * i.quantity), 0)
+                    : parseFloat(currentSelectedOrder?.total_amount || 0);
+                  return amt.toLocaleString();
+                })()
+              }
             </p>
           </div>
           <DialogFooter className="p-4 bg-zinc-50 border-t m-0 shrink-0">

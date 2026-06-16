@@ -152,7 +152,8 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                           notif.type === 'low_stock' && "bg-red-50 text-red-700",
                           notif.type === 'new_order' && "bg-emerald-50 text-emerald-700",
                           notif.type === 'daily_report' && "bg-indigo-50 text-indigo-700",
-                          notif.type === 'inquiry' && "bg-blue-50 text-blue-700"
+                          notif.type === 'inquiry' && "bg-blue-50 text-blue-700",
+                          notif.type === 'cancellation_request' && "bg-rose-50 text-rose-700"
                         )}>
                           {notif.title}
                         </span>

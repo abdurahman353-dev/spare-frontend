@@ -152,6 +152,7 @@ function AccountPortalInner() {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
+  const [selectedItemIdsToCancel, setSelectedItemIdsToCancel] = useState<number[]>([]);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDeleteAddressModalOpen, setIsDeleteAddressModalOpen] = useState(false);
   const [hiddenAddresses, setHiddenAddresses] = useState<string[]>([]);
@@ -283,16 +284,24 @@ function AccountPortalInner() {
   };
 
   const handleRequestCancel = async () => {
+    if (selectedItemIdsToCancel.length === 0) {
+      toast.error("Please select at least one product to cancel");
+      return;
+    }
     if (!cancelReason.trim()) {
       toast.error("Please provide a reason for cancellation");
       return;
     }
     setIsCancelling(true);
     try {
-      const res = await api.post(`/orders/${selectedOrder.id}/request-cancel`, { reason: cancelReason });
+      const res = await api.post(`/orders/${selectedOrder.id}/request-cancel`, { 
+        reason: cancelReason,
+        cancel_item_ids: selectedItemIdsToCancel
+      });
       toast.success(res.data.message || "Cancellation requested successfully");
       setIsCancelModalOpen(false);
       setCancelReason("");
+      setSelectedItemIdsToCancel([]);
       setSelectedOrder(res.data.order);
       // Update the local orders list
       setOrders(orders.map((o: any) => o.id === res.data.order.id ? res.data.order : o));
@@ -312,7 +321,12 @@ function AccountPortalInner() {
   const partsPurchased = orders
     .filter((o: any) => o.status !== "Cancelled")
     .reduce((sum: number, order: any) => {
-      const itemsCount = order.items?.reduce((itemSum: number, item: any) => itemSum + Number(item.quantity || 0), 0) || 0;
+      const itemsCount = order.items?.reduce((itemSum: number, item: any) => {
+        if (item.cancellation_status === "Cancelled") {
+          return itemSum;
+        }
+        return itemSum + Number(item.quantity || 0);
+      }, 0) || 0;
       return sum + itemsCount;
     }, 0);
 
@@ -1091,6 +1105,14 @@ function AccountPortalInner() {
                         {item.product?.suitable_vehicle && (
                           <span className="text-xs text-zinc-500 font-medium">Suitable: {item.product.suitable_vehicle}</span>
                         )}
+                        {item.cancellation_status && item.cancellation_status !== "None" && (
+                          <span className={cn(
+                            "text-[9px] font-black uppercase px-2 py-0.5 rounded border tracking-wider",
+                            item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-50 text-red-700 border-red-200"
+                          )}>
+                            {item.cancellation_status === "Pending" ? "Cancellation Pending" : "Cancelled / Refunded"}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <p className="font-bold text-[#1e293b] text-[14px]">Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>
@@ -1155,7 +1177,14 @@ function AccountPortalInner() {
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2">
               {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing") && (
-                <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700 text-white hover:text-white border-none shadow-none" onClick={() => { setIsOrderModalOpen(false); setIsCancelModalOpen(true); }}>
+                <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700 text-white hover:text-white border-none shadow-none" onClick={() => { 
+                  setIsOrderModalOpen(false); 
+                  setIsCancelModalOpen(true); 
+                  const eligibleIds = selectedOrder?.items
+                    ?.filter((i: any) => i.cancellation_status !== "Cancelled" && i.cancellation_status !== "Pending")
+                    ?.map((i: any) => i.id) || [];
+                  setSelectedItemIdsToCancel(eligibleIds);
+                }}>
                   Request Cancellation
                 </Button>
               )}
@@ -1176,14 +1205,56 @@ function AccountPortalInner() {
           <DialogHeader>
             <DialogTitle className="font-bold text-[#1e293b]">Request Order Cancellation</DialogTitle>
             <DialogDescription className="text-xs text-[#64748b]">
-              Please provide a reason for cancelling this order. Once approved, your refund will be processed.
+              Select the products you wish to cancel and provide a cancellation reason.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {selectedOrder?.items && (
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider block">Tick Products to Cancel *</label>
+                <div className="space-y-2 max-h-[180px] overflow-y-auto border border-[#e2e8f0] rounded-md p-3 bg-slate-50/50">
+                  {selectedOrder.items.map((item: any) => {
+                    const isItemCancelled = item.cancellation_status === "Cancelled" || item.cancellation_status === "Pending";
+                    return (
+                      <label key={item.id} className={cn("flex items-start gap-3 p-2 rounded-lg border border-transparent hover:bg-white transition-colors cursor-pointer", isItemCancelled && "opacity-60 cursor-not-allowed")}>
+                        <input
+                          type="checkbox"
+                          disabled={isItemCancelled}
+                          checked={isItemCancelled || selectedItemIdsToCancel.includes(item.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItemIdsToCancel([...selectedItemIdsToCancel, item.id]);
+                            } else {
+                              setSelectedItemIdsToCancel(selectedItemIdsToCancel.filter(id => id !== item.id));
+                            }
+                          }}
+                          className="w-4 h-4 accent-[#0052cc] rounded mt-0.5 cursor-pointer"
+                        />
+                        <div className="text-xs">
+                          <p className="font-bold text-slate-800 leading-tight">{item.product?.name || "Genuine Part"}</p>
+                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                            Qty: {item.quantity} · Price: Ksh {Number(item.price).toLocaleString()}
+                          </p>
+                          {item.cancellation_status && item.cancellation_status !== "None" && (
+                            <span className={cn(
+                              "text-[9px] font-black uppercase border px-1.5 py-0.2 rounded mt-1 inline-block",
+                              item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-red-50 text-red-700 border-red-100"
+                            )}>
+                              {item.cancellation_status === "Pending" ? "Pending Approval" : "Cancelled / Refunded"}
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Cancellation Reason *</label>
               <textarea 
-                rows={4}
+                rows={3}
                 placeholder="e.g., I ordered the wrong item, or I changed my mind..."
                 className="w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc]"
                 value={cancelReason}

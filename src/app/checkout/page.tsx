@@ -71,6 +71,7 @@ export default function CheckoutPage() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
   const [paymentError, setPaymentError] = useState("");
   const [paybillOrderId, setPaybillOrderId] = useState<number | null>(null);
+  const [pendingOrderIds, setPendingOrderIds] = useState<number[]>([]); // track unpaid orders for cleanup
   const [mpesaCode, setMpesaCode] = useState("");
   const [mpesaCodeError, setMpesaCodeError] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
@@ -237,8 +238,19 @@ export default function CheckoutPage() {
     setSelectedZone(zone || (destinations.some(d => d.country === shippingDetails.country && d.city === city) ? { country: shippingDetails.country, city } : null));
   };
 
+  // Silently deletes pending unpaid orders (safety net for failed/timeout payments)
+  const cleanupPendingOrders = async (orderIds: number[]) => {
+    for (const id of orderIds) {
+      try {
+        await api.delete(`/orders/${id}`);
+      } catch {
+        // Silent — backend callback already handles this; this is just a safety net
+      }
+    }
+  };
+
   // ── Polling for STK Push result ──────────────────────────────────────────────
-  const startPolling = (reqId: string) => {
+  const startPolling = (reqId: string, orderIds: number[]) => {
     let attempts = 0;
     const maxAttempts = 24; // 24 × 5s = 2 minutes
 
@@ -262,14 +274,22 @@ export default function CheckoutPage() {
         if (status === "success") {
           clearInterval(pollIntervalRef.current!);
           clearInterval(countdownIntervalRef.current!);
+          // Set order reference from server response (order was created by the callback)
+          if (res.data.tracking_numbers && Array.isArray(res.data.tracking_numbers) && res.data.tracking_numbers.length > 0) {
+            setOrderRefs(res.data.tracking_numbers);
+          } else if (res.data.tracking_number) {
+            setOrderRefs([res.data.tracking_number]);
+          }
           setPaymentStatus("success");
           setCompleted(true);
           clearCart();
         } else if (status === "failed" || status === "cancelled") {
           clearInterval(pollIntervalRef.current!);
           clearInterval(countdownIntervalRef.current!);
+          // Backend callback already deleted orders; this is a safety net
+          await cleanupPendingOrders(orderIds);
           setPaymentStatus("failed");
-          setPaymentError("Payment was declined or cancelled. Please try again.");
+          setPaymentError("Payment was declined or cancelled. Your cart has been kept — please try again.");
           setIsProcessing(false);
         }
       } catch {
@@ -279,6 +299,8 @@ export default function CheckoutPage() {
       if (attempts >= maxAttempts) {
         clearInterval(pollIntervalRef.current!);
         clearInterval(countdownIntervalRef.current!);
+        // Payment timed out — clean up the pending order
+        await cleanupPendingOrders(orderIds);
         setPaymentStatus("timeout");
         setPaymentError("Payment timed out. If you completed the payment, check your orders page.");
         setIsProcessing(false);
@@ -337,74 +359,87 @@ export default function CheckoutPage() {
     setPaymentError("");
 
     try {
-      // 1. Create orders (Pending payment)
-      const checkoutResponse = await api.post("/checkout", {
-        shipping: {
-          first_name: sanitizeText(shippingDetails.firstName),
-          last_name: sanitizeText(shippingDetails.lastName),
-          phone: shippingDetails.phone,
-          address: sanitizeText(shippingDetails.address),
-          city: shippingDetails.city,
-          country: shippingDetails.country
-        },
-        items: cart.map(item => ({
-          id: item.id,
-          quantity: item.quantity,
-          price: item.price,
-          warehouse_id: item.warehouse_id,
-          shipping_fee: getItemShippingFee(item, shippingMethod)
-        })),
-        total: cartTotal + shippingFee,
-        shipping_fee: shippingFee,
-        shipping_method: shippingMethod === "express" ? "Express Logistics" : "Standard Delivery"
-      });
+      if (paymentMethod === "mpesa_stk") {
+        // ── NEW FLOW: single call — no order created until payment confirmed ──
+        // POST /mpesa/checkout validates cart server-side, initiates STK push,
+        // and stores cart data. The order is created ONLY by the Safaricom callback.
+        const formattedPhone = formatKenyanPhone(mpesaPhone);
+        const stkResponse = await api.post("/mpesa/checkout", {
+          phone: formattedPhone,
+          shipping: {
+            first_name: sanitizeText(shippingDetails.firstName),
+            last_name:  sanitizeText(shippingDetails.lastName),
+            phone:      shippingDetails.phone,
+            address:    sanitizeText(shippingDetails.address),
+            city:       shippingDetails.city,
+            country:    shippingDetails.country,
+          },
+          items: cart.map(item => ({
+            id:           item.id,
+            quantity:     item.quantity,
+            warehouse_id: item.warehouse_id,
+          })),
+          shipping_method: shippingMethod === "express" ? "Express Logistics" : "Standard Delivery",
+        });
 
-      const orderIds: number[] = checkoutResponse.data.order_ids || [];
-      const totalAmount: number = checkoutResponse.data.total_amount || (cartTotal + shippingFee);
-      const refs: string[] = (checkoutResponse.data.orders || []).map((o: any) => o.tracking_number);
-      setOrderRefs(refs.length > 0 ? refs : [checkoutResponse.data.order?.tracking_number || ""]);
+        const reqId: string = stkResponse.data.checkout_request_id;
+        setCheckoutRequestId(reqId);
 
-      if (paymentMethod === "paybill") {
-        // Change to verification step
-        setPaymentStatus("paybill_verify");
-        setPaybillOrderId(orderIds[0]);
-        setIsProcessing(false);
-
-        // Start polling order status for auto-confirmation
-        pollIntervalRef.current = setInterval(async () => {
-          try {
-            const res = await api.get(`/orders/${orderIds[0]}`);
-            if (res.data.payment_status === "Paid") {
-              if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-              setPaymentStatus("success");
-              setCompleted(true);
-              clearCart();
-            }
-          } catch { }
-        }, 5000);
+        if (reqId) {
+          startPolling(reqId, []);
+        } else {
+          setPaymentStatus("failed");
+          setPaymentError(stkResponse.data.message || "Could not initiate payment. Please try again.");
+          setIsProcessing(false);
+        }
         return;
       }
 
-      // 2. Initiate STK Push
-      const formattedPhone = formatKenyanPhone(mpesaPhone);
-      const stkResponse = await api.post("/mpesa/stk-push", {
-        phone: formattedPhone,
-        amount: totalAmount,
-        order_ids: orderIds,
+      // ── PAYBILL FLOW: still creates order first (customer needs tracking number) ──
+      const checkoutResponse = await api.post("/checkout", {
+        shipping: {
+          first_name: sanitizeText(shippingDetails.firstName),
+          last_name:  sanitizeText(shippingDetails.lastName),
+          phone:      shippingDetails.phone,
+          address:    sanitizeText(shippingDetails.address),
+          city:       shippingDetails.city,
+          country:    shippingDetails.country,
+        },
+        items: cart.map(item => ({
+          id:           item.id,
+          quantity:     item.quantity,
+          price:        item.price,
+          warehouse_id: item.warehouse_id,
+          shipping_fee: getItemShippingFee(item, shippingMethod),
+        })),
+        total:           cartTotal + shippingFee,
+        shipping_fee:    shippingFee,
+        shipping_method: shippingMethod === "express" ? "Express Logistics" : "Standard Delivery",
       });
 
-      const reqId: string = stkResponse.data.checkout_request_id;
-      setCheckoutRequestId(reqId);
+      const orderIds: number[]  = checkoutResponse.data.order_ids || [];
+      const totalAmount: number = checkoutResponse.data.total_amount || (cartTotal + shippingFee);
+      const refs: string[]      = (checkoutResponse.data.orders || []).map((o: any) => o.tracking_number);
+      setOrderRefs(refs.length > 0 ? refs : [checkoutResponse.data.order?.tracking_number || ""]);
+      setPendingOrderIds(orderIds);
 
-      // 3. Start polling for confirmation
-      if (reqId) {
-        startPolling(reqId);
-      } else {
-        // No checkout_request_id — sandbox or error
-        setPaymentStatus("failed");
-        setPaymentError(stkResponse.data.message || "Could not initiate payment.");
-        setIsProcessing(false);
-      }
+      setPaymentStatus("paybill_verify");
+      setPaybillOrderId(orderIds[0]);
+      setIsProcessing(false);
+
+      // Poll order status for auto-confirmation
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const res = await api.get(`/orders/${orderIds[0]}`);
+          if (res.data.payment_status === "Paid") {
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            setPaymentStatus("success");
+            setCompleted(true);
+            clearCart();
+          }
+        } catch { }
+      }, 5000);
+      return;
     } catch (error: any) {
       console.error("Checkout failed:", error);
       const msg = error?.response?.data?.message || "Payment failed or order could not be placed. Please try again.";

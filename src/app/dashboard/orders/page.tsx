@@ -168,6 +168,7 @@ export default function AdminOrdersPage() {
   const [shippingAddress, setShippingAddress] = useState<string>("");
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [voidOrderTarget, setVoidOrderTarget] = useState<any>(null);
+  const [selectedVoidItemIds, setSelectedVoidItemIds] = useState<number[]>([]);
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
   const [voidReason, setVoidReason] = useState("");
@@ -369,11 +370,19 @@ export default function AdminOrdersPage() {
     setVoidOrderTarget(order);
     setVoidReason("");
     setVoidTransactionId("");
+    const activeItemIds = (order.items || [])
+      .filter((item: any) => item.cancellation_status !== "Cancelled")
+      .map((item: any) => item.id);
+    setSelectedVoidItemIds(activeItemIds);
     setIsVoidDialogOpen(true);
   };
 
   const handleConfirmVoidRefund = async () => {
     if (!voidOrderTarget) return;
+    if (selectedVoidItemIds.length === 0) {
+      toast.error("Please select at least one product to cancel / refund.");
+      return;
+    }
     if (!voidReason.trim()) {
       toast.error("Please enter a void/refund reason.");
       return;
@@ -387,15 +396,17 @@ export default function AdminOrdersPage() {
       const res = await api.post(`/orders/${voidOrderTarget.id}/void-refund`, {
         reason: voidReason,
         refund_transaction_id: voidTransactionId,
+        cancel_item_ids: selectedVoidItemIds,
       });
       const refunded = parseFloat(res.data?.refunded_amount ?? voidOrderTarget.total_amount ?? 0);
       toast.success(
-        `Order ${voidOrderTarget.tracking_number} voided. Ksh ${refunded.toLocaleString()} refunded — stock restored to warehouse.`
+        `Order ${voidOrderTarget.tracking_number} refund processed. Ksh ${refunded.toLocaleString()} refunded — stock restored to warehouse.`
       );
       setIsVoidDialogOpen(false);
       setVoidOrderTarget(null);
       setVoidReason("");
       setVoidTransactionId("");
+      setSelectedVoidItemIds([]);
       await fetchOrders(true);
       await fetchMetadata();
     } catch (err: any) {
@@ -690,7 +701,7 @@ export default function AdminOrdersPage() {
         });
       }
 
-      fetchOrders();
+      fetchOrders(true);
     } catch (err) {
       console.error("Failed to update status", err);
       toast.error("Status update failed");
@@ -743,7 +754,7 @@ export default function AdminOrdersPage() {
       }
 
       setSelectedOrderIds([]);
-      fetchOrders();
+      fetchOrders(true);
     } catch (err) {
       console.error("Bulk update failed", err);
       toast.error("Bulk update failed");
@@ -1536,11 +1547,11 @@ export default function AdminOrdersPage() {
                           )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
                         </div>
                         <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",
-                          order.payment_status === "Paid" ? "bg-emerald-100 text-emerald-800" :
+                          (order.payment_status === "Paid" || !isOrderVoided(order)) ? "bg-emerald-100 text-emerald-800" :
                           order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "bg-red-100 text-red-800" :
                           "bg-amber-100 text-amber-800"
                         )}>
-                          {order.payment_status === "Paid" ? "✓ M-Pesa Paid" :
+                          {(order.payment_status === "Paid" || !isOrderVoided(order)) ? "✓ M-Pesa Paid" :
                            order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "Refunded" :
                            "Payment Pending"}
                         </Badge>
@@ -1696,43 +1707,62 @@ export default function AdminOrdersPage() {
 
             <div className="space-y-4">
                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
-              {currentSelectedOrder?.items?.map((item: any, idx: number) => (
-                <div key={idx} className="flex justify-between items-center py-3 border-b last:border-0">
-                  <div className="space-y-1">
-                    <p className="font-bold text-zinc-900 text-sm">{item.product?.name || `Part ID: ${item.product_id}`}</p>
-                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-zinc-500 font-medium">
-                      <span>Qty: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
-                      {item.product?.part_number && (
-                        <>
-                          <span>|</span>
-                          <span className="font-semibold text-[#0052cc]">Part No: {item.product.part_number}</span>
-                        </>
-                      )}
-                      {item.product?.engine_model && (
-                        <>
-                          <span>|</span>
-                          <span>Engine: {item.product.engine_model}</span>
-                        </>
+              {currentSelectedOrder?.items?.map((item: any, idx: number) => {
+                const isItemCancelled = item.cancellation_status === "Cancelled";
+                return (
+                  <div key={idx} className={cn("flex justify-between items-center py-3 border-b last:border-0", isItemCancelled && "bg-red-50/50 px-3 py-2 rounded-xl border border-red-100")}>
+                    <div className="space-y-1">
+                      <p className="font-bold text-zinc-900 text-sm flex items-center gap-2">
+                        <span className={cn(isItemCancelled && "line-through text-zinc-400 font-medium")}>
+                          {item.product?.name || `Part ID: ${item.product_id}`}
+                        </span>
+                        {isItemCancelled && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-red-100 text-red-700 border border-red-200">
+                            Cancelled / Refunded
+                          </span>
+                        )}
+                      </p>
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-zinc-500 font-medium">
+                        <span className={cn(isItemCancelled && "line-through text-zinc-400")}>
+                          Qty: {item.quantity} × Ksh {Number(item.price).toLocaleString()}
+                        </span>
+                        {item.product?.part_number && (
+                          <>
+                            <span>|</span>
+                            <span className={cn("font-semibold text-[#0052cc]", isItemCancelled && "text-zinc-450 line-through")}>Part No: {item.product.part_number}</span>
+                          </>
+                        )}
+                        {item.product?.engine_model && (
+                          <>
+                            <span>|</span>
+                            <span className={cn(isItemCancelled && "text-zinc-450 line-through")}>Engine: {item.product.engine_model}</span>
+                          </>
+                        )}
+                      </div>
+                      {item.product?.suitable_vehicle && (
+                        <p className={cn("text-[11px] text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</p>
                       )}
                     </div>
-                    {item.product?.suitable_vehicle && (
-                      <p className="text-[11px] text-zinc-500 font-medium">Suitable: {item.product.suitable_vehicle}</p>
-                    )}
+                    <p className={cn("font-bold text-zinc-900", isItemCancelled && "line-through text-red-500")}>
+                      Ksh {(Number(item.price) * item.quantity).toLocaleString()}
+                    </p>
                   </div>
-                  <p className="font-bold text-zinc-900">Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
             
-            {(currentSelectedOrder?.status === "Cancelled" || currentSelectedOrder?.status === "Cancellation Requested") && (
+            {(currentSelectedOrder?.status === "Cancelled" || 
+              currentSelectedOrder?.status === "Cancellation Requested" || 
+              currentSelectedOrder?.refund_transaction_id || 
+              currentSelectedOrder?.items?.some((i: any) => i.cancellation_status === "Cancelled")) && (
               <div className="mt-6 bg-red-50 p-4 rounded-xl border border-red-200">
-                <h4 className="text-[11px] font-bold text-red-800 uppercase tracking-widest mb-2">Cancellation Details</h4>
+                <h4 className="text-[11px] font-bold text-red-800 uppercase tracking-widest mb-2">Cancellation / Refund Details</h4>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Reason:</span> {currentSelectedOrder.cancellation_reason || 'N/A'}</p>
-                  <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Refund Status:</span> <span className="uppercase tracking-wider font-black">{currentSelectedOrder.refund_status || 'Pending'}</span></p>
+                  <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Refund Status:</span> <span className="uppercase tracking-wider font-black">{currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id ? 'Completed' : 'Pending')}</span></p>
                   {currentSelectedOrder.refund_transaction_id && (
                     <p className="text-[11px] font-black text-green-700 bg-green-50 px-2.5 py-1 inline-block rounded border border-green-200 uppercase tracking-wider mt-1">
-                      Tx Ref: {currentSelectedOrder.refund_transaction_id}
+                      Refund Evidence Tx Ref: {currentSelectedOrder.refund_transaction_id}
                     </p>
                   )}
                 </div>
@@ -2117,15 +2147,15 @@ export default function AdminOrdersPage() {
       </Dialog>
 
       {/* Void / Refund Confirmation Dialog */}
-      <Dialog open={isVoidDialogOpen} onOpenChange={(open) => { if (!open) { setIsVoidDialogOpen(false); setVoidOrderTarget(null); } }}>
-        <DialogContent className="max-w-[95vw] sm:max-w-[440px] w-full bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden">
+      <Dialog open={isVoidDialogOpen} onOpenChange={(open) => { if (!open) { setIsVoidDialogOpen(false); setVoidOrderTarget(null); setSelectedVoidItemIds([]); } }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-[460px] w-full bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="h-11 w-11 rounded-full bg-red-50 flex items-center justify-center shrink-0">
                 <Trash2 className="h-5 w-5 text-red-600" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold text-zinc-900">Void & Refund Order</DialogTitle>
+                <DialogTitle className="text-lg font-bold text-zinc-900">Void & Refund Order Items</DialogTitle>
                 <DialogDescription className="text-xs text-zinc-400 font-medium mt-0.5">
                   Ref: <span className="font-bold text-zinc-600">{voidOrderTarget?.tracking_number}</span>
                 </DialogDescription>
@@ -2134,18 +2164,59 @@ export default function AdminOrdersPage() {
           </DialogHeader>
           <div className="px-6 pb-4 space-y-4">
             <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-2">
-              <p className="text-xs font-bold text-red-700">What happens when you void this order:</p>
+              <p className="text-xs font-bold text-red-700">What happens when you process this refund:</p>
               <ul className="space-y-1 text-[11px] text-red-600 font-medium">
-                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Payment of <strong>Ksh {parseFloat(voidOrderTarget?.total_amount || 0).toLocaleString()}</strong> is refunded to the customer</li>
-                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />The amount is deducted from your revenue records</li>
-                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />All sold items are returned to warehouse stock</li>
-                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Order status is set to <strong>Cancelled / Refunded</strong></li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Selected items will be refunded to the customer</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Their cost is deducted from your revenue records</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Returned items are restored to warehouse stock</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Order status is updated with refund completed</li>
               </ul>
             </div>
             
+            {/* Products Checkbox List */}
+            {voidOrderTarget?.items && voidOrderTarget.items.length > 0 && (
+              <div className="space-y-2 border border-zinc-200 rounded-xl p-3 bg-zinc-50/50">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                  Select Products to Void / Refund *
+                </label>
+                <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                  {voidOrderTarget.items.map((item: any) => {
+                    const isCancelled = item.cancellation_status === "Cancelled";
+                    const isChecked = selectedVoidItemIds.includes(item.id);
+                    return (
+                      <div key={item.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0 border-zinc-105">
+                        <label className={cn("flex items-center gap-2 cursor-pointer select-none", isCancelled && "opacity-50 cursor-not-allowed")}>
+                          <input
+                            type="checkbox"
+                            disabled={isCancelled}
+                            checked={isChecked && !isCancelled}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedVoidItemIds([...selectedVoidItemIds, item.id]);
+                              } else {
+                                setSelectedVoidItemIds(selectedVoidItemIds.filter(id => id !== item.id));
+                              }
+                            }}
+                            className="w-4 h-4 accent-red-600 rounded cursor-pointer"
+                          />
+                          <span className={cn("font-bold text-zinc-800", isCancelled && "line-through")}>
+                            {item.product?.name || "Genuine Spare Part"}
+                            {isCancelled && <span className="ml-1 text-[10px] text-red-500 font-bold">(Refunded)</span>}
+                          </span>
+                        </label>
+                        <span className="font-bold text-zinc-500 shrink-0">
+                          {item.quantity} × Ksh {Number(item.price).toLocaleString()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
             <div className="space-y-3">
               <div className="space-y-1 text-left">
-                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Void / Refund Reason *</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Refund Reason *</label>
                 <textarea 
                   rows={2}
                   placeholder="e.g., Customer requested refund, duplicate order..."
@@ -2169,11 +2240,11 @@ export default function AdminOrdersPage() {
           </div>
           <DialogFooter className="px-6 pb-6 flex gap-3 m-0 shrink-0">
             <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200 h-10 text-xs"
-              onClick={() => { setIsVoidDialogOpen(false); setVoidOrderTarget(null); }}>
+              onClick={() => { setIsVoidDialogOpen(false); setVoidOrderTarget(null); setSelectedVoidItemIds([]); }}>
               Cancel
             </Button>
             <Button
-              disabled={isVoiding || !voidReason.trim() || !voidTransactionId.trim()}
+              disabled={isVoiding || !voidReason.trim() || !voidTransactionId.trim() || selectedVoidItemIds.length === 0}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold shadow-sm h-10 text-xs"
               onClick={handleConfirmVoidRefund}
             >

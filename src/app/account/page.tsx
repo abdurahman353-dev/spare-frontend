@@ -28,8 +28,18 @@ import { exportSingleOrderInvoicePDF, exportCustomerLedgerPDF } from "@/lib/pdf-
 
 import { Suspense } from "react";
 
+/**
+ * Returns the total amount already refunded for an order.
+ * Reads from the backend-persisted `refunded_amount` column (product + shipping).
+ * Legacy fallback: proportional calculation if field is absent.
+ */
 function getOrderRefundedTotal(order: any): number {
-  if (!order || !order.items) return 0;
+  if (!order) return 0;
+  if (order.refunded_amount !== undefined && order.refunded_amount !== null) {
+    return Number(order.refunded_amount || 0);
+  }
+  // Legacy fallback
+  if (!order.items) return 0;
   const totalUnits = Math.max(1, order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
   const shippingFee = Number(order.shipping_fee || 0);
   return order.items
@@ -1247,20 +1257,15 @@ function AccountPortalInner() {
                           {selectedOrder?.refund_status || (selectedOrder?.refund_transaction_id ? "Completed" : "Pending")}
                         </span>
                       </p>
-                      {/* Total refunded (product + proportional shipping) */}
+                      {/* Total refunded — reads from backend-persisted refunded_amount */}
                       {(() => {
-                        const cancelledItems = (selectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
-                        if (cancelledItems.length === 0) return null;
-                        const totalUnits = Math.max(1, (selectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                        const shippingFee = Number(selectedOrder?.shipping_fee || 0);
-                        const totalRefunded = cancelledItems.reduce((sum: number, i: any) => {
-                          return sum + (Number(i.price) * i.quantity) + ((shippingFee / totalUnits) * i.quantity);
-                        }, 0);
+                        const refunded = Number(selectedOrder?.refunded_amount || 0);
+                        if (refunded <= 0) return null;
                         return (
                           <p className="text-[12px] font-semibold text-red-900">
-                            <span className="text-red-700">Amount to be Refunded: </span>
-                            <span className="font-black text-[#1e293b]">Ksh {Math.round(totalRefunded).toLocaleString()}</span>
-                            <span className="text-[10px] text-zinc-500 ml-1">(incl. shipping)</span>
+                            <span className="text-red-700">Amount Refunded: </span>
+                            <span className="font-black text-[#1e293b]">Ksh {Math.round(refunded).toLocaleString()}</span>
+                            <span className="text-[10px] text-zinc-500 ml-1">(product + shipping)</span>
                           </p>
                         );
                       })()}
@@ -1284,7 +1289,12 @@ function AccountPortalInner() {
               <div className="pt-6 border-t border-[#f1f5f9] space-y-2">
                 <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
                   <span>Logistics Fee ({selectedOrder?.shipping_method || 'Standard'})</span>
-                  <span>Ksh {selectedOrder ? Number(selectedOrder.shipping_fee || 0).toLocaleString() : 0}</span>
+                  <span className="flex items-center gap-1.5">
+                    Ksh {selectedOrder ? Number(selectedOrder.shipping_fee || 0).toLocaleString() : 0}
+                    {selectedOrder && Number(selectedOrder.shipping_fee || 0) === 0 && Number(selectedOrder.refunded_amount || 0) > 0 && (
+                      <span className="text-[9px] font-black text-red-500 uppercase bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Refunded</span>
+                    )}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-[#1e293b] text-[13px] uppercase tracking-wider">Total Settlement</span>

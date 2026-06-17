@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, Menu, User, LogOut, Settings, Key, ChevronRight, Home } from "lucide-react";
+import { Bell, Search, Menu, User, LogOut, Settings, Key, ChevronRight, Home, Undo2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
@@ -23,7 +23,6 @@ import { Badge } from "@/components/ui/badge";
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
 
   const pathSegments = pathname ? pathname.split("/").filter(Boolean) : [];
@@ -49,7 +48,6 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
       const dismissed = JSON.parse(localStorage.getItem("dismissed_notifications") || "[]");
       const active = res.data.notifications.filter((n: any) => !dismissed.includes(n.id));
       setNotifications(active);
-      setUnreadCount(active.length);
     } catch (err) {
       console.error("Failed to fetch notifications:", err);
     }
@@ -61,14 +59,27 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     return () => clearInterval(interval);
   }, []);
 
-  const handleMarkAllRead = (e: React.MouseEvent) => {
+  const cancellationNotifications = notifications.filter((n: any) => n.type === 'cancellation_request');
+  const generalNotifications = notifications.filter((n: any) => n.type !== 'cancellation_request');
+  const generalUnreadCount = generalNotifications.length;
+  const cancellationUnreadCount = cancellationNotifications.length;
+
+  const handleMarkAllGeneralRead = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     const dismissed = JSON.parse(localStorage.getItem("dismissed_notifications") || "[]");
-    const newDismissed = [...dismissed, ...notifications.map((n: any) => n.id)];
+    const newDismissed = [...dismissed, ...generalNotifications.map((n: any) => n.id)];
     localStorage.setItem("dismissed_notifications", JSON.stringify(newDismissed));
-    setNotifications([]);
-    setUnreadCount(0);
+    setNotifications(notifications.filter((n: any) => n.type === 'cancellation_request'));
+  };
+
+  const handleMarkAllCancellationsRead = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const dismissed = JSON.parse(localStorage.getItem("dismissed_notifications") || "[]");
+    const newDismissed = [...dismissed, ...cancellationNotifications.map((n: any) => n.id)];
+    localStorage.setItem("dismissed_notifications", JSON.stringify(newDismissed));
+    setNotifications(notifications.filter((n: any) => n.type !== 'cancellation_request'));
   };
 
   const handleDismissNotification = (id: string) => {
@@ -78,7 +89,6 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     }
     const active = notifications.filter((n: any) => n.id !== id);
     setNotifications(active);
-    setUnreadCount(active.length);
   };
 
   return (
@@ -104,15 +114,74 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Cancellation Alert Dropdown (Critical Action Alerts) */}
+        {cancellationNotifications.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="relative text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer outline-none rounded-full h-10 w-10 flex items-center justify-center shrink-0">
+              <Undo2 className={cn(
+                "h-5 w-5 transition-all duration-300",
+                cancellationUnreadCount > 0 ? "text-rose-600 animate-pulse stroke-[2.5]" : "text-zinc-500"
+              )} />
+              {cancellationUnreadCount > 0 && (
+                <span className="absolute top-2 right-2 h-4 min-w-4 px-1 rounded-full bg-rose-600 border-2 border-white text-[8px] font-black text-white flex items-center justify-center animate-bounce">
+                  {cancellationUnreadCount}
+                </span>
+              )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-80 mt-2 rounded-xl shadow-2xl border-zinc-200 p-0 overflow-hidden" align="end">
+              <div className="p-4 border-b border-rose-100 bg-rose-50/30 flex justify-between items-center">
+                <span className="text-xs font-black text-rose-850 uppercase tracking-wider">Cancellations</span>
+                <div className="flex items-center gap-3">
+                  {cancellationUnreadCount > 0 && (
+                    <button 
+                      onClick={handleMarkAllCancellationsRead}
+                      className="text-[10px] font-black text-rose-700 hover:text-rose-800 transition-colors uppercase tracking-wider cursor-pointer outline-none border-none bg-transparent"
+                    >
+                      Clear all
+                    </button>
+                  )}
+                  <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-200 border-none font-bold text-[10px]">
+                    {cancellationNotifications.length}
+                  </Badge>
+                </div>
+              </div>
+              <div className="max-h-[260px] overflow-y-auto divide-y divide-rose-50">
+                {cancellationNotifications.map((notif: any) => (
+                  <Link href={notif.link || "/dashboard/orders?status=Cancellation Requested"} key={notif.id} className="block" onClick={() => handleDismissNotification(notif.id)}>
+                    <DropdownMenuItem className="p-4 cursor-pointer hover:bg-rose-50/25 transition-colors flex flex-col items-start gap-1">
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-rose-100 text-rose-700">
+                          {notif.title}
+                        </span>
+                        <span className="text-[9px] font-medium text-zinc-400">{notif.time}</span>
+                      </div>
+                      <p className="text-xs font-semibold text-zinc-700 leading-snug mt-1">{notif.message}</p>
+                    </DropdownMenuItem>
+                  </Link>
+                ))}
+              </div>
+              <div className="p-3 bg-zinc-50 border-t border-zinc-100 text-center">
+                <Link 
+                  href="/dashboard/orders?status=Cancellation Requested" 
+                  className="inline-flex items-center justify-center w-full py-2 bg-rose-600 hover:bg-rose-750 text-white rounded-lg text-xs font-bold shadow-sm transition-all"
+                >
+                  Open Cancellation Manager
+                </Link>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        {/* Standard Notification Bell Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger className="relative text-zinc-500 hover:text-[#0052cc] hover:bg-blue-50 transition-colors cursor-pointer outline-none rounded-full h-10 w-10 flex items-center justify-center shrink-0">
             <Bell className={cn(
               "h-5 w-5 transition-all duration-300",
-              unreadCount > 0 ? "text-red-500 animate-pulse stroke-[2.5]" : "text-zinc-500"
+              generalUnreadCount > 0 ? "text-red-500 animate-pulse stroke-[2.5]" : "text-zinc-500"
             )} />
-            {unreadCount > 0 && (
+            {generalUnreadCount > 0 && (
               <span className="absolute top-2 right-2 h-4 min-w-4 px-1 rounded-full bg-red-500 border-2 border-white text-[8px] font-black text-white flex items-center justify-center animate-bounce">
-                {unreadCount}
+                {generalUnreadCount}
               </span>
             )}
           </DropdownMenuTrigger>
@@ -120,30 +189,30 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             <div className="p-4 border-b border-zinc-100 bg-zinc-50/50 flex justify-between items-center">
               <span className="text-xs font-black text-zinc-900 uppercase tracking-wider">Alert Center</span>
               <div className="flex items-center gap-3">
-                {unreadCount > 0 && (
+                {generalUnreadCount > 0 && (
                   <button 
-                    onClick={handleMarkAllRead}
+                    onClick={handleMarkAllGeneralRead}
                     className="text-[10px] font-black text-[#0052cc] hover:text-[#0052cc]/85 transition-colors uppercase tracking-wider cursor-pointer outline-none border-none bg-transparent"
                   >
                     Mark all read
                   </button>
                 )}
-                {unreadCount > 0 && (
+                {generalNotifications.length > 0 && (
                   <Badge className="bg-blue-100 text-[#0052cc] hover:bg-blue-200 border-none font-bold text-[10px]">
-                    {unreadCount}
+                    {generalNotifications.length}
                   </Badge>
                 )}
               </div>
             </div>
             <div className="max-h-[300px] overflow-y-auto divide-y divide-zinc-100">
-              {notifications.length === 0 ? (
+              {generalNotifications.length === 0 ? (
                 <div className="p-8 text-center text-zinc-400 flex flex-col items-center gap-2">
                   <Bell className="h-8 w-8 text-zinc-300 stroke-[1.5]" />
                   <p className="text-xs font-bold uppercase tracking-wider">All quiet here</p>
                   <p className="text-[10px] text-zinc-400">No active stock or order alerts.</p>
                 </div>
               ) : (
-                notifications.map((notif: any) => (
+                generalNotifications.map((notif: any) => (
                   <Link href={notif.link} key={notif.id} className="block" onClick={() => handleDismissNotification(notif.id)}>
                     <DropdownMenuItem className="p-4 cursor-pointer hover:bg-zinc-50 transition-colors flex flex-col items-start gap-1">
                       <div className="flex items-center justify-between w-full">
@@ -152,8 +221,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                           notif.type === 'low_stock' && "bg-red-50 text-red-700",
                           notif.type === 'new_order' && "bg-emerald-50 text-emerald-700",
                           notif.type === 'daily_report' && "bg-indigo-50 text-indigo-700",
-                          notif.type === 'inquiry' && "bg-blue-50 text-blue-700",
-                          notif.type === 'cancellation_request' && "bg-rose-50 text-rose-700"
+                          notif.type === 'inquiry' && "bg-blue-50 text-blue-700"
                         )}>
                           {notif.title}
                         </span>

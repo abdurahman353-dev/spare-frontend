@@ -81,6 +81,19 @@ function isOrderVoided(order: { status?: string; payment_status?: string }): boo
   return order.status === "Cancelled" || order.payment_status === "Refunded";
 }
 
+function getOrderRefundedTotal(order: any): number {
+  if (!order || !order.items) return 0;
+  const totalUnits = Math.max(1, order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+  const shippingFee = Number(order.shipping_fee || 0);
+  return order.items
+    .filter((i: any) => i.cancellation_status === "Cancelled")
+    .reduce((sum: number, i: any) => {
+      const itemProductCost = Number(i.price) * i.quantity;
+      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
+      return sum + itemProductCost + itemShippingShare;
+    }, 0);
+}
+
 function getWalkInPayStatusDisplay(order: { status?: string; payment_status?: string }) {
   if (isOrderVoided(order)) {
     return { label: "Cancelled / Refunded", className: "bg-red-100 text-red-700" };
@@ -1358,15 +1371,35 @@ export default function AdminOrdersPage() {
                       </p>
                     </TableCell>
                     <TableCell className="text-right">
-                      <p className={cn(
-                        "text-sm font-black",
-                        isOrderVoided(order) ? "text-red-500 line-through opacity-75" : "text-zinc-900"
-                      )}>
-                        Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
-                      </p>
-                      {isOrderVoided(order) && (
-                        <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
-                      )}
+                      {(() => {
+                        const refundedTotal = getOrderRefundedTotal(order);
+                        const hasCancelledItems = order.items?.some((i: any) => i.cancellation_status === "Cancelled");
+                        const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+                        
+                        if (isOrderVoided(order) || allCancelled) {
+                          return (
+                            <>
+                              <p className="text-sm font-black text-red-500 line-through opacity-75">
+                                Ksh {refundedTotal.toLocaleString()}
+                              </p>
+                              <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
+                            </>
+                          );
+                        }
+                        
+                        return (
+                          <>
+                            <p className="text-sm font-black text-zinc-900">
+                              Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
+                            </p>
+                            {refundedTotal > 0 && (
+                              <p className="text-[9px] font-bold text-red-500 uppercase">
+                                Ksh {refundedTotal.toLocaleString()} Refunded
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="px-6 text-right">
                       <DropdownMenu>
@@ -1420,6 +1453,15 @@ export default function AdminOrdersPage() {
                                 <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
                               </DropdownMenuItem>
                             ) : null}
+                            {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
+                                  <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
+                                </DropdownMenuItem>
+                              </>
+                            )}
                             {!isOrderVoided(order) && (
                             <DropdownMenuItem
                               onClick={() => handleOpenVoidDialog(order)}
@@ -1534,7 +1576,36 @@ export default function AdminOrdersPage() {
                     <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
                     <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
                     <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
-                    <TableCell className="text-right"><p className="text-xs font-black text-zinc-900">Ksh {parseFloat(order.total_amount || 0).toLocaleString()}</p></TableCell>
+                    <TableCell className="text-right">
+                      {(() => {
+                        const refundedTotal = getOrderRefundedTotal(order);
+                        const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+                        
+                        if (order.status === "Cancelled" || allCancelled) {
+                          return (
+                            <>
+                              <p className="text-xs font-black text-red-500 line-through opacity-75">
+                                Ksh {refundedTotal.toLocaleString()}
+                              </p>
+                              <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
+                            </>
+                          );
+                        }
+                        
+                        return (
+                          <>
+                            <p className="text-xs font-black text-zinc-900">
+                              Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
+                            </p>
+                            {refundedTotal > 0 && (
+                              <p className="text-[9px] font-bold text-red-500 uppercase">
+                                Ksh {refundedTotal.toLocaleString()} Refunded
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell className="text-center">
                       <div className="flex flex-col items-center justify-center gap-1">
                         <div className="flex items-center justify-center gap-1.5">
@@ -1591,7 +1662,7 @@ export default function AdminOrdersPage() {
                               </>
                             )}
                             
-                            {order.status === "Cancelled" && order.refund_status === "Pending" && (
+                            {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
                               <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
@@ -2499,10 +2570,17 @@ export default function AdminOrdersPage() {
               Total Refund Value: Ksh {
                 (() => {
                   const pendingItems = currentSelectedOrder?.items?.filter((i: any) => i.cancellation_status === "Pending") || [];
+                  const totalUnits = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                  const shippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
+                  
                   const amt = pendingItems.length > 0
-                    ? pendingItems.reduce((acc: number, i: any) => acc + (Number(i.price) * i.quantity), 0)
+                    ? pendingItems.reduce((acc: number, i: any) => {
+                        const itemProductCost = Number(i.price) * i.quantity;
+                        const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
+                        return acc + itemProductCost + itemShippingShare;
+                      }, 0)
                     : parseFloat(currentSelectedOrder?.total_amount || 0);
-                  return amt.toLocaleString();
+                  return Math.round(amt).toLocaleString();
                 })()
               }
             </p>
@@ -2528,7 +2606,20 @@ export default function AdminOrdersPage() {
           <div className="p-6 space-y-4">
             <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
               <p className="text-sm font-bold text-amber-800">
-                Refund Amount: Ksh {parseFloat(currentSelectedOrder?.total_amount || 0).toLocaleString()}
+                Refund Amount: Ksh {
+                  (() => {
+                    const cancelledItems = (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                    if (cancelledItems.length === 0) return parseFloat(currentSelectedOrder?.total_amount || 0).toLocaleString();
+                    const totalUnits = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                    const shippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
+                    const totalRefunded = cancelledItems.reduce((sum: number, i: any) => {
+                      const itemProductCost = Number(i.price) * i.quantity;
+                      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
+                      return sum + itemProductCost + itemShippingShare;
+                    }, 0);
+                    return Math.round(totalRefunded).toLocaleString();
+                  })()
+                }
               </p>
               <p className="text-xs text-amber-700 mt-1">
                 Please transfer this amount manually (e.g. M-Pesa or Bank) to {currentSelectedOrder?.customer?.name || "the customer"}.

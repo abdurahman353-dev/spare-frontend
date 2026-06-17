@@ -28,6 +28,19 @@ import { exportSingleOrderInvoicePDF, exportCustomerLedgerPDF } from "@/lib/pdf-
 
 import { Suspense } from "react";
 
+function getOrderRefundedTotal(order: any): number {
+  if (!order || !order.items) return 0;
+  const totalUnits = Math.max(1, order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+  const shippingFee = Number(order.shipping_fee || 0);
+  return order.items
+    .filter((i: any) => i.cancellation_status === "Cancelled")
+    .reduce((sum: number, i: any) => {
+      const itemProductCost = Number(i.price) * i.quantity;
+      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
+      return sum + itemProductCost + itemShippingShare;
+    }, 0);
+}
+
 function AccountPortalInner() {
   const { user, logout, refreshUser } = useAuth();
   const { settings } = useSettings();
@@ -690,7 +703,36 @@ function AccountPortalInner() {
                                   <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
                                     Ksh {Number(order.shipping_fee || 0).toLocaleString()}
                                   </td>
-                                  <td className="px-6 py-4 text-[14px] font-black text-[#1e293b] text-right pr-10">Ksh {Number(order.total_amount).toLocaleString()}</td>
+                                  <td className="px-6 py-4 text-right pr-10">
+                                    {(() => {
+                                      const refundedTotal = getOrderRefundedTotal(order);
+                                      const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+                                      
+                                      if (order.status === "Cancelled" || allCancelled) {
+                                        return (
+                                          <>
+                                            <p className="text-[14px] font-black text-red-500 line-through opacity-75">
+                                              Ksh {refundedTotal.toLocaleString()}
+                                            </p>
+                                            <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">Refunded</p>
+                                          </>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <>
+                                          <p className="text-[14px] font-black text-[#1e293b]">
+                                            Ksh {Number(order.total_amount || 0).toLocaleString()}
+                                          </p>
+                                          {refundedTotal > 0 && (
+                                            <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
+                                              Ksh {refundedTotal.toLocaleString()} Refunded
+                                            </p>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </td>
                                   <td className="px-6 py-4 text-center">
                                     <Badge className={cn(
                                       "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
@@ -886,7 +928,36 @@ function AccountPortalInner() {
                                   <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
                                     Ksh {Number(order.shipping_fee || 0).toLocaleString()}
                                   </td>
-                                  <td className="px-6 py-4 text-[14px] font-black text-[#1e293b] text-right pr-10">Ksh {Number(order.total_amount).toLocaleString()}</td>
+                                  <td className="px-6 py-4 text-right pr-10">
+                                    {(() => {
+                                      const refundedTotal = getOrderRefundedTotal(order);
+                                      const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+                                      
+                                      if (order.status === "Cancelled" || allCancelled) {
+                                        return (
+                                          <>
+                                            <p className="text-[14px] font-black text-red-500 line-through opacity-75">
+                                              Ksh {refundedTotal.toLocaleString()}
+                                            </p>
+                                            <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">Refunded</p>
+                                          </>
+                                        );
+                                      }
+                                      
+                                      return (
+                                        <>
+                                          <p className="text-[14px] font-black text-[#1e293b]">
+                                            Ksh {Number(order.total_amount || 0).toLocaleString()}
+                                          </p>
+                                          {refundedTotal > 0 && (
+                                            <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
+                                              Ksh {refundedTotal.toLocaleString()} Refunded
+                                            </p>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </td>
                                   <td className="px-6 py-4 text-center">
                                     <Badge className={cn(
                                       "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",

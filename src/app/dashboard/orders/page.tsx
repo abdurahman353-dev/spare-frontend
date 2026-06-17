@@ -1709,10 +1709,16 @@ export default function AdminOrdersPage() {
                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
               {currentSelectedOrder?.items?.map((item: any, idx: number) => {
                 const isItemCancelled = item.cancellation_status === "Cancelled";
+                // Per-item refund total = product cost + proportional shipping share
+                const totalUnits = Math.max(1, (currentSelectedOrder.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                const shippingFee = Number(currentSelectedOrder.shipping_fee || 0);
+                const itemProductCost = Number(item.price) * item.quantity;
+                const itemShippingShare = (shippingFee / totalUnits) * item.quantity;
+                const itemRefundTotal = itemProductCost + itemShippingShare;
                 return (
-                  <div key={idx} className={cn("flex justify-between items-center py-3 border-b last:border-0", isItemCancelled && "bg-red-50/50 px-3 py-2 rounded-xl border border-red-100")}>
-                    <div className="space-y-1">
-                      <p className="font-bold text-zinc-900 text-sm flex items-center gap-2">
+                  <div key={idx} className={cn("flex justify-between items-start py-3 border-b last:border-0", isItemCancelled && "bg-red-50/50 px-3 py-2 rounded-xl border border-red-100")}>
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <p className="font-bold text-zinc-900 text-sm flex items-center gap-2 flex-wrap">
                         <span className={cn(isItemCancelled && "line-through text-zinc-400 font-medium")}>
                           {item.product?.name || `Part ID: ${item.product_id}`}
                         </span>
@@ -1742,8 +1748,16 @@ export default function AdminOrdersPage() {
                       {item.product?.suitable_vehicle && (
                         <p className={cn("text-[11px] text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</p>
                       )}
+                      {/* Refund breakdown shown per cancelled item */}
+                      {isItemCancelled && (
+                        <p className="text-[10px] font-semibold text-red-600 mt-1">
+                          Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
+                          {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
+                          {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
+                        </p>
+                      )}
                     </div>
-                    <p className={cn("font-bold text-zinc-900", isItemCancelled && "line-through text-red-500")}>
+                    <p className={cn("font-bold text-zinc-900 shrink-0 ml-2", isItemCancelled && "line-through text-red-500")}>
                       Ksh {(Number(item.price) * item.quantity).toLocaleString()}
                     </p>
                   </div>
@@ -1751,17 +1765,46 @@ export default function AdminOrdersPage() {
               })}
             </div>
             
+            {/* Cancellation / Refund Details — shows for ANY partial or full cancellation */}
             {(currentSelectedOrder?.status === "Cancelled" || 
               currentSelectedOrder?.status === "Cancellation Requested" || 
               currentSelectedOrder?.refund_transaction_id || 
+              currentSelectedOrder?.refund_status ||
               currentSelectedOrder?.items?.some((i: any) => i.cancellation_status === "Cancelled")) && (
               <div className="mt-6 bg-red-50 p-4 rounded-xl border border-red-200">
-                <h4 className="text-[11px] font-bold text-red-800 uppercase tracking-widest mb-2">Cancellation / Refund Details</h4>
+                <h4 className="text-[11px] font-bold text-red-800 uppercase tracking-widest mb-3">Cancellation / Refund Details</h4>
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Reason:</span> {currentSelectedOrder.cancellation_reason || 'N/A'}</p>
-                  <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Refund Status:</span> <span className="uppercase tracking-wider font-black">{currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id ? 'Completed' : 'Pending')}</span></p>
+                  {currentSelectedOrder.cancellation_reason && (
+                    <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Reason:</span> {currentSelectedOrder.cancellation_reason}</p>
+                  )}
+                  <p className="text-xs font-semibold text-red-900">
+                    <span className="text-red-700">Refund Status:</span>{" "}
+                    <span className={cn(
+                      "uppercase tracking-wider font-black",
+                      (currentSelectedOrder.refund_status === "Completed" || currentSelectedOrder.refund_transaction_id) ? "text-green-700" : "text-orange-600"
+                    )}>
+                      {currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id ? "Completed" : "Pending")}
+                    </span>
+                  </p>
+                  {/* Total refunded amount (product + shipping) across all cancelled items */}
+                  {(() => {
+                    const cancelledItems = (currentSelectedOrder.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                    if (cancelledItems.length === 0) return null;
+                    const totalUnits = Math.max(1, (currentSelectedOrder.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                    const shippingFee = Number(currentSelectedOrder.shipping_fee || 0);
+                    const totalRefunded = cancelledItems.reduce((sum: number, i: any) => {
+                      return sum + (Number(i.price) * i.quantity) + ((shippingFee / totalUnits) * i.quantity);
+                    }, 0);
+                    return (
+                      <p className="text-xs font-semibold text-red-900">
+                        <span className="text-red-700">Total Refunded:</span>{" "}
+                        <span className="font-black">Ksh {Math.round(totalRefunded).toLocaleString()}</span>
+                        <span className="text-[10px] text-zinc-500 ml-1">(incl. shipping)</span>
+                      </p>
+                    );
+                  })()}
                   {currentSelectedOrder.refund_transaction_id && (
-                    <p className="text-[11px] font-black text-green-700 bg-green-50 px-2.5 py-1 inline-block rounded border border-green-200 uppercase tracking-wider mt-1">
+                    <p className="text-[11px] font-black text-green-700 bg-green-50 px-2.5 py-1.5 inline-block rounded border border-green-200 uppercase tracking-wider mt-1">
                       Refund Evidence Tx Ref: {currentSelectedOrder.refund_transaction_id}
                     </p>
                   )}
@@ -2179,13 +2222,18 @@ export default function AdminOrdersPage() {
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
                   Select Products to Void / Refund *
                 </label>
-                <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                <div className="space-y-2 max-h-[180px] overflow-y-auto">
                   {voidOrderTarget.items.map((item: any) => {
                     const isCancelled = item.cancellation_status === "Cancelled";
                     const isChecked = selectedVoidItemIds.includes(item.id);
+                    const totalUnits = Math.max(1, (voidOrderTarget.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                    const shippingFee = Number(voidOrderTarget.shipping_fee || 0);
+                    const productCost = Number(item.price) * item.quantity;
+                    const shippingShare = (shippingFee / totalUnits) * item.quantity;
+                    const itemRefundTotal = productCost + shippingShare;
                     return (
-                      <div key={item.id} className="flex items-center justify-between text-xs py-1 border-b last:border-0 border-zinc-105">
-                        <label className={cn("flex items-center gap-2 cursor-pointer select-none", isCancelled && "opacity-50 cursor-not-allowed")}>
+                      <div key={item.id} className="flex items-start justify-between text-xs py-2 border-b last:border-0 border-zinc-100 gap-2">
+                        <label className={cn("flex items-start gap-2 cursor-pointer select-none flex-1 min-w-0", isCancelled && "opacity-50 cursor-not-allowed")}>
                           <input
                             type="checkbox"
                             disabled={isCancelled}
@@ -2197,20 +2245,43 @@ export default function AdminOrdersPage() {
                                 setSelectedVoidItemIds(selectedVoidItemIds.filter(id => id !== item.id));
                               }
                             }}
-                            className="w-4 h-4 accent-red-600 rounded cursor-pointer"
+                            className="w-4 h-4 accent-red-600 rounded cursor-pointer mt-0.5 shrink-0"
                           />
-                          <span className={cn("font-bold text-zinc-800", isCancelled && "line-through")}>
+                          <span className={cn("font-bold text-zinc-800 leading-snug", isCancelled && "line-through")}>
                             {item.product?.name || "Genuine Spare Part"}
                             {isCancelled && <span className="ml-1 text-[10px] text-red-500 font-bold">(Refunded)</span>}
                           </span>
                         </label>
-                        <span className="font-bold text-zinc-500 shrink-0">
-                          {item.quantity} × Ksh {Number(item.price).toLocaleString()}
+                        <span className="shrink-0 text-right flex flex-col items-end leading-snug">
+                          <span className="text-zinc-500">{item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                          {shippingShare > 0 && (
+                            <span className="text-[10px] text-zinc-400">+ Ksh {Math.round(shippingShare).toLocaleString()} shipping</span>
+                          )}
+                          <span className="text-[11px] font-black text-zinc-700">= Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
                         </span>
                       </div>
                     );
                   })}
                 </div>
+                {/* Total to Refund — live preview based on checked items */}
+                {selectedVoidItemIds.length > 0 && (() => {
+                  const allItems = voidOrderTarget?.items || [];
+                  const totalUnits = Math.max(1, allItems.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                  const shippingFee = Number(voidOrderTarget?.shipping_fee || 0);
+                  const total = allItems
+                    .filter((i: any) => selectedVoidItemIds.includes(i.id) && i.cancellation_status !== "Cancelled")
+                    .reduce((sum: number, i: any) => {
+                      const productCost = Number(i.price) * i.quantity;
+                      const shippingShare = (shippingFee / totalUnits) * i.quantity;
+                      return sum + productCost + shippingShare;
+                    }, 0);
+                  return (
+                    <div className="mt-2 pt-2 border-t border-zinc-200 flex justify-between items-center">
+                      <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Total to Refund to Customer</span>
+                      <span className="text-sm font-black text-red-600">Ksh {Math.round(total).toLocaleString()}</span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
             

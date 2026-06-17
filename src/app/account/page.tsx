@@ -1089,43 +1089,66 @@ function AccountPortalInner() {
 
              <div>
                <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Manifest Summary</h4>
-               {selectedOrder?.items?.map((item: any, idx: number) => (
-                  <div key={idx} className="flex justify-between items-center pb-4 border-b border-[#f1f5f9] last:border-0 last:pb-0">
-                    <div className="space-y-1">
-                      <p className="font-semibold text-[#1e293b] text-[14px]">{item.product?.name || `Product ID: ${item.product_id}`}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
-                        <span className="text-[11px] font-semibold text-slate-700">Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
-                        {item.product?.part_number && (
-                          <span className="text-xs font-bold text-[#0052cc]">Part No: {item.product.part_number}</span>
-                        )}
-                        {item.product?.engine_model && (
-                          <span className="text-xs text-zinc-500 font-medium">Engine: {item.product.engine_model}</span>
-                        )}
-                        {item.product?.suitable_vehicle && (
-                          <span className="text-xs text-zinc-500 font-medium">Suitable: {item.product.suitable_vehicle}</span>
-                        )}
-                        {item.cancellation_status && item.cancellation_status !== "None" && (
-                          <span className={cn(
-                            "text-[9px] font-black uppercase px-2 py-0.5 rounded border tracking-wider",
-                            item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-50 text-red-700 border-red-200"
-                          )}>
-                            {item.cancellation_status === "Pending" ? "Cancellation Pending" : "Cancelled / Refunded"}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <p className="font-bold text-[#1e293b] text-[14px]">Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>
-                  </div>
-               ))}
+               {selectedOrder?.items?.map((item: any, idx: number) => {
+                 const isItemCancelled = item.cancellation_status === "Cancelled";
+                 const totalUnits = Math.max(1, (selectedOrder.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                 const shippingFee = Number(selectedOrder.shipping_fee || 0);
+                 const itemProductCost = Number(item.price) * item.quantity;
+                 const itemShippingShare = (shippingFee / totalUnits) * item.quantity;
+                 const itemRefundTotal = itemProductCost + itemShippingShare;
+                 return (
+                   <div key={idx} className={cn("flex justify-between items-start pb-4 border-b border-[#f1f5f9] last:border-0 last:pb-0", isItemCancelled && "bg-red-50/60 px-3 py-3 rounded-lg border border-red-100 mb-2")}>
+                     <div className="space-y-1 flex-1 min-w-0">
+                       <p className={cn("font-semibold text-[#1e293b] text-[14px]", isItemCancelled && "line-through text-zinc-400")}>{item.product?.name || `Product ID: ${item.product_id}`}</p>
+                       <div className="flex flex-wrap items-center gap-2">
+                         <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
+                         <span className={cn("text-[11px] font-semibold text-slate-700", isItemCancelled && "line-through text-zinc-400")}>Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                         {item.product?.part_number && (
+                           <span className={cn("text-xs font-bold text-[#0052cc]", isItemCancelled && "line-through text-zinc-400")}>Part No: {item.product.part_number}</span>
+                         )}
+                         {item.product?.engine_model && (
+                           <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Engine: {item.product.engine_model}</span>
+                         )}
+                         {item.product?.suitable_vehicle && (
+                           <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</span>
+                         )}
+                         {item.cancellation_status && item.cancellation_status !== "None" && (
+                           <span className={cn(
+                             "text-[9px] font-black uppercase px-2 py-0.5 rounded border tracking-wider",
+                             item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-50 text-red-700 border-red-200"
+                           )}>
+                             {item.cancellation_status === "Pending" ? "Cancellation Pending" : "Cancelled / Refunded"}
+                           </span>
+                         )}
+                       </div>
+                       {/* Per-item refund breakdown for cancelled items */}
+                       {isItemCancelled && (
+                         <p className="text-[11px] font-semibold text-red-600 mt-1">
+                           Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
+                           {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
+                           {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
+                         </p>
+                       )}
+                     </div>
+                     <p className={cn("font-bold text-[#1e293b] text-[14px] shrink-0 ml-2", isItemCancelled && "line-through text-red-400")}>Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>
+                   </div>
+                 );
+               })}
              </div>
              
-             {(selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") && (
+             {/* Cancellation / Refund block — shows for partial OR full cancellations */}
+             {(selectedOrder?.status === "Cancelled" ||
+               selectedOrder?.status === "Cancellation Requested" ||
+               selectedOrder?.refund_status ||
+               selectedOrder?.refund_transaction_id ||
+               selectedOrder?.items?.some((i: any) => i.cancellation_status === "Cancelled")) && (
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200 mt-4 mb-4">
-                  <h4 className="text-[13px] font-bold text-red-800 flex items-center gap-2 mb-2">
-                    <AlertCircle className="h-4 w-4" /> {selectedOrder.status === "Cancellation Requested" ? "Cancellation Requested" : "Order Cancelled"}
+                  <h4 className="text-[13px] font-bold text-red-800 flex items-center gap-2 mb-3">
+                    <AlertCircle className="h-4 w-4" />
+                    {selectedOrder?.status === "Cancellation Requested" ? "Cancellation Requested" :
+                     selectedOrder?.status === "Cancelled" ? "Order Cancelled" : "Partial Cancellation"}
                   </h4>
-                  {selectedOrder.status === "Cancellation Requested" ? (
+                  {selectedOrder?.status === "Cancellation Requested" ? (
                     <div className="space-y-2">
                       <p className="text-[12px] text-red-700 font-medium leading-relaxed">
                         You have requested to cancel this order. The cancellation is pending approval by the administration. You will be notified once it is approved.
@@ -1136,26 +1159,50 @@ function AccountPortalInner() {
                         </p>
                       )}
                     </div>
-                  ) : selectedOrder.refund_status === "Completed" ? (
-                    <div className="space-y-1">
-                      <p className="text-[12px] text-red-700 font-medium">Your refund has been completed manually.</p>
-                      {selectedOrder.cancellation_reason && (
-                        <p className="text-[11px] text-red-700/80 bg-white/60 p-2 rounded-md border border-red-100 mb-2">
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedOrder?.cancellation_reason && (
+                        <p className="text-[11px] text-red-700/80 bg-white/60 p-2 rounded-md border border-red-100">
                           <strong>Reason:</strong> {selectedOrder.cancellation_reason}
                         </p>
                       )}
-                      <p className="text-[13px] font-black text-[#1e293b] bg-white px-3 py-2 rounded-md border border-zinc-200 inline-block mt-2">
-                        Transaction ID: <span className="text-green-700">{selectedOrder.refund_transaction_id}</span>
+                      {/* Refund Status */}
+                      <p className="text-[12px] font-semibold text-red-900">
+                        <span className="text-red-700">Refund Status: </span>
+                        <span className={cn(
+                          "font-black uppercase tracking-wider",
+                          (selectedOrder?.refund_status === "Completed" || selectedOrder?.refund_transaction_id) ? "text-green-700" : "text-orange-600"
+                        )}>
+                          {selectedOrder?.refund_status || (selectedOrder?.refund_transaction_id ? "Completed" : "Pending")}
+                        </span>
                       </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      <p className="text-[12px] text-red-700 font-medium leading-relaxed mb-2">
-                        Your order has been cancelled. Your refund is being processed manually and will be sent to you within 3-5 business days. If you do not receive it, please call us with your Order Reference.
-                      </p>
-                      {selectedOrder.cancellation_reason && (
-                        <p className="text-[11px] text-red-700/80 bg-white/60 p-2 rounded-md border border-red-100">
-                          <strong>Reason:</strong> {selectedOrder.cancellation_reason}
+                      {/* Total refunded (product + proportional shipping) */}
+                      {(() => {
+                        const cancelledItems = (selectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                        if (cancelledItems.length === 0) return null;
+                        const totalUnits = Math.max(1, (selectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                        const shippingFee = Number(selectedOrder?.shipping_fee || 0);
+                        const totalRefunded = cancelledItems.reduce((sum: number, i: any) => {
+                          return sum + (Number(i.price) * i.quantity) + ((shippingFee / totalUnits) * i.quantity);
+                        }, 0);
+                        return (
+                          <p className="text-[12px] font-semibold text-red-900">
+                            <span className="text-red-700">Amount to be Refunded: </span>
+                            <span className="font-black text-[#1e293b]">Ksh {Math.round(totalRefunded).toLocaleString()}</span>
+                            <span className="text-[10px] text-zinc-500 ml-1">(incl. shipping)</span>
+                          </p>
+                        );
+                      })()}
+                      {/* Refund evidence */}
+                      {selectedOrder?.refund_transaction_id && (
+                        <p className="text-[13px] font-black text-[#1e293b] bg-white px-3 py-2 rounded-md border border-green-200 inline-block mt-1 text-green-700">
+                          Transaction ID: <span className="text-green-700">{selectedOrder.refund_transaction_id}</span>
+                        </p>
+                      )}
+                      {/* Pending refund message (no tx ID yet) */}
+                      {!selectedOrder?.refund_transaction_id && selectedOrder?.status === "Cancelled" && (
+                        <p className="text-[12px] text-red-700 font-medium leading-relaxed">
+                          Your refund is being processed manually and will be sent to you within 3–5 business days. If you do not receive it, please call us with your Order Reference.
                         </p>
                       )}
                     </div>

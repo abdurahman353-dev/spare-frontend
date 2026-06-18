@@ -166,15 +166,7 @@ export default function CheckoutPage() {
           !d.warehouse_id
         );
       }
-      // Priority 4: any rate tied to this product (regardless of warehouse)
-      if (!rate) {
-        rate = destinations.find(d =>
-          d.country === shippingDetails.country &&
-          d.city === shippingDetails.city &&
-          d.product_id?.toString() === item.id?.toString()
-        );
-      }
-      // Priority 5: catch-all route rate (no product, no warehouse)
+      // Priority 4: catch-all route rate (no product, no warehouse)
       if (!rate) {
         rate = destinations.find(d =>
           d.country === shippingDetails.country &&
@@ -219,15 +211,7 @@ export default function CheckoutPage() {
         !d.warehouse_id
       );
     }
-    // Priority 4: any rate for this product
-    if (!rate) {
-      rate = destinations.find(d =>
-        d.country === shippingDetails.country &&
-        d.city === shippingDetails.city &&
-        d.product_id?.toString() === item.id?.toString()
-      );
-    }
-    // Priority 5: catch-all route rate
+    // Priority 4: catch-all route rate
     if (!rate) {
       rate = destinations.find(d =>
         d.country === shippingDetails.country &&

@@ -476,14 +476,20 @@ function AdminOrdersPageInner() {
 
     // New customer validation
     if (selectedCustomerId === "new") {
-      if (!newCustomerData.name || !newCustomerData.email) {
-        toast.error("Customer Name and Email are required.");
+      if (!newCustomerData.name) {
+        toast.error("Customer Name is required.");
         return;
       }
-      const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRx.test(newCustomerData.email)) {
-        toast.error("Please enter a valid email address.");
+      if (registerAccount && !newCustomerData.email) {
+        toast.error("Email is required when registering a login account.");
         return;
+      }
+      if (newCustomerData.email) {
+        const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRx.test(newCustomerData.email)) {
+          toast.error("Please enter a valid email address.");
+          return;
+        }
       }
       if (newCustomerData.phone) {
         const cleanedPhone = newCustomerData.phone.replace(/[\s\-\(\)]/g, "");
@@ -1999,7 +2005,7 @@ function AdminOrdersPageInner() {
                           value={newCustomerData.name} onChange={(e) => setNewCustomerData({...newCustomerData, name: e.target.value})} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-500">Gmail Address * <span className="text-zinc-400">(name@gmail.com)</span></label>
+                        <label className="text-xs font-semibold text-zinc-500">Gmail Address{registerAccount ? " *" : ""} <span className="text-zinc-400">(name@gmail.com)</span></label>
                         <Input type="email" placeholder="name@gmail.com" className="h-10 border-zinc-200 rounded-lg bg-white"
                           value={newCustomerData.email} onChange={(e) => setNewCustomerData({...newCustomerData, email: e.target.value})} />
                       </div>

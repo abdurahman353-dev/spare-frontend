@@ -228,16 +228,17 @@ export default function CheckoutPage() {
   };
 
   useEffect(() => {
-    if (destinations.length > 0 && shippingDetails.city && !shippingDetails.country) {
+    if (destinations.length > 0 && locations.length > 0 && shippingDetails.city && !shippingDetails.country) {
       const zone = destinations.find(d => d.city === shippingDetails.city);
       if (zone) {
         setShippingDetails(prev => ({ ...prev, country: zone.country }));
-        setAvailableCities(destinations.filter(d => d.country === zone.country));
+        const loc = locations.find(l => l.name === zone.country);
+        setAvailableCities(loc ? loc.cities : []);
         setSelectedZone(zone);
         localStorage.removeItem("spare_prefill_shipping");
       }
     }
-  }, [destinations, shippingDetails.city]);
+  }, [destinations, locations, shippingDetails.city]);
 
   useEffect(() => {
     if (shippingDetails.country && shippingDetails.city) {

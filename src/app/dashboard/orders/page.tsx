@@ -1392,6 +1392,11 @@ function AdminOrdersPageInner() {
                       <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">
                         {order.payment_status === "Pending" ? "— (Pending Payment)" : (order.payment_method || "Cash")}
                       </p>
+                      {order.payment_ref_code && (
+                        <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                          {order.payment_ref_code}
+                        </p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       {(() => {
@@ -1555,7 +1560,14 @@ function AdminOrdersPageInner() {
                         {selectedOrderIds.includes(order.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                       </button>
                     </TableCell>
-                    <TableCell className="px-4 py-4"><p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p></TableCell>
+                    <TableCell className="px-4 py-4">
+                      <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
+                      {order.payment_ref_code && (
+                        <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                          M-Pesa: {order.payment_ref_code}
+                        </p>
+                      )}
+                    </TableCell>
                     <TableCell><div className="space-y-0.5"><p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p><p className="text-[11px] text-zinc-500 font-medium">{order.customer?.email}</p></div></TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">

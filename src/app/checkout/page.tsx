@@ -141,12 +141,14 @@ export default function CheckoutPage() {
     if (!shippingDetails.country || !shippingDetails.city || destinations.length === 0) return 0;
     let totalFee = 0;
     for (const item of cart) {
+      // Priority 1: exact product + warehouse match
       let rate = destinations.find(d =>
         d.country === shippingDetails.country &&
         d.city === shippingDetails.city &&
         d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
         d.product_id?.toString() === item.id?.toString()
       );
+      // Priority 2: warehouse-level rate (no product filter)
       if (!rate) {
         rate = destinations.find(d =>
           d.country === shippingDetails.country &&
@@ -155,6 +157,7 @@ export default function CheckoutPage() {
           !d.product_id
         );
       }
+      // Priority 3: product-only rate (no warehouse filter)
       if (!rate) {
         rate = destinations.find(d =>
           d.country === shippingDetails.country &&
@@ -163,11 +166,21 @@ export default function CheckoutPage() {
           !d.warehouse_id
         );
       }
+      // Priority 4: any rate tied to this product (regardless of warehouse)
       if (!rate) {
         rate = destinations.find(d =>
           d.country === shippingDetails.country &&
           d.city === shippingDetails.city &&
           d.product_id?.toString() === item.id?.toString()
+        );
+      }
+      // Priority 5: catch-all route rate (no product, no warehouse)
+      if (!rate) {
+        rate = destinations.find(d =>
+          d.country === shippingDetails.country &&
+          d.city === shippingDetails.city &&
+          !d.product_id &&
+          !d.warehouse_id
         );
       }
       if (rate) {
@@ -181,12 +194,14 @@ export default function CheckoutPage() {
   };
 
   const getItemShippingFee = (item: any, method: "standard" | "express"): number => {
+    // Priority 1: exact product + warehouse match
     let rate = destinations.find(d =>
       d.country === shippingDetails.country &&
       d.city === shippingDetails.city &&
       d.warehouse_id?.toString() === item.warehouse_id?.toString() &&
       d.product_id?.toString() === item.id?.toString()
     );
+    // Priority 2: warehouse-level rate
     if (!rate) {
       rate = destinations.find(d =>
         d.country === shippingDetails.country &&
@@ -195,6 +210,7 @@ export default function CheckoutPage() {
         !d.product_id
       );
     }
+    // Priority 3: product-only rate (no warehouse)
     if (!rate) {
       rate = destinations.find(d =>
         d.country === shippingDetails.country &&
@@ -203,11 +219,21 @@ export default function CheckoutPage() {
         !d.warehouse_id
       );
     }
+    // Priority 4: any rate for this product
     if (!rate) {
       rate = destinations.find(d =>
         d.country === shippingDetails.country &&
         d.city === shippingDetails.city &&
         d.product_id?.toString() === item.id?.toString()
+      );
+    }
+    // Priority 5: catch-all route rate
+    if (!rate) {
+      rate = destinations.find(d =>
+        d.country === shippingDetails.country &&
+        d.city === shippingDetails.city &&
+        !d.product_id &&
+        !d.warehouse_id
       );
     }
     if (!rate) return 0;

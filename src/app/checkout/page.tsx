@@ -163,6 +163,13 @@ export default function CheckoutPage() {
           !d.warehouse_id
         );
       }
+      if (!rate) {
+        rate = destinations.find(d =>
+          d.country === shippingDetails.country &&
+          d.city === shippingDetails.city &&
+          d.product_id?.toString() === item.id?.toString()
+        );
+      }
       if (rate) {
         const feePerItem = method === "express"
           ? parseFloat(rate.express_fee || 0)
@@ -194,6 +201,13 @@ export default function CheckoutPage() {
         d.city === shippingDetails.city &&
         d.product_id?.toString() === item.id?.toString() &&
         !d.warehouse_id
+      );
+    }
+    if (!rate) {
+      rate = destinations.find(d =>
+        d.country === shippingDetails.country &&
+        d.city === shippingDetails.city &&
+        d.product_id?.toString() === item.id?.toString()
       );
     }
     if (!rate) return 0;

@@ -903,6 +903,7 @@ function AdminOrdersPageInner() {
           (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
           getWalkInDestinationLabel(order).toLowerCase().includes(sq) ||
           (order.payment_method || "cash").toLowerCase().includes(sq) ||
+          (order.payment_ref_code || "").toLowerCase().includes(sq) ||
           matchesProducts
         );
         const matchesPayStatus = walkInPayStatusFilter === "All" ||
@@ -941,6 +942,7 @@ function AdminOrdersPageInner() {
         (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
         (order.shipping_city || "").toLowerCase().includes(sq) ||
         (order.shipping_address || "").toLowerCase().includes(sq) ||
+        (order.payment_ref_code || "").toLowerCase().includes(sq) ||
         matchesProducts
       );
       const matchesWarehouse = warehouseFilter === "all" ||

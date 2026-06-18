@@ -660,6 +660,11 @@ function AccountPortalInner() {
                                 <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                   <td className="px-6 py-4">
                                     <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
+                                    {order.payment_ref_code && (
+                                      <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                                        M-Pesa: {order.payment_ref_code}
+                                      </p>
+                                    )}
                                   </td>
                                   <td className="px-6 py-4 text-[13px] text-[#64748b]">
                                     {new Date(order.created_at).toLocaleDateString()}
@@ -885,6 +890,11 @@ function AccountPortalInner() {
                                 <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                   <td className="px-6 py-4">
                                     <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
+                                    {order.payment_ref_code && (
+                                      <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                                        M-Pesa: {order.payment_ref_code}
+                                      </p>
+                                    )}
                                   </td>
                                   <td className="px-6 py-4 text-[13px] text-[#64748b]">
                                     {new Date(order.created_at).toLocaleDateString()}
@@ -1296,6 +1306,18 @@ function AccountPortalInner() {
                     )}
                   </span>
                 </div>
+                {selectedOrder?.payment_method && (
+                  <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
+                    <span>Payment Method</span>
+                    <span className="text-[#1e293b] font-semibold text-[13px]">{selectedOrder.payment_method}</span>
+                  </div>
+                )}
+                {selectedOrder?.payment_ref_code && (
+                  <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
+                    <span>Payment Ref Code</span>
+                    <span className="text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 font-bold">{selectedOrder.payment_ref_code}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-[#1e293b] text-[13px] uppercase tracking-wider">Total Settlement</span>
                   <span className="text-xl font-bold text-[#1e293b]">Ksh {selectedOrder ? Number(selectedOrder.total_amount).toLocaleString() : 0}</span>

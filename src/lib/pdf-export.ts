@@ -1352,7 +1352,7 @@ export const exportSingleOrderInvoicePDF = async (
   const orderMeta: [string, string][] = [
     ["Invoice Reference", orderRef],
     ["Order Date",      orderDate],
-    ["Payment Method",  order?.payment_method || "N/A"],
+    ["Payment Method",  order?.payment_method ? (order.payment_ref_code ? `${order.payment_method} (${order.payment_ref_code})` : order.payment_method) : "N/A"],
     ["Payment Status",  order?.payment_status || "N/A"],
     ["Fulfillment Status", order?.status || "N/A"],
   ];
@@ -1746,7 +1746,7 @@ export const exportCustomerLedgerPDF = async (
       `${currency} ${Number(o.shipping_fee || 0).toLocaleString()}`,
       `${currency} ${Number(o.total_amount || 0).toLocaleString()}`,
       o.status === "In Transit" ? "Shipped" : (o.status || "Pending"),
-      o.payment_method || "M-Pesa",
+      o.payment_method ? (o.payment_ref_code ? `${o.payment_method} (${o.payment_ref_code})` : o.payment_method) : "M-Pesa",
     ];
   });
 

@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       deleteCookie("auth_token");
       delete api.defaults.headers.common["Authorization"];
       setUser(null);
-      router.push("/login");
+      window.location.href = "/login";
     }
   };
 

@@ -19,7 +19,7 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        router.replace("/login");
+        window.location.href = "/login";
       } else if (user.must_change_password) {
         router.replace("/change-password");
       } else if (user.role !== "admin" && user.role !== "superadmin") {

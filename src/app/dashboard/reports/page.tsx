@@ -99,9 +99,10 @@ export default function AdminReportsPage() {
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredCustomers = useMemo(() => {
-    if (!searchQuery) return customers;
+    const activeCustomers = customers.filter(c => c.name?.toLowerCase() !== "walk-in customer");
+    if (!searchQuery) return activeCustomers;
     const q = searchQuery.toLowerCase();
-    return customers.filter(c => 
+    return activeCustomers.filter(c => 
       c.name?.toLowerCase().includes(q) || 
       c.phone?.toLowerCase().includes(q) || 
       c.email?.toLowerCase().includes(q)

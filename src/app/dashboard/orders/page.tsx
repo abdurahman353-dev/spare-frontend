@@ -2656,16 +2656,14 @@ function AdminOrdersPageInner() {
               <p className="text-sm font-bold text-amber-800">
                 Refund Amount: Ksh {
                   (() => {
-                    const cancelledItems = (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
-                    if (cancelledItems.length === 0) return parseFloat(currentSelectedOrder?.total_amount || 0).toLocaleString();
-                    const totalUnits = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                    const shippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
-                    const totalRefunded = cancelledItems.reduce((sum: number, i: any) => {
-                      const itemProductCost = Number(i.price) * i.quantity;
-                      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
-                      return sum + itemProductCost + itemShippingShare;
-                    }, 0);
-                    return Math.round(totalRefunded).toLocaleString();
+                    // Always read from the backend-persisted refunded_amount.
+                    // Do NOT recalculate from items — when the order is fully cancelled
+                    // the backend zeros shipping_fee on the record, so item-level math
+                    // would omit the original shipping cost portion.
+                    const persisted = Number(currentSelectedOrder?.refunded_amount || 0);
+                    if (persisted > 0) return Math.round(persisted).toLocaleString();
+                    // Fallback: if no persisted value yet, use total_amount
+                    return Math.round(Number(currentSelectedOrder?.total_amount || 0)).toLocaleString();
                   })()
                 }
               </p>

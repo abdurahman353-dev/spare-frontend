@@ -4,9 +4,9 @@ import { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { CarFront, Lock, Mail, ArrowRight, ShieldCheck, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Lock, Mail, ArrowRight, ShieldCheck, Eye, EyeOff, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { useSearchParams } from "next/navigation";
@@ -61,9 +61,25 @@ function LoginPageInner() {
         <Card className="border-none shadow-[0_20px_60px_rgba(0,0,0,0.1)] bg-white overflow-hidden rounded-2xl">
           <div className="h-2 bg-primary w-full" />
           <CardHeader className="space-y-4 text-center pt-8 sm:pt-12 pb-6 sm:pb-8">
-            <div className="mx-auto h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
-              <ShieldCheck className="h-8 w-8 text-primary" />
-            </div>
+            {/* Clickable brand badge — navigates back to landing page */}
+            <Link href="/" className="mx-auto flex flex-col items-center gap-2 group">
+              {settings.store_logo ? (
+                <img
+                  src={settings.store_logo}
+                  alt={brandName}
+                  className="h-16 w-auto max-w-[160px] object-contain rounded-lg group-hover:opacity-80 transition-opacity"
+                />
+              ) : (
+                <div className="h-16 w-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-all group-hover:scale-105">
+                  <span className="text-white text-2xl font-black">
+                    {brandName.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+              )}
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 group-hover:text-primary transition-colors">
+                ← Back to {brandName}
+              </span>
+            </Link>
             <div className="space-y-1">
               <CardTitle className="text-4xl font-black tracking-tighter text-zinc-900 uppercase">Secure Login</CardTitle>
               <CardDescription className="text-zinc-500 text-lg font-medium">

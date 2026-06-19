@@ -632,9 +632,9 @@ function AccountPortalInner() {
                         <button onClick={() => setActiveTab("My Orders")} className="text-[12px] font-bold text-[#0052cc] hover:underline uppercase tracking-wider">Explore All</button>
                       </div>
                       
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto overflow-y-auto max-h-[480px] custom-scrollbar">
                         <table className="w-full text-left">
-                          <thead className="bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
+                          <thead className="sticky top-0 z-10 bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
                             <tr>
                               <th className="px-6 py-4">Order Ref</th>
                               <th className="px-6 py-4">Date</th>
@@ -656,7 +656,7 @@ function AccountPortalInner() {
                             ) : orders.length === 0 ? (
                               <tr><td colSpan={9} className="p-10 text-center text-[#64748b]">No order history found.</td></tr>
                             ) : (
-                              orders.slice(0, 5).map((order: any) => (
+                              orders.map((order: any) => (
                                 <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                   <td className="px-6 py-4">
                                     <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>

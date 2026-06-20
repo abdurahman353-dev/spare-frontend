@@ -258,8 +258,8 @@ export default function AdminCustomersPage() {
       });
 
       const matchesSearch =
-        c.name.toLowerCase().includes(sq) ||
-        c.email.toLowerCase().includes(sq) ||
+        (c.name || "").toLowerCase().includes(sq) ||
+        (c.email || "").toLowerCase().includes(sq) ||
         (c.phone || "").toLowerCase().includes(sq) ||
         (c.company_name || "").toLowerCase().includes(sq) ||
         matchesProducts;

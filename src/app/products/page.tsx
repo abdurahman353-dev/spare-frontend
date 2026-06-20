@@ -396,22 +396,47 @@ export default function PublicProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(9);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/products", {
+        params: {
+          page: currentPage,
+          per_page: pageSize,
+          search: searchQuery,
+          category_id: selectedCategoryIds.length === 1 ? selectedCategoryIds[0] : undefined,
+          // If multiple categories are selected, we still fetch by search/pagination
+          // but we'll apply the multi-category filter client-side on the current page
+        }
+      });
+
+      if (res.data.data) {
+        setProducts(res.data.data);
+        setTotalItems(res.data.total);
+      } else {
+        setProducts(res.data);
+        setTotalItems(res.data.length);
+      }
+    } catch (err) {
+      console.error("Failed to fetch products:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    Promise.all([
-      api.get("/products"),
-      api.get("/categories")
-    ])
-      .then(([productsRes, categoriesRes]) => {
-        setProducts(productsRes.data);
-        setCategories(categoriesRes.data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error(err);
-        setLoading(false);
-      });
+    api.get("/categories")
+      .then((res) => setCategories(res.data))
+      .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    fetchProducts();
+  }, [currentPage, pageSize, searchQuery, selectedCategoryIds]);
 
   const toggleCategory = (categoryId: number) => {
     setSelectedCategoryIds((prev) =>
@@ -421,38 +446,23 @@ export default function PublicProductsPage() {
     );
   };
 
+  // We still use a small memo for the current page if multiple categories are selected
   const filteredProducts = useMemo(() => {
+    if (!Array.isArray(products)) return [];
     return products.filter((product) => {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch =
-        !query ||
-        product.name.toLowerCase().includes(query) ||
-        product.sku.toLowerCase().includes(query) ||
-        (product.part_number || "").toLowerCase().includes(query) ||
-        (product.suitable_vehicle || "").toLowerCase().includes(query) ||
-        (product.engine_model || "").toLowerCase().includes(query) ||
-        (product.brand?.name || "").toLowerCase().includes(query);
-
       const matchesCategory =
-        selectedCategoryIds.length === 0 ||
+        selectedCategoryIds.length <= 1 || // Already filtered by server if 1 or 0
         (product.category && selectedCategoryIds.includes(product.category.id));
 
-      return matchesSearch && matchesCategory;
+      return matchesCategory;
     });
-  }, [products, searchQuery, selectedCategoryIds]);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(9);
+  }, [products, selectedCategoryIds]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, selectedCategoryIds]);
 
-  const totalPages = Math.ceil(filteredProducts.length / pageSize);
-  const paginatedProducts = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return filteredProducts.slice(startIndex, startIndex + pageSize);
-  }, [filteredProducts, currentPage, pageSize]);
+  const paginatedProducts = filteredProducts; // Already limited by server pageSize
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -569,7 +579,7 @@ export default function PublicProductsPage() {
             <div id="tour-product-grid" className="flex-1">
               <div className="flex justify-between items-center mb-8 border-b border-[#f1f5f9] pb-4">
                 <p className="text-[#64748b] text-[14px] font-medium">
-                  Showing <span className="text-[#1e293b] font-bold">{filteredProducts.length}</span> parts available
+                  Showing <span className="text-[#1e293b] font-bold">{totalItems}</span> parts available
                 </p>
                 <Button variant="ghost" className="text-[13px] font-bold text-[#64748b]">
                   <Filter className="mr-2 h-4 w-4" /> Sort by: Featured
@@ -619,7 +629,7 @@ export default function PublicProductsPage() {
                     setCurrentPage={setCurrentPage}
                     pageSize={pageSize}
                     setPageSize={setPageSize}
-                    totalItems={filteredProducts.length}
+                    totalItems={totalItems}
                     itemName="parts"
                     pageSizeOptions={[9, 18, 36, 72]}
                   />

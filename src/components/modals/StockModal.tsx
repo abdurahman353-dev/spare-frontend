@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [bulkFormData, setBulkFormData] = useState<any[]>([]);
-  
+
   const [formData, setFormData] = useState({
     id: "",
     product_id: "",
@@ -112,7 +112,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
     try {
       const [wRes, pRes] = await Promise.all([
         api.get("/warehouses"),
-        api.get("/products")
+        api.get("/products", { params: { per_page: -1 } })
       ]);
       setWarehouses(wRes.data);
       setProducts(pRes.data);
@@ -168,11 +168,11 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
       if (type === "update" && bulkFormData.length > 0) {
         const itemsToUpdate = bulkFormData.filter(item => item.warehouse_id);
-        
+
         if (itemsToUpdate.length === 0) {
           toast.error("Please select a warehouse for at least one item.");
           setLoading(false);
@@ -204,14 +204,14 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
             quantity: Number(item.quantity),
             min_stock: Number(item.min_stock)
           };
-          
+
           if (item.id) {
             return api.put(`/inventory/${item.id}`, payload);
           } else {
             return api.post("/inventory", payload);
           }
         }));
-        
+
         toast.success("Pending stock assigned successfully!");
         onSuccess();
         onClose();
@@ -239,7 +239,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
         } else {
           // Create new inventory record
           if (formData.quantity === "") return toast.error("Please enter the initial quantity.");
-          
+
           await api.post("/inventory", {
             product_id: Number(formData.product_id),
             warehouse_id: Number(formData.warehouse_id),
@@ -279,7 +279,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
         <form onSubmit={handleSubmit}>
           <DialogHeader className="border-b pb-4">
             <div className="flex items-center gap-3">
-               <div className="text-zinc-600">
+              <div className="text-zinc-600">
                 {type === "transfer" ? <ArrowRightLeft className="h-5 w-5" /> : <PackagePlus className="h-5 w-5" />}
               </div>
               <DialogTitle className="text-xl font-bold">
@@ -317,7 +317,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-xs font-semibold text-zinc-500">Quantity</Label>
-                          <Input 
+                          <Input
                             type="number"
                             value={item.quantity}
                             onChange={(e) => {
@@ -331,7 +331,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
                         </div>
                         <div>
                           <Label className="text-xs font-semibold text-zinc-500">Low Stock Alert</Label>
-                          <Input 
+                          <Input
                             type="number"
                             value={item.min_stock}
                             onChange={(e) => {
@@ -371,7 +371,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
                     onDelete={handleDeleteWarehouse}
                   />
                 </div>
-                
+
                 {formData.id ? (
                   // Edit mode - Show Current Stock and Adjustment field
                   <div className="grid grid-cols-2 gap-4 bg-zinc-50 p-4 rounded-lg border border-zinc-100">
@@ -383,7 +383,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs font-bold text-primary">Adjustment (+ / -)</Label>
-                      <Input 
+                      <Input
                         type="number"
                         value={formData.adjustment}
                         onChange={(e) => setFormData({ ...formData, adjustment: e.target.value })}
@@ -396,7 +396,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
                   // Add mode - Show Absolute Initial Stock field
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-zinc-500">Initial Quantity</Label>
-                    <Input 
+                    <Input
                       type="number"
                       value={formData.quantity}
                       onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
@@ -405,10 +405,10 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
                     />
                   </div>
                 )}
-                
+
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold text-zinc-500">Low Stock Alert Level</Label>
-                  <Input 
+                  <Input
                     type="number"
                     value={formData.min_stock}
                     onChange={(e) => setFormData({ ...formData, min_stock: e.target.value })}
@@ -457,7 +457,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold text-zinc-500">Transfer Quantity</Label>
-                  <Input 
+                  <Input
                     type="number"
                     value={formData.quantity}
                     onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}

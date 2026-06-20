@@ -3,13 +3,13 @@
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Search, Filter, Mail, Phone, MapPin, UserCheck, Plus, Loader2, Building2, ShieldCheck, CheckCircle2, Eye, EyeOff, MoreHorizontal, UserX, FileText, RefreshCw, Star, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +93,7 @@ export default function AdminCustomersPage() {
 
   const fetchCustomers = () => {
     setLoading(true);
-    api.get("/customers")
+    api.get("/customers", { params: { per_page: -1 } })
       .then((res) => {
         setCustomers(res.data);
         setLoading(false);
@@ -164,14 +164,14 @@ export default function AdminCustomersPage() {
     try {
       await api.post("/customers", formData);
       setIsCreateModalOpen(false);
-      setFormData({ 
-        name: "", 
-        company_name: "", 
-        email: "", 
-        phone: "", 
+      setFormData({
+        name: "",
+        company_name: "",
+        email: "",
+        phone: "",
         secondary_phone: "",
         tax_id: "",
-        address: "", 
+        address: "",
         type: "Retail",
         password: "",
         confirmPassword: ""
@@ -202,7 +202,7 @@ export default function AdminCustomersPage() {
   const handleSaveEdit = async () => {
     if (!editTarget) return;
     if (!editFormData.name.trim()) return toast.error("Name is required.");
-    
+
     // Optional phone validation for edited details
     if (editFormData.phone) {
       const cleanedPhone = editFormData.phone.replace(/[\s\-\(\)]/g, "");
@@ -242,7 +242,7 @@ export default function AdminCustomersPage() {
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
       const sq = searchQuery.toLowerCase();
-      
+
       const matchesProducts = (c as any).orders?.some((order: any) => {
         return order.items?.some((item: any) => {
           const prod = item.product;
@@ -257,8 +257,8 @@ export default function AdminCustomersPage() {
         });
       });
 
-      const matchesSearch = 
-        c.name.toLowerCase().includes(sq) || 
+      const matchesSearch =
+        c.name.toLowerCase().includes(sq) ||
         c.email.toLowerCase().includes(sq) ||
         (c.phone || "").toLowerCase().includes(sq) ||
         (c.company_name || "").toLowerCase().includes(sq) ||
@@ -303,15 +303,15 @@ export default function AdminCustomersPage() {
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
         <div className="relative w-full sm:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <Input 
-            placeholder="Search by name or email..." 
+          <Input
+            placeholder="Search by name or email..."
             className="pl-10 h-10 border-zinc-200 rounded-lg bg-white"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <select 
+          <select
             className="h-10 pl-3 pr-8 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
@@ -379,9 +379,9 @@ export default function AdminCustomersPage() {
                     <Badge className={cn(
                       "font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 border-none",
                       customer.type === "Wholesale" ? "bg-[#0052cc] text-white" :
-                      customer.type === "Garage"    ? "bg-amber-500 text-white" :
-                      customer.type === "Retail"    ? "bg-purple-100 text-purple-700" :
-                      "bg-zinc-100 text-zinc-600"
+                        customer.type === "Garage" ? "bg-amber-500 text-white" :
+                          customer.type === "Retail" ? "bg-purple-100 text-purple-700" :
+                            "bg-zinc-100 text-zinc-600"
                     )}>
                       {customer.type}
                     </Badge>
@@ -558,243 +558,243 @@ export default function AdminCustomersPage() {
             </div>
           </DialogHeader>
           <div className="p-6 flex-1 overflow-y-auto space-y-8">
-             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-               <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
-                 <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Total Purchases</div>
-                 <div className="text-2xl font-black text-zinc-900">{selectedCustomer?.orders_count || 0} <span className="text-xs text-zinc-400 font-bold uppercase ml-1">Orders</span></div>
-               </div>
-               <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
-                  <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Customer Rank</div>
-                  <div className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-                    {(() => {
-                      const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
-                      const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
-                      const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
-                      const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
-                      if (ltv >= platThresh) return <><span className="text-blue-500 font-black">★</span> Platinum</>;
-                      if (ltv >= goldThresh) return <><span className="text-yellow-500 font-black">★</span> Gold</>;
-                      if (ltv >= silverThresh)  return <><span className="text-slate-400 font-black">★</span> Silver</>;
-                      return <><span className="text-amber-600 font-black">★</span> Bronze</>;
-                    })()}
-                  </div>
-                </div>
-               <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
-                 <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Member Since</div>
-                 <div className="text-lg font-bold text-zinc-900">{selectedCustomer && new Date(selectedCustomer.created_at).toLocaleDateString('en-KE', { month: 'short', year: 'numeric', day: 'numeric' })}</div>
-               </div>
-             </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               <div className="space-y-4">
-                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                   <Building2 className="h-4 w-4 text-[#0052cc]" /> Shipping Profile
-                 </h3>
-                 <div className="bg-white border rounded-2xl p-5 space-y-3 shadow-sm">
-                   <div className="flex justify-between items-center border-b pb-2">
-                     <span className="text-xs font-bold text-zinc-400">Company</span>
-                     <span className="text-sm font-bold text-zinc-900">{selectedCustomer?.company_name || "N/A"}</span>
-                   </div>
-                   <div className="flex justify-between items-center border-b pb-2">
-                     <span className="text-xs font-bold text-zinc-400">Tax ID / PIN</span>
-                     <span className="text-sm font-bold text-zinc-900">{selectedCustomer?.tax_id || "N/A"}</span>
-                   </div>
-                   <div className="flex flex-col gap-1">
-                     <span className="text-xs font-bold text-zinc-400 uppercase tracking-tighter">Registered Address</span>
-                     <span className="text-sm font-semibold text-zinc-600 italic">"{selectedCustomer?.address || "No address on file"}"</span>
-                   </div>
-                 </div>
-               </div>
-
-               <div className="space-y-4">
-                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-[#0052cc]" /> B2B Membership Rank
-                  </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
+                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Total Purchases</div>
+                <div className="text-2xl font-black text-zinc-900">{selectedCustomer?.orders_count || 0} <span className="text-xs text-zinc-400 font-bold uppercase ml-1">Orders</span></div>
+              </div>
+              <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
+                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Customer Rank</div>
+                <div className="text-lg font-bold text-zinc-900 flex items-center gap-2">
                   {(() => {
-                     const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
-                     const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
-                     const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
-                     const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
-                     let tierName = "Bronze", nextTierName = "Silver", nextTierThreshold = silverThresh;
-                     let progressPercent = Math.min(100, Math.max(0, (ltv / silverThresh) * 100));
-                     let discountText = "Standard Pricing — Level up to unlock logistics discounts";
-                     let stars = 1, themeBg = "bg-amber-700", textTheme = "text-amber-800";
-                     let medalColor = "#b45309", cardBorder = "border-amber-100 bg-amber-50/30";
-                     if (ltv >= platThresh) {
-                       tierName = "Platinum"; nextTierName = "Max Tier"; nextTierThreshold = platThresh;
-                       progressPercent = 100;
-                       discountText = "15% Logistics discount + Express priority dispatch enabled!";
-                       stars = 4; themeBg = "bg-blue-600"; textTheme = "text-blue-700";
-                       medalColor = "#0052cc"; cardBorder = "border-blue-100 bg-blue-50/30";
-                     } else if (ltv >= goldThresh) {
-                       tierName = "Gold"; nextTierName = "Platinum"; nextTierThreshold = platThresh;
-                       progressPercent = Math.min(100, Math.max(0, ((ltv - goldThresh) / (platThresh - goldThresh)) * 100));
-                       discountText = "10% Logistics discount + Priority support enabled!";
-                       stars = 3; themeBg = "bg-yellow-500"; textTheme = "text-yellow-700";
-                       medalColor = "#d97706"; cardBorder = "border-yellow-100 bg-yellow-50/30";
-                     } else if (ltv >= silverThresh) {
-                       tierName = "Silver"; nextTierName = "Gold"; nextTierThreshold = goldThresh;
-                       progressPercent = Math.min(100, Math.max(0, ((ltv - silverThresh) / (goldThresh - silverThresh)) * 100));
-                       discountText = "5% Logistics discount enabled!";
-                       stars = 2; themeBg = "bg-slate-400"; textTheme = "text-slate-600";
-                       medalColor = "#64748b"; cardBorder = "border-slate-200 bg-slate-50/30";
-                     }
-                    const remainingToNext = nextTierThreshold - ltv;
-                    return (
-                      <div className={cn("border rounded-2xl p-5 flex flex-col space-y-4 shadow-sm", cardBorder)}>
-                        <div className="flex items-center gap-4">
-                          <svg className="w-14 h-14 drop-shadow-md shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M7 2L10 12L12 12L9 2H7Z" fill={medalColor} opacity="0.7"/>
-                            <path d="M17 2L14 12L12 12L15 2H17Z" fill={medalColor} opacity="0.7"/>
-                            <path d="M10 2L12 10L14 2H10Z" fill={medalColor} opacity="0.9"/>
-                            <circle cx="12" cy="14" r="7" fill="white" stroke={medalColor} strokeWidth="2" />
-                            <circle cx="12" cy="14" r="5" fill={medalColor} />
-                            <path d="M12 11.5L13.1 13.7L15.5 14L13.7 15.6L14.2 18L12 16.7L9.8 18L10.3 15.6L8.5 14L10.9 13.7L12 11.5Z" fill="white" />
-                          </svg>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className={cn("font-black text-base uppercase tracking-wider", textTheme)}>{tierName} Tier</span>
-                              <div className="flex gap-0.5">
-                                {Array.from({ length: stars }).map((_, i) => (
-                                  <Star key={i} className={cn("h-3.5 w-3.5 fill-current stroke-none", textTheme)} />
-                                ))}
-                              </div>
-                            </div>
-                            <p className="text-[11px] font-semibold text-zinc-500">{discountText}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-1.5 pt-2 border-t border-dashed border-zinc-200">
-                          <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
-                            <span>LTV Tier Progress</span>
-                            {nextTierName === "Max Tier" ? (
-                              <span className="text-blue-600 font-extrabold">MAX PLATINUM REACHED ✓</span>
-                            ) : (
-                              <span>{Math.round(progressPercent)}% to {nextTierName}</span>
-                            )}
-                          </div>
-                          <div className="w-full h-2 bg-zinc-200/60 rounded-full overflow-hidden">
-                            <div className={cn("h-full rounded-full transition-all duration-700", themeBg)} style={{ width: `${progressPercent}%` }} />
-                          </div>
-                          {nextTierName !== "Max Tier" && (
-                            <p className="text-[10px] text-zinc-400 font-semibold">
-                              KSh {remainingToNext.toLocaleString()} more to reach {nextTierName} (KSh {nextTierThreshold.toLocaleString()})
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
+                    const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
+                    const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+                    const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
+                    const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+                    if (ltv >= platThresh) return <><span className="text-blue-500 font-black">★</span> Platinum</>;
+                    if (ltv >= goldThresh) return <><span className="text-yellow-500 font-black">★</span> Gold</>;
+                    if (ltv >= silverThresh) return <><span className="text-slate-400 font-black">★</span> Silver</>;
+                    return <><span className="text-amber-600 font-black">★</span> Bronze</>;
                   })()}
                 </div>
-             </div>
+              </div>
+              <div className="p-5 bg-zinc-50 rounded-2xl border border-zinc-100 shadow-sm">
+                <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Member Since</div>
+                <div className="text-lg font-bold text-zinc-900">{selectedCustomer && new Date(selectedCustomer.created_at).toLocaleDateString('en-KE', { month: 'short', year: 'numeric', day: 'numeric' })}</div>
+              </div>
+            </div>
 
-             <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-                    <Plus className="h-4 w-4 text-[#0052cc]" /> Precision Order History
-                    <button
-                      onClick={() => handleViewHistory(selectedCustomer!)}
-                      className="p-1 hover:bg-zinc-100 rounded-full transition-colors text-zinc-400 hover:text-zinc-700"
-                      title="Sync History"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    </button>
-                  </h3>
-                  <Button
-                    onClick={() => {
-                      if (selectedCustomer) {
-                        exportCustomerStatementPDF(selectedCustomer, {
-                          storeName: settings?.store_name,
-                          storeTagline: settings?.store_tagline,
-                          storeLogo: settings?.store_logo,
-                          physicalAddress: settings?.store_address || settings?.physical_address,
-                          contactEmail: settings?.store_email || settings?.contact_email,
-                          contactPhone: settings?.store_phone || settings?.contact_phone,
-                          currency: "Ksh",
-                          storeWebsite: settings?.store_website,
-                          storeKraPin: settings?.store_kra_pin,
-                          storeRegNumber: settings?.store_reg_number
-                        });
-                      }
-                    }}
-                    className="h-8 bg-[#0052cc] hover:bg-[#0747a6] text-white text-xs font-bold gap-1.5 rounded-lg shadow-sm w-full sm:w-auto"
-                  >
-                    <FileText className="h-3.5 w-3.5" /> Export B2B Statement
-                  </Button>
-                </div>
-                <div className="border rounded-2xl overflow-x-auto custom-scrollbar shadow-sm">
-                  <Table className="min-w-[700px]">
-                    <TableHeader className="bg-zinc-50/50 border-b">
-                      <TableRow>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4 h-12">Reference</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Date</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Items</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Route</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Payment</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-right">Shipping Fee</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-right">Total</TableHead>
-                        <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-center px-4">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(selectedCustomer as any)?.orders?.length > 0 ? (
-                        (selectedCustomer as any).orders.map((order: any) => (
-                          <TableRow key={order.id} className="hover:bg-zinc-50/30 transition-colors text-xs">
-                            <TableCell className="px-4 py-3">
-                              <span className="bg-zinc-100 text-zinc-800 px-2 py-0.5 rounded font-black text-[11px] border border-zinc-200">
-                                {order.tracking_number}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-zinc-500 font-medium">
-                              {new Date(order.created_at).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </TableCell>
-                            <TableCell className="max-w-[140px] truncate text-zinc-700 font-semibold"
-                              title={order.items?.map((i: any) => `${i.product?.name || 'Part'} (${i.quantity})`).join(', ')}>
-                              {order.items?.map((i: any) => `${i.product?.name || 'Part'} (${i.quantity})`).join(', ') || '—'}
-                            </TableCell>
-                            <TableCell>
-                              {order.shipping_method === "Pickup" ? (
-                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">In-Store POS</span>
-                              ) : (
-                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                                  {order.items?.[0]?.warehouse?.name?.split(' ')?.shift() || 'WH'} → {order.shipping_city || 'Dest'}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="space-y-0.5">
-                                <p className="font-bold text-zinc-800">{order.payment_method || 'Cash'}</p>
-                                {order.payment_ref_code && <p className="text-[9px] text-zinc-400 font-bold">Ref: {order.payment_ref_code}</p>}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-zinc-500">
-                              KSh {parseFloat(order.shipping_fee || 0).toLocaleString()}
-                            </TableCell>
-                            <TableCell className="font-black text-zinc-900 text-right">
-                              KSh {parseFloat(order.total_amount || 0).toLocaleString()}
-                            </TableCell>
-                            <TableCell className="text-center px-4 py-3">
-                              <Badge className={cn(
-                                "text-[9px] font-black uppercase px-2 py-0.5 rounded-full border-none",
-                                order.status === "Delivered" ? "bg-emerald-100 text-emerald-700" :
-                                order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-100 text-blue-700" :
-                                order.status === "Processing" ? "bg-purple-100 text-purple-700" :
-                                order.status === "Pending" ? "bg-amber-100 text-amber-700" :
-                                order.status === "Cancelled" ? "bg-red-100 text-red-700" :
-                                "bg-zinc-100 text-zinc-600"
-                              )}>
-                                {order.status === "In Transit" ? "SHIPPED" : order.status}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={8} className="h-32 text-center text-zinc-400 font-medium">No order transactions recorded.</TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-[#0052cc]" /> Shipping Profile
+                </h3>
+                <div className="bg-white border rounded-2xl p-5 space-y-3 shadow-sm">
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <span className="text-xs font-bold text-zinc-400">Company</span>
+                    <span className="text-sm font-bold text-zinc-900">{selectedCustomer?.company_name || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b pb-2">
+                    <span className="text-xs font-bold text-zinc-400">Tax ID / PIN</span>
+                    <span className="text-sm font-bold text-zinc-900">{selectedCustomer?.tax_id || "N/A"}</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-tighter">Registered Address</span>
+                    <span className="text-sm font-semibold text-zinc-600 italic">"{selectedCustomer?.address || "No address on file"}"</span>
+                  </div>
                 </div>
               </div>
+
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-[#0052cc]" /> B2B Membership Rank
+                </h3>
+                {(() => {
+                  const ltv = parseFloat(selectedCustomer?.orders_sum_total_amount || "0");
+                  const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+                  const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
+                  const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+                  let tierName = "Bronze", nextTierName = "Silver", nextTierThreshold = silverThresh;
+                  let progressPercent = Math.min(100, Math.max(0, (ltv / silverThresh) * 100));
+                  let discountText = "Standard Pricing — Level up to unlock logistics discounts";
+                  let stars = 1, themeBg = "bg-amber-700", textTheme = "text-amber-800";
+                  let medalColor = "#b45309", cardBorder = "border-amber-100 bg-amber-50/30";
+                  if (ltv >= platThresh) {
+                    tierName = "Platinum"; nextTierName = "Max Tier"; nextTierThreshold = platThresh;
+                    progressPercent = 100;
+                    discountText = "15% Logistics discount + Express priority dispatch enabled!";
+                    stars = 4; themeBg = "bg-blue-600"; textTheme = "text-blue-700";
+                    medalColor = "#0052cc"; cardBorder = "border-blue-100 bg-blue-50/30";
+                  } else if (ltv >= goldThresh) {
+                    tierName = "Gold"; nextTierName = "Platinum"; nextTierThreshold = platThresh;
+                    progressPercent = Math.min(100, Math.max(0, ((ltv - goldThresh) / (platThresh - goldThresh)) * 100));
+                    discountText = "10% Logistics discount + Priority support enabled!";
+                    stars = 3; themeBg = "bg-yellow-500"; textTheme = "text-yellow-700";
+                    medalColor = "#d97706"; cardBorder = "border-yellow-100 bg-yellow-50/30";
+                  } else if (ltv >= silverThresh) {
+                    tierName = "Silver"; nextTierName = "Gold"; nextTierThreshold = goldThresh;
+                    progressPercent = Math.min(100, Math.max(0, ((ltv - silverThresh) / (goldThresh - silverThresh)) * 100));
+                    discountText = "5% Logistics discount enabled!";
+                    stars = 2; themeBg = "bg-slate-400"; textTheme = "text-slate-600";
+                    medalColor = "#64748b"; cardBorder = "border-slate-200 bg-slate-50/30";
+                  }
+                  const remainingToNext = nextTierThreshold - ltv;
+                  return (
+                    <div className={cn("border rounded-2xl p-5 flex flex-col space-y-4 shadow-sm", cardBorder)}>
+                      <div className="flex items-center gap-4">
+                        <svg className="w-14 h-14 drop-shadow-md shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M7 2L10 12L12 12L9 2H7Z" fill={medalColor} opacity="0.7" />
+                          <path d="M17 2L14 12L12 12L15 2H17Z" fill={medalColor} opacity="0.7" />
+                          <path d="M10 2L12 10L14 2H10Z" fill={medalColor} opacity="0.9" />
+                          <circle cx="12" cy="14" r="7" fill="white" stroke={medalColor} strokeWidth="2" />
+                          <circle cx="12" cy="14" r="5" fill={medalColor} />
+                          <path d="M12 11.5L13.1 13.7L15.5 14L13.7 15.6L14.2 18L12 16.7L9.8 18L10.3 15.6L8.5 14L10.9 13.7L12 11.5Z" fill="white" />
+                        </svg>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn("font-black text-base uppercase tracking-wider", textTheme)}>{tierName} Tier</span>
+                            <div className="flex gap-0.5">
+                              {Array.from({ length: stars }).map((_, i) => (
+                                <Star key={i} className={cn("h-3.5 w-3.5 fill-current stroke-none", textTheme)} />
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-[11px] font-semibold text-zinc-500">{discountText}</p>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 pt-2 border-t border-dashed border-zinc-200">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                          <span>LTV Tier Progress</span>
+                          {nextTierName === "Max Tier" ? (
+                            <span className="text-blue-600 font-extrabold">MAX PLATINUM REACHED ✓</span>
+                          ) : (
+                            <span>{Math.round(progressPercent)}% to {nextTierName}</span>
+                          )}
+                        </div>
+                        <div className="w-full h-2 bg-zinc-200/60 rounded-full overflow-hidden">
+                          <div className={cn("h-full rounded-full transition-all duration-700", themeBg)} style={{ width: `${progressPercent}%` }} />
+                        </div>
+                        {nextTierName !== "Max Tier" && (
+                          <p className="text-[10px] text-zinc-400 font-semibold">
+                            KSh {remainingToNext.toLocaleString()} more to reach {nextTierName} (KSh {nextTierThreshold.toLocaleString()})
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <Plus className="h-4 w-4 text-[#0052cc]" /> Precision Order History
+                  <button
+                    onClick={() => handleViewHistory(selectedCustomer!)}
+                    className="p-1 hover:bg-zinc-100 rounded-full transition-colors text-zinc-400 hover:text-zinc-700"
+                    title="Sync History"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </button>
+                </h3>
+                <Button
+                  onClick={() => {
+                    if (selectedCustomer) {
+                      exportCustomerStatementPDF(selectedCustomer, {
+                        storeName: settings?.store_name,
+                        storeTagline: settings?.store_tagline,
+                        storeLogo: settings?.store_logo,
+                        physicalAddress: settings?.store_address || settings?.physical_address,
+                        contactEmail: settings?.store_email || settings?.contact_email,
+                        contactPhone: settings?.store_phone || settings?.contact_phone,
+                        currency: "Ksh",
+                        storeWebsite: settings?.store_website,
+                        storeKraPin: settings?.store_kra_pin,
+                        storeRegNumber: settings?.store_reg_number
+                      });
+                    }
+                  }}
+                  className="h-8 bg-[#0052cc] hover:bg-[#0747a6] text-white text-xs font-bold gap-1.5 rounded-lg shadow-sm w-full sm:w-auto"
+                >
+                  <FileText className="h-3.5 w-3.5" /> Export B2B Statement
+                </Button>
+              </div>
+              <div className="border rounded-2xl overflow-x-auto custom-scrollbar shadow-sm">
+                <Table className="min-w-[700px]">
+                  <TableHeader className="bg-zinc-50/50 border-b">
+                    <TableRow>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest px-4 h-12">Reference</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Date</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Items</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Route</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12">Payment</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-right">Shipping Fee</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-right">Total</TableHead>
+                      <TableHead className="font-bold text-[10px] uppercase tracking-widest h-12 text-center px-4">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(selectedCustomer as any)?.orders?.length > 0 ? (
+                      (selectedCustomer as any).orders.map((order: any) => (
+                        <TableRow key={order.id} className="hover:bg-zinc-50/30 transition-colors text-xs">
+                          <TableCell className="px-4 py-3">
+                            <span className="bg-zinc-100 text-zinc-800 px-2 py-0.5 rounded font-black text-[11px] border border-zinc-200">
+                              {order.tracking_number}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-zinc-500 font-medium">
+                            {new Date(order.created_at).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </TableCell>
+                          <TableCell className="max-w-[140px] truncate text-zinc-700 font-semibold"
+                            title={order.items?.map((i: any) => `${i.product?.name || 'Part'} (${i.quantity})`).join(', ')}>
+                            {order.items?.map((i: any) => `${i.product?.name || 'Part'} (${i.quantity})`).join(', ') || '—'}
+                          </TableCell>
+                          <TableCell>
+                            {order.shipping_method === "Pickup" ? (
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">In-Store POS</span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                {order.items?.[0]?.warehouse?.name?.split(' ')?.shift() || 'WH'} → {order.shipping_city || 'Dest'}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-zinc-800">{order.payment_method || 'Cash'}</p>
+                              {order.payment_ref_code && <p className="text-[9px] text-zinc-400 font-bold">Ref: {order.payment_ref_code}</p>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-zinc-500">
+                            KSh {parseFloat(order.shipping_fee || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="font-black text-zinc-900 text-right">
+                            KSh {parseFloat(order.total_amount || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-center px-4 py-3">
+                            <Badge className={cn(
+                              "text-[9px] font-black uppercase px-2 py-0.5 rounded-full border-none",
+                              order.status === "Delivered" ? "bg-emerald-100 text-emerald-700" :
+                                order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-100 text-blue-700" :
+                                  order.status === "Processing" ? "bg-purple-100 text-purple-700" :
+                                    order.status === "Pending" ? "bg-amber-100 text-amber-700" :
+                                      order.status === "Cancelled" ? "bg-red-100 text-red-700" :
+                                        "bg-zinc-100 text-zinc-600"
+                            )}>
+                              {order.status === "In Transit" ? "SHIPPED" : order.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={8} className="h-32 text-center text-zinc-400 font-medium">No order transactions recorded.</TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
           </div>
           <DialogFooter className="p-4 border-t bg-white m-0 shrink-0">
             <Button variant="outline" className="w-full h-10 border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-bold text-sm rounded-lg" onClick={() => setIsHistoryModalOpen(false)}>
@@ -911,43 +911,43 @@ export default function AdminCustomersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Contact Name *</label>
-                <Input 
-                  placeholder="e.g. John Doe" 
-                  className="h-10 border-zinc-200 rounded-lg" 
+                <Input
+                  placeholder="e.g. John Doe"
+                  className="h-10 border-zinc-200 rounded-lg"
                   value={formData.name}
-                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Company Name</label>
-                <Input 
-                  placeholder="e.g. Auto Shop LLC" 
-                  className="h-10 border-zinc-200 rounded-lg" 
+                <Input
+                  placeholder="e.g. Auto Shop LLC"
+                  className="h-10 border-zinc-200 rounded-lg"
                   value={formData.company_name}
-                  onChange={(e) => setFormData({...formData, company_name: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Email Address *</label>
-                <Input 
-                  placeholder="john@gmail.com" 
-                  className={cn("h-10 border-zinc-200 rounded-lg", errors.email && "border-red-500")} 
+                <Input
+                  placeholder="john@gmail.com"
+                  className={cn("h-10 border-zinc-200 rounded-lg", errors.email && "border-red-500")}
                   value={formData.email}
                   onChange={(e) => {
-                    setFormData({...formData, email: e.target.value});
-                    if (errors.email) setErrors({...errors, email: ""});
+                    setFormData({ ...formData, email: e.target.value });
+                    if (errors.email) setErrors({ ...errors, email: "" });
                   }}
                 />
                 {errors.email && <p className="text-[10px] text-red-500 font-bold italic">{errors.email}</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Customer Type</label>
-                <select 
+                <select
                   className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none"
                   value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                 >
                   <option value="Retail">Retail</option>
                   <option value="Wholesale">Wholesale</option>
@@ -958,101 +958,101 @@ export default function AdminCustomersPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Phone Number *</label>
-                <Input 
-                  placeholder="07xxxxxxxx" 
-                  className={cn("h-10 border-zinc-200 rounded-lg", errors.phone && "border-red-500")} 
+                <Input
+                  placeholder="07xxxxxxxx"
+                  className={cn("h-10 border-zinc-200 rounded-lg", errors.phone && "border-red-500")}
                   value={formData.phone}
                   onChange={(e) => {
                     const val = e.target.value.replace(/\D/g, "");
                     if (val.length <= 10) {
-                      setFormData({...formData, phone: val});
-                      if (errors.phone) setErrors({...errors, phone: ""});
+                      setFormData({ ...formData, phone: val });
+                      if (errors.phone) setErrors({ ...errors, phone: "" });
                     }
                   }}
                 />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Tax ID / PIN</label>
-                <Input 
-                  placeholder="e.g. P000000000Z" 
-                  className="h-10 border-zinc-200 rounded-lg" 
+                <Input
+                  placeholder="e.g. P000000000Z"
+                  className="h-10 border-zinc-200 rounded-lg"
                   value={formData.tax_id}
-                  onChange={(e) => setFormData({...formData, tax_id: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, tax_id: e.target.value })}
                 />
               </div>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-zinc-500">Main Delivery Address</label>
-              <Input 
-                placeholder="Full street address" 
-                className="h-10 border-zinc-200 rounded-lg" 
+              <Input
+                placeholder="Full street address"
+                className="h-10 border-zinc-200 rounded-lg"
                 value={formData.address}
-                onChange={(e) => setFormData({...formData, address: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
               />
             </div>
 
             {/* Login Setup Section */}
             <div className="pt-4 border-t space-y-4">
-               <h3 className="text-xs font-bold text-[#0052cc] uppercase tracking-widest flex items-center gap-2">
-                 <ShieldCheck className="h-4 w-4" /> Credentials Setup
-               </h3>
-               <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl space-y-3">
-               <p className="text-[11px] text-blue-700 font-medium leading-relaxed">
-                    You must set an initial login password for this customer. They will be required to change it on first login for their security.
-                  </p>
-                  <div className="space-y-1.5">
-                     <label className={cn("text-xs font-semibold", "text-[#0052cc]")}>Assign Account Password *</label>
-                     <div className="relative">
-                       <Input 
-                         type={showFormPassword ? "text" : "password"}
-                         placeholder="Minimum 8 characters" 
-                         className={cn("h-10 border-zinc-200 rounded-lg bg-white pr-10", errors.password && "border-red-500 ring-1 ring-red-500")} 
-                         value={formData.password}
-                         onChange={(e) => {
-                           setFormData({...formData, password: e.target.value});
-                           if (errors.password) setErrors({...errors, password: ""});
-                         }}
-                       />
-                       <button
-                         type="button"
-                         onClick={() => setShowFormPassword(!showFormPassword)}
-                         className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#0052cc] transition-colors"
-                       >
-                         {showFormPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                       </button>
-                     </div>
-                     {errors.password && <p className="text-[10px] text-red-500 font-bold italic">{errors.password}</p>}
+              <h3 className="text-xs font-bold text-[#0052cc] uppercase tracking-widest flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4" /> Credentials Setup
+              </h3>
+              <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl space-y-3">
+                <p className="text-[11px] text-blue-700 font-medium leading-relaxed">
+                  You must set an initial login password for this customer. They will be required to change it on first login for their security.
+                </p>
+                <div className="space-y-1.5">
+                  <label className={cn("text-xs font-semibold", "text-[#0052cc]")}>Assign Account Password *</label>
+                  <div className="relative">
+                    <Input
+                      type={showFormPassword ? "text" : "password"}
+                      placeholder="Minimum 8 characters"
+                      className={cn("h-10 border-zinc-200 rounded-lg bg-white pr-10", errors.password && "border-red-500 ring-1 ring-red-500")}
+                      value={formData.password}
+                      onChange={(e) => {
+                        setFormData({ ...formData, password: e.target.value });
+                        if (errors.password) setErrors({ ...errors, password: "" });
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormPassword(!showFormPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#0052cc] transition-colors"
+                    >
+                      {showFormPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
-                   <div className="space-y-1.5">
-                     <label className={cn("text-xs font-semibold", "text-[#0052cc]")}>Confirm Account Password *</label>
-                     <div className="relative">
-                       <Input 
-                         type={showFormConfirmPassword ? "text" : "password"}
-                         placeholder="Re-enter password" 
-                         className={cn("h-10 border-zinc-200 rounded-lg bg-white pr-10", errors.confirmPassword && "border-red-500 ring-1 ring-red-500")} 
-                         value={formData.confirmPassword}
-                         onChange={(e) => {
-                           setFormData({...formData, confirmPassword: e.target.value});
-                           if (errors.confirmPassword) setErrors({...errors, confirmPassword: ""});
-                         }}
-                       />
-                       <button
-                         type="button"
-                         onClick={() => setShowFormConfirmPassword(!showFormConfirmPassword)}
-                         className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#0052cc] transition-colors"
-                       >
-                         {showFormConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                       </button>
-                     </div>
-                     {errors.confirmPassword && <p className="text-[10px] text-red-500 font-bold italic">{errors.confirmPassword}</p>}
-                   </div>            
-               </div>
+                  {errors.password && <p className="text-[10px] text-red-500 font-bold italic">{errors.password}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className={cn("text-xs font-semibold", "text-[#0052cc]")}>Confirm Account Password *</label>
+                  <div className="relative">
+                    <Input
+                      type={showFormConfirmPassword ? "text" : "password"}
+                      placeholder="Re-enter password"
+                      className={cn("h-10 border-zinc-200 rounded-lg bg-white pr-10", errors.confirmPassword && "border-red-500 ring-1 ring-red-500")}
+                      value={formData.confirmPassword}
+                      onChange={(e) => {
+                        setFormData({ ...formData, confirmPassword: e.target.value });
+                        if (errors.confirmPassword) setErrors({ ...errors, confirmPassword: "" });
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowFormConfirmPassword(!showFormConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#0052cc] transition-colors"
+                    >
+                      {showFormConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.confirmPassword && <p className="text-[10px] text-red-500 font-bold italic">{errors.confirmPassword}</p>}
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3 m-0">
             <Button variant="outline" className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsCreateModalOpen(false)}>Cancel</Button>
-            <Button 
-              className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" 
+            <Button
+              className="h-10 bg-[#0052cc] text-white hover:bg-[#0747a6] rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm"
               onClick={handleSaveCustomer}
               disabled={isSaving || !formData.name || !formData.email}
             >

@@ -101,15 +101,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await api.post("/login", credentials);
     const { user: loginUser, token } = res.data;
     localStorage.setItem("auth_token", token);
-    
+
     const days = credentials.remember ? 30 : 7;
     setCookie("auth_token", token, days);
-    
+
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     // Set from login response immediately (already contains total_spent from backend)
     setUser(loginUser);
     // Also fire a background re-fetch so total_spent is always live real-time
-    api.get("/user").then(r => setUser(r.data)).catch(() => {});
+    api.get("/user").then(r => setUser(r.data)).catch(() => { });
 
     if (loginUser.must_change_password) {
       router.push("/change-password");
@@ -156,12 +156,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  /**
+   * Session Inactivity Watcher (30 Minutes)
+   * Automatically logs the user out after 30 minutes of no interaction.
+   */
+  useEffect(() => {
+    if (!user) return;
+
+    let timeout: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        // Trigger local logout first for instant UI response
+        localStorage.removeItem("auth_token");
+        deleteCookie("auth_token");
+        delete api.defaults.headers.common["Authorization"];
+        setUser(null);
+        window.location.href = "/login?expired=1";
+      }, 30 * 60 * 1000); // 30 minutes
+    };
+
+    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
+    const handleActivity = () => resetTimer();
+
+    events.forEach((name) => document.addEventListener(name, handleActivity));
+    resetTimer();
+
+    return () => {
+      events.forEach((name) => document.removeEventListener(name, handleActivity));
+      clearTimeout(timeout);
+    };
+  }, [user]);
+
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading, 
-      login, 
-      register, 
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      login,
+      register,
       logout,
       changePassword,
       refreshUser,

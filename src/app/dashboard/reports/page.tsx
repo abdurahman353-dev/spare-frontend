@@ -34,11 +34,11 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  Pending:    "bg-amber-50 text-amber-700 border-amber-200",
+  Pending: "bg-amber-50 text-amber-700 border-amber-200",
   Processing: "bg-blue-50 text-blue-700 border-blue-200",
-  Shipped:    "bg-blue-50 text-blue-700 border-blue-200",
-  Delivered:  "bg-emerald-50 text-emerald-700 border-emerald-200",
-  Cancelled:  "bg-red-50 text-red-700 border-red-200",
+  Shipped: "bg-blue-50 text-blue-700 border-blue-200",
+  Delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Cancelled: "bg-red-50 text-red-700 border-red-200",
 };
 
 function DocumentHeader({ title, subtitle, period, storeName }: { title: string; subtitle: string; period: string; storeName?: string }) {
@@ -71,10 +71,10 @@ function SummaryCard({ label, value, sub }: { label: string; value: string; sub?
 
 export default function AdminReportsPage() {
   const { settings } = useSettings();
-  const [orders, setOrders]       = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
   const [storeName, setStoreName] = useState("My Business");
   const [storeKraPin, setStoreKraPin] = useState("");
   const [storeAddress, setStoreAddress] = useState("");
@@ -92,7 +92,7 @@ export default function AdminReportsPage() {
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0];
 
   const [startDate, setStartDate] = useState(firstOfMonth);
-  const [endDate, setEndDate]     = useState(today);
+  const [endDate, setEndDate] = useState(today);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [activeTab, setActiveTab] = useState("sales");
   const [openCustomerSelect, setOpenCustomerSelect] = useState(false);
@@ -102,9 +102,9 @@ export default function AdminReportsPage() {
     const activeCustomers = customers.filter(c => c.name?.toLowerCase() !== "walk-in customer");
     if (!searchQuery) return activeCustomers;
     const q = searchQuery.toLowerCase();
-    return activeCustomers.filter(c => 
-      c.name?.toLowerCase().includes(q) || 
-      c.phone?.toLowerCase().includes(q) || 
+    return activeCustomers.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.phone?.toLowerCase().includes(q) ||
       c.email?.toLowerCase().includes(q)
     );
   }, [customers, searchQuery]);
@@ -112,21 +112,21 @@ export default function AdminReportsPage() {
   useEffect(() => {
     // Fetch admin settings to get business name and KRA PIN
     api.get("/settings").then(r => {
-      if (r.data?.store_name)       setStoreName(r.data.store_name);
-      if (r.data?.store_kra_pin)    setStoreKraPin(r.data.store_kra_pin);
-      if (r.data?.store_address)    setStoreAddress(r.data.store_address);
-      if (r.data?.store_phone)      setStorePhone(r.data.store_phone);
-      if (r.data?.store_email)      setStoreEmail(r.data.store_email);
-      if (r.data?.store_website)    setStoreWebsite(r.data.store_website);
+      if (r.data?.store_name) setStoreName(r.data.store_name);
+      if (r.data?.store_kra_pin) setStoreKraPin(r.data.store_kra_pin);
+      if (r.data?.store_address) setStoreAddress(r.data.store_address);
+      if (r.data?.store_phone) setStorePhone(r.data.store_phone);
+      if (r.data?.store_email) setStoreEmail(r.data.store_email);
+      if (r.data?.store_website) setStoreWebsite(r.data.store_website);
       if (r.data?.store_reg_number) setStoreRegNumber(r.data.store_reg_number);
-      if (r.data?.store_branch)     setStoreBranch(r.data.store_branch);
-      if (r.data?.store_tagline)    setStoreTagline(r.data.store_tagline);
-    }).catch(() => {});
+      if (r.data?.store_branch) setStoreBranch(r.data.store_branch);
+      if (r.data?.store_tagline) setStoreTagline(r.data.store_tagline);
+    }).catch(() => { });
 
     Promise.all([
-      api.get("/orders"),
-      api.get("/inventory"),
-      api.get("/customers"),
+      api.get("/orders", { params: { per_page: -1 } }),
+      api.get("/inventory", { params: { per_page: -1 } }),
+      api.get("/customers", { params: { per_page: -1 } }),
       api.get("/warehouses"),
     ]).then(([o, i, c, w]) => {
       setOrders(o.data);
@@ -194,8 +194,8 @@ export default function AdminReportsPage() {
   // Filter Inventory based on active warehouse hub filter
   const filteredInventory = useMemo(() => {
     if (selectedWarehouseId === "All") return inventory;
-    return inventory.filter(i => 
-      String(i.warehouse_id) === selectedWarehouseId || 
+    return inventory.filter(i =>
+      String(i.warehouse_id) === selectedWarehouseId ||
       i.warehouse?.id?.toString() === selectedWarehouseId
     );
   }, [inventory, selectedWarehouseId]);
@@ -209,12 +209,12 @@ export default function AdminReportsPage() {
   }, [filteredInventory, inventoryPage]);
 
   // Summary stats — fully reflect both warehouse and channel filters
-  const totalRevenue  = channelRevenueOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  const totalRevenue = channelRevenueOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
   const totalShippingFeesInPeriod = channelRevenueOrders.reduce((s, o) => s + Number(o.shipping_fee || 0), 0);
-  const totalVAT      = totalRevenue * 0.16;
-  const netRevenue    = totalRevenue - totalVAT;
-  const periodLabel   = `${new Date(startDate).toLocaleDateString("en-KE", { day:"numeric", month:"short", year:"numeric" })} – ${new Date(endDate).toLocaleDateString("en-KE", { day:"numeric", month:"short", year:"numeric" })}`;
-  const channelLabel  = orderChannelFilter === "All" ? "All Channels" : orderChannelFilter;
+  const totalVAT = totalRevenue * 0.16;
+  const netRevenue = totalRevenue - totalVAT;
+  const periodLabel = `${new Date(startDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })} – ${new Date(endDate).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}`;
+  const channelLabel = orderChannelFilter === "All" ? "All Channels" : orderChannelFilter;
   const warehouseLabel = selectedWarehouseId === "All" ? "All Hubs" : (warehouses.find(w => String(w.id) === selectedWarehouseId)?.name || "Selected Hub");
 
   // BI Calculations: Timeline Data — respects BOTH warehouse and channel filters
@@ -224,7 +224,7 @@ export default function AdminReportsPage() {
       const date = o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE", { month: "short", day: "numeric" }) : "Unknown";
       map.set(date, (map.get(date) || 0) + Number(o.total_amount || 0));
     });
-    return Array.from(map.entries()).map(([date, revenue]) => ({ date, revenue })).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return Array.from(map.entries()).map(([date, revenue]) => ({ date, revenue })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [channelRevenueOrders]);
 
   // BI Calculations: Status Breakdown — respects BOTH filters
@@ -252,7 +252,7 @@ export default function AdminReportsPage() {
       }
     });
     return Array.from(map.entries()).map(([name, data]) => ({ name, revenue: data.revenue, qty: data.qty }))
-      .sort((a,b) => b.revenue - a.revenue).slice(0, 5);
+      .sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [channelRevenueOrders]);
 
   // BI Calculations: Sales by Location — respects BOTH filters
@@ -262,7 +262,7 @@ export default function AdminReportsPage() {
       const loc = o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || 'KE'}` : "Unknown Origin";
       map.set(loc, (map.get(loc) || 0) + Number(o.total_amount || 0));
     });
-    return Array.from(map.entries()).map(([name, revenue]) => ({ name, revenue })).sort((a,b) => b.revenue - a.revenue).slice(0, 5);
+    return Array.from(map.entries()).map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [channelRevenueOrders]);
 
   // Customer Statement Logic
@@ -295,13 +295,13 @@ export default function AdminReportsPage() {
     const doc = new jsPDF(isStatement ? { orientation: "landscape", unit: "mm", format: "a4" } : undefined);
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
-    
+
     // Generate a unique report ID based on tab and date
-    const dateStamp = new Date().toISOString().slice(0,7).replace("-", "");
+    const dateStamp = new Date().toISOString().slice(0, 7).replace("-", "");
     const randomSeq = Math.floor(100 + Math.random() * 900);
     const reportCode = activeTab.toUpperCase();
     const docId = `${reportCode}-${dateStamp}-${randomSeq}`;
-    
+
     // Company details from real settings
     const legalName = storeName;
     const tagline = storeTagline || "";
@@ -329,47 +329,47 @@ export default function AdminReportsPage() {
       storeRegNumber: businessReg,
       storeLogo: logoBase64
     });
-    
+
     // 2. Report Information Block (2 Columns - Clean and Spacious)
     const infoY = 38;
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(14, infoY, pageWidth - 28, 28, 2, 2, 'F');
-    
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(30, 41, 59);
-    
+
     // Left column
     doc.text(`Report ID:`, 20, infoY + 7);
     doc.text(`Generated By:`, 20, infoY + 14);
     doc.text(`Generated On:`, 20, infoY + 21);
-    
+
     doc.setFont("helvetica", "normal");
     doc.text(docId, 45, infoY + 7);
     doc.text(currentUserName, 45, infoY + 14);
     doc.text(new Date().toLocaleString("en-KE", { hour12: false }), 45, infoY + 21);
-    
+
     // Right column
     doc.setFont("helvetica", "bold");
     doc.text(`Branch:`, 110, infoY + 7);
     doc.text(`Currency:`, 110, infoY + 14);
-    
+
     doc.setFont("helvetica", "normal");
     doc.text(activeBranch, 132, infoY + 7);
     doc.text("KES (Kenyan Shilling)", 132, infoY + 14);
-    
+
     let currentY = infoY + 34;
-    
+
     // 3. Tab-Specific Reports
     if (activeTab === "sales") {
       // Summary Metrics Card
       doc.setFillColor(239, 246, 255);
       doc.roundedRect(14, currentY, pageWidth - 28, 16, 2, 2, 'F');
-      
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(30, 41, 59);
-      
+
       doc.text(`Total Invoices: ${channelRevenueOrders.length}`, 16, currentY + 10);
       doc.text(`Gross (Ksh): ${totalRevenue.toLocaleString()}`, 64, currentY + 10);
       doc.text(`VAT 16% (Ksh): ${totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 114, currentY + 10);
@@ -394,19 +394,19 @@ export default function AdminReportsPage() {
         foot: [['TOTAL', `Ksh ${totalRevenue.toLocaleString()}`]],
         theme: 'grid',
         headStyles: { fillColor: [0, 82, 204], fontSize: 9, fontStyle: 'bold' },
-        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', fontSize: 9 },
+        footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
         styles: { fontSize: 8.5, cellPadding: 3 }
       });
-      
+
     } else if (activeTab === "inventory") {
       // Summary Metrics Card
       doc.setFillColor(254, 242, 242);
       doc.roundedRect(14, currentY, pageWidth - 28, 16, 2, 2, 'F');
-      
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(30, 41, 59);
-      
+
       const lowStockCount = filteredInventory.filter(i => i.quantity > 0 && i.quantity <= (Number(i.min_stock) || 5)).length;
       const outOfStockCount = filteredInventory.filter(i => i.quantity === 0).length;
 
@@ -436,7 +436,7 @@ export default function AdminReportsPage() {
         headStyles: { fillColor: [0, 82, 204], fontSize: 8, fontStyle: 'bold' },
         styles: { fontSize: 7.5, cellPadding: 2.5 }
       });
-      
+
     } else if (activeTab === "statement") {
       if (!selectedCustomer) {
         alert("Please select a customer first.");
@@ -559,18 +559,18 @@ export default function AdminReportsPage() {
       // Summary Metrics Card
       doc.setFillColor(245, 243, 255);
       doc.roundedRect(14, currentY, pageWidth - 28, 16, 2, 2, 'F');
-      
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(30, 41, 59);
-      
+
       doc.text(`Total Invoices: ${channelRevenueOrders.length}`, 16, currentY + 10);
       doc.text(`Gross (Ksh): ${totalRevenue.toLocaleString()}`, 64, currentY + 10);
       doc.text(`VAT 16% (Ksh): ${totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 114, currentY + 10);
       doc.text(`Net (Ksh): ${netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 164, currentY + 10);
-      
+
       currentY += 22;
-      
+
       // Group by date for daily VAT breakdown
       const dailyVatMap = new Map<string, { gross: number; vat: number; net: number }>();
       channelRevenueOrders.forEach(o => {
@@ -578,8 +578,8 @@ export default function AdminReportsPage() {
         const gross = Number(o.total_amount || 0);
         const prev = dailyVatMap.get(d) || { gross: 0, vat: 0, net: 0 };
         prev.gross += gross;
-        prev.vat   += gross * 0.16;
-        prev.net   += gross * 0.84;
+        prev.vat += gross * 0.16;
+        prev.net += gross * 0.84;
         dailyVatMap.set(d, prev);
       });
       const dailyVatRows = Array.from(dailyVatMap.entries())
@@ -598,11 +598,11 @@ export default function AdminReportsPage() {
         foot: [['TOTALS', totalRevenue.toLocaleString(), totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 }), netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })]],
         theme: 'grid',
         headStyles: { fillColor: [0, 82, 204], fontSize: 9, fontStyle: 'bold' },
-        footStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', fontSize: 9 },
+        footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
         styles: { fontSize: 8.5, cellPadding: 3 }
       });
     }
-    
+
     // 4. Draw Professional Signatures & Approval Blocks (Only on the last page)
     let finalY = (doc as any).lastAutoTable.finalY || currentY;
     if (finalY + 45 > pageHeight - 35) {
@@ -611,39 +611,39 @@ export default function AdminReportsPage() {
     } else {
       finalY += 15;
     }
-    
+
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(30, 41, 59);
-    
+
     doc.text("Prepared By: __________________", 14, finalY);
     doc.text("Reviewed By: __________________", pageWidth / 3 + 8, finalY);
     doc.text("Approved By: __________________", (pageWidth / 3) * 2 + 2, finalY);
-    
+
     // 5. Post-Process Loop for Watermark, Confidentiality Note and Page Numbers on All Pages
     const pageCount = doc.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      
+
       // Top header line accent (very faint)
       doc.setDrawColor(240, 240, 240);
       doc.setLineWidth(0.3);
       doc.line(14, 10, pageWidth - 14, 10);
-      
+
       // Bottom footer line
       doc.line(14, pageHeight - 16, pageWidth - 14, pageHeight - 16);
-      
+
       // Confidentiality disclaimer
       doc.setFontSize(7.5);
       doc.setTextColor(148, 163, 184); // Slate grey
       doc.setFont("helvetica", "bold");
       doc.text("This report is system-generated and confidential.", 14, pageHeight - 10);
-      
+
       // Page numbering
       doc.setFont("helvetica", "normal");
       doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 10, { align: 'right' });
     }
-    
+
     doc.save(`${(storeName || "Report").replace(/\s+/g, "_")}_${activeTab}_${today}.pdf`);
   };
 
@@ -677,10 +677,10 @@ export default function AdminReportsPage() {
           <Tabs orientation="vertical" value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="flex flex-col h-auto w-full bg-transparent p-0 gap-1.5">
               {[
-                { value: "sales",     icon: TrendingUp,    label: "Sales & BI Analytics"  },
-                { value: "inventory", icon: Package,       label: "Inventory Status"      },
-                { value: "statement", icon: Users,         label: "Customer Statement"    },
-                { value: "vat",       icon: Receipt,       label: "VAT / Tax Filing"      },
+                { value: "sales", icon: TrendingUp, label: "Sales & BI Analytics" },
+                { value: "inventory", icon: Package, label: "Inventory Status" },
+                { value: "statement", icon: Users, label: "Customer Statement" },
+                { value: "vat", icon: Receipt, label: "VAT / Tax Filing" },
               ].map(({ value, icon: Icon, label }) => (
                 <TabsTrigger
                   key={value}
@@ -698,7 +698,7 @@ export default function AdminReportsPage() {
 
         {/* Main Content Area */}
         <div className="flex-1 p-3 sm:p-6 md:p-8 bg-zinc-50/30 overflow-y-auto">
-          
+
           {/* Global Date Filter (Visible on all tabs) */}
           <div className="flex flex-wrap items-end gap-4 mb-8 p-5 bg-white rounded-2xl shadow-sm border border-zinc-200">
             <div className="space-y-1.5">
@@ -739,9 +739,9 @@ export default function AdminReportsPage() {
               <select
                 className="h-10 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700"
                 value={selectedWarehouseId}
-                onChange={(e) => { 
-                  setSelectedWarehouseId(e.target.value); 
-                  setSalesPage(1); 
+                onChange={(e) => {
+                  setSelectedWarehouseId(e.target.value);
+                  setSalesPage(1);
                   setInventoryPage(1);
                 }}
               >
@@ -765,9 +765,9 @@ export default function AdminReportsPage() {
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 <SummaryCard label="Total Paid Orders" value={String(channelRevenueOrders.length)} sub={`${channelLabel} | ${warehouseLabel}`} />
-                <SummaryCard label="Gross Revenue"  value={`Ksh ${totalRevenue.toLocaleString()}`} />
-                <SummaryCard label="VAT Collected"  value={`Ksh ${totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} sub="16% standard rate" />
-                <SummaryCard label="Net Revenue"    value={`Ksh ${netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+                <SummaryCard label="Gross Revenue" value={`Ksh ${totalRevenue.toLocaleString()}`} />
+                <SummaryCard label="VAT Collected" value={`Ksh ${totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} sub="16% standard rate" />
+                <SummaryCard label="Net Revenue" value={`Ksh ${netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
               </div>
 
               {/* BI Charts Section */}
@@ -775,7 +775,7 @@ export default function AdminReportsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Revenue Timeline */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
-                    <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#0052cc]"/> Revenue Timeline</h3>
+                    <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-[#0052cc]" /> Revenue Timeline</h3>
                     <div className="h-[250px] w-full">
                       {timelineData.length > 0 && mounted ? (
                         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -795,7 +795,7 @@ export default function AdminReportsPage() {
 
                   {/* Status Breakdown */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
-                    <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><PieChart className="h-4 w-4 text-[#0052cc]"/> Fulfillment Status</h3>
+                    <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><PieChart className="h-4 w-4 text-[#0052cc]" /> Fulfillment Status</h3>
                     <div className="h-[250px] w-full">
                       {statusData.length > 0 && mounted ? (
                         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -829,7 +829,7 @@ export default function AdminReportsPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Top Products */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
-                  <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><Package className="h-4 w-4 text-[#0052cc]"/> Top Selling Products</h3>
+                  <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><Package className="h-4 w-4 text-[#0052cc]" /> Top Selling Products</h3>
                   <div className="space-y-4">
                     {topProducts.length > 0 ? topProducts.map((p, i) => (
                       <div key={i} className="flex justify-between items-center pb-3 border-b border-zinc-100 last:border-0 last:pb-0">
@@ -845,7 +845,7 @@ export default function AdminReportsPage() {
 
                 {/* Top Locations */}
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200">
-                  <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><MapPin className="h-4 w-4 text-[#0052cc]"/> Top Regional Destinations</h3>
+                  <h3 className="text-sm font-black text-zinc-800 mb-6 flex items-center gap-2"><MapPin className="h-4 w-4 text-[#0052cc]" /> Top Regional Destinations</h3>
                   <div className="h-[200px] w-full mt-4">
                     {locationData.length > 0 && mounted && activeTab === "sales" ? (
                       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -913,7 +913,7 @@ export default function AdminReportsPage() {
                   currentPage={salesPage}
                   setCurrentPage={setSalesPage}
                   pageSize={SALES_PAGE_SIZE}
-                  setPageSize={() => {}}
+                  setPageSize={() => { }}
                   totalItems={channelRevenueOrders.length}
                   itemName="orders"
                 />
@@ -925,9 +925,9 @@ export default function AdminReportsPage() {
               <DocumentHeader title="Inventory Status Report" subtitle="Real-time stock level analysis across all distribution hubs" period={`As of ${new Date().toLocaleDateString("en-KE")}`} storeName={storeName} />
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                <SummaryCard label="Total Monitored SKUs"    value={String(filteredInventory.length)} />
-                <SummaryCard label="Low Stock Warning"     value={String(filteredInventory.filter(i => i.quantity > 0 && i.quantity <= (Number(i.min_stock) || 5)).length)} sub="Items at or below their threshold" />
-                <SummaryCard label="Critical Out of Stock"  value={String(filteredInventory.filter(i => i.quantity === 0).length)} sub="Requires immediate replenishment" />
+                <SummaryCard label="Total Monitored SKUs" value={String(filteredInventory.length)} />
+                <SummaryCard label="Low Stock Warning" value={String(filteredInventory.filter(i => i.quantity > 0 && i.quantity <= (Number(i.min_stock) || 5)).length)} sub="Items at or below their threshold" />
+                <SummaryCard label="Critical Out of Stock" value={String(filteredInventory.filter(i => i.quantity === 0).length)} sub="Requires immediate replenishment" />
               </div>
 
               <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
@@ -973,7 +973,7 @@ export default function AdminReportsPage() {
                   currentPage={inventoryPage}
                   setCurrentPage={setInventoryPage}
                   pageSize={INVENTORY_PAGE_SIZE}
-                  setPageSize={() => {}}
+                  setPageSize={() => { }}
                   totalItems={inventory.length}
                   itemName="SKUs"
                 />
@@ -1152,10 +1152,10 @@ export default function AdminReportsPage() {
               <DocumentHeader title="VAT & Tax Compliance Report" subtitle="Financial breakdown of taxable transactions for KRA filing" period={periodLabel} storeName={storeName} />
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                <SummaryCard label="Total Gross Sales"     value={`Ksh ${totalRevenue.toLocaleString()}`} />
-                <SummaryCard label="Taxable Amount"  value={`Ksh ${totalRevenue.toLocaleString()}`} sub="100% of transactions" />
-                <SummaryCard label="VAT Remittable @ 16%"       value={`Ksh ${totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
-                <SummaryCard label="Net Income (ex-VAT)"    value={`Ksh ${netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+                <SummaryCard label="Total Gross Sales" value={`Ksh ${totalRevenue.toLocaleString()}`} />
+                <SummaryCard label="Taxable Amount" value={`Ksh ${totalRevenue.toLocaleString()}`} sub="100% of transactions" />
+                <SummaryCard label="VAT Remittable @ 16%" value={`Ksh ${totalVAT.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+                <SummaryCard label="Net Income (ex-VAT)" value={`Ksh ${netRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
               </div>
 
               <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
@@ -1175,8 +1175,8 @@ export default function AdminReportsPage() {
                       <TableRow><TableCell colSpan={6} className="h-32 text-center text-zinc-400 font-medium">No taxable transactions found.</TableCell></TableRow>
                     ) : channelRevenueOrders.map((o: any, i: number) => {
                       const gross = Number(o.total_amount || 0);
-                      const vat   = gross * 0.16;
-                      const net   = gross - vat;
+                      const vat = gross * 0.16;
+                      const net = gross - vat;
                       return (
                         <TableRow key={i} className="hover:bg-zinc-50/80">
                           <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">{o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`}</TableCell>
@@ -1199,7 +1199,7 @@ export default function AdminReportsPage() {
                   </TableBody>
                 </Table>
               </div>
- 
+
               <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-xs font-semibold text-zinc-500">
                 ⚠️ Legal Note: VAT is calculated at the standard rate of 16% strictly following Kenya Revenue Authority (KRA) guidelines. This system-generated report serves as preliminary supporting documentation for iTax filings.
               </div>

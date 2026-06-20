@@ -74,6 +74,7 @@ export default function AdminSettingsPage() {
     contact_email: "",
     contact_phone: "",
     contact_whatsapp: "",
+    support_phone: "",
     physical_address: "",
     working_hours: "",
     currency: "Ksh",
@@ -172,6 +173,10 @@ export default function AdminSettingsPage() {
         const currentWA = settings.contact_whatsapp || "";
         if (currentWA === "" || prefixes.includes(currentWA)) {
           setSettings(prev => ({ ...prev, contact_whatsapp: prefix }));
+        }
+        const currentSupport = settings.support_phone || "";
+        if (currentSupport === "" || prefixes.includes(currentSupport)) {
+          setSettings(prev => ({ ...prev, support_phone: prefix }));
         }
       }
     }
@@ -426,6 +431,13 @@ export default function AdminSettingsPage() {
       const cleanPhone = settings.contact_whatsapp.replace(/[\s\-\(\)]/g, "");
       if (!phoneRegex.test(cleanPhone)) {
         showAlert("Invalid WhatsApp Number", "The WhatsApp contact must be a valid phone number (e.g. +254 7XXXXXXXX or 07XXXXXXXX).", "error");
+        return;
+      }
+    }
+    if (settings.support_phone) {
+      const cleanPhone = settings.support_phone.replace(/[\s\-\(\)]/g, "");
+      if (!phoneRegex.test(cleanPhone)) {
+        showAlert("Invalid Support Phone Number", "The support phone number must be a valid phone number (e.g. +254 7XXXXXXXX or 07XXXXXXXX).", "error");
         return;
       }
     }
@@ -690,6 +702,11 @@ export default function AdminSettingsPage() {
                 <div className="space-y-1.5">
                   <Label className={labelCls}>WhatsApp Contact</Label>
                   <Input name="contact_whatsapp" value={settings.contact_whatsapp || ""} onChange={handleChange} placeholder="+254..." className={inputCls} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className={labelCls}>Customer Support Phone (Call Button)</Label>
+                  <Input name="support_phone" value={settings.support_phone || ""} onChange={handleChange} placeholder="+254..." className={inputCls} />
+                  <p className="text-[10px] text-zinc-400 font-medium">Used for direct calls on the "Contact Support" buttons.</p>
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <Label className={labelCls}>Physical Address</Label>

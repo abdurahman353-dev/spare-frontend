@@ -29,7 +29,8 @@ import {
   Activity, 
   Smartphone,
   Info,
-  Pencil
+  Pencil,
+  Download
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -74,9 +75,14 @@ export default function AdminsAndAuditsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isTogglingId, setIsTogglingId] = useState<number | null>(null);
 
-  // Search & Filtering State
   const [adminSearch, setAdminSearch] = useState("");
   const [auditSearch, setAuditSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [selectedAction, setSelectedAction] = useState("all");
+  const [selectedActor, setSelectedActor] = useState("all");
+  const [ipFilter, setIpFilter] = useState("");
+  const [selectedSeverity, setSelectedSeverity] = useState("all");
   
   // Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -277,14 +283,147 @@ export default function AdminsAndAuditsPage() {
     );
   }, [admins, adminSearch]);
 
+  const getActionSeverity = (action: string) => {
+    const act = action.toUpperCase();
+    if (act.includes("DELETE") || act.includes("VOID") || act.includes("CANCEL") || act.includes("REVOKE") || act.includes("TOGGLE")) {
+      return "danger";
+    }
+    if (act.includes("LOGIN") || act.includes("LOGOUT") || act.includes("PASSWORD") || act.includes("CREATE")) {
+      return "warning";
+    }
+    return "info";
+  };
+
+  // Dynamic filter options derived from auditLogs
+  const uniqueActions = useMemo(() => {
+    const actions = new Set<string>();
+    auditLogs.forEach(log => {
+      if (log.action) actions.add(log.action);
+    });
+    return Array.from(actions).sort();
+  }, [auditLogs]);
+
+  const uniqueActors = useMemo(() => {
+    const actors = new Map<string, string>();
+    auditLogs.forEach(log => {
+      if (log.user) {
+        actors.set(String(log.user.id), log.user.name);
+      } else {
+        actors.set("system", "System Actions");
+      }
+    });
+    return Array.from(actors.entries()).map(([id, name]) => ({ id, name }));
+  }, [auditLogs]);
+
   const filteredAuditLogs = useMemo(() => {
-    return auditLogs.filter(log => 
-      log.action.toLowerCase().includes(auditSearch.toLowerCase()) ||
-      log.description.toLowerCase().includes(auditSearch.toLowerCase()) ||
-      (log.user && log.user.name.toLowerCase().includes(auditSearch.toLowerCase())) ||
-      (log.user && log.user.email.toLowerCase().includes(auditSearch.toLowerCase()))
-    );
-  }, [auditLogs, auditSearch]);
+    return auditLogs.filter(log => {
+      // 1. Text Search
+      if (auditSearch) {
+        const query = auditSearch.toLowerCase();
+        const matchesText = 
+          log.action.toLowerCase().includes(query) ||
+          log.description.toLowerCase().includes(query) ||
+          (log.user && log.user.name.toLowerCase().includes(query)) ||
+          (log.user && log.user.email.toLowerCase().includes(query));
+        if (!matchesText) return false;
+      }
+
+      // 2. Date From
+      if (dateFrom) {
+        const logDate = new Date(log.created_at);
+        const fromDate = new Date(dateFrom + "T00:00:00");
+        if (logDate < fromDate) return false;
+      }
+
+      // 3. Date To
+      if (dateTo) {
+        const logDate = new Date(log.created_at);
+        const toDate = new Date(dateTo + "T23:59:59.999");
+        if (logDate > toDate) return false;
+      }
+
+      // 4. Action Type
+      if (selectedAction !== "all") {
+        if (log.action !== selectedAction) return false;
+      }
+
+      // 5. Actor
+      if (selectedActor !== "all") {
+        if (selectedActor === "system") {
+          if (log.user !== null && log.user !== undefined) return false;
+        } else {
+          if (!log.user || String(log.user.id) !== selectedActor) return false;
+        }
+      }
+
+      // 6. IP Address
+      if (ipFilter) {
+        const query = ipFilter.toLowerCase();
+        if (!log.ip_address || !log.ip_address.toLowerCase().includes(query)) return false;
+      }
+
+      // 7. Severity
+      if (selectedSeverity !== "all") {
+        const severity = getActionSeverity(log.action);
+        if (severity !== selectedSeverity) return false;
+      }
+
+      return true;
+    });
+  }, [auditLogs, auditSearch, dateFrom, dateTo, selectedAction, selectedActor, ipFilter, selectedSeverity]);
+
+  const dateRangeCovered = useMemo(() => {
+    if (filteredAuditLogs.length === 0) return "N/A";
+    const dates = filteredAuditLogs.map(log => new Date(log.created_at).getTime());
+    const minDate = new Date(Math.min(...dates));
+    const maxDate = new Date(Math.max(...dates));
+    return `${minDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${maxDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  }, [filteredAuditLogs]);
+
+  // Export filtered audit logs to CSV
+  const exportToCSV = () => {
+    if (filteredAuditLogs.length === 0) {
+      toast.error("No records to export.");
+      return;
+    }
+    const headers = ["Timestamp", "Actor Name", "Actor Email", "Action", "Description", "IP Address", "User Agent"];
+    const rows = filteredAuditLogs.map(log => [
+      new Date(log.created_at).toISOString(),
+      log.user ? log.user.name : "System",
+      log.user ? log.user.email : "N/A",
+      log.action,
+      log.description,
+      log.ip_address || "N/A",
+      log.user_agent || "N/A"
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(row => row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `audit_logs_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("Audit logs exported to CSV successfully.");
+  };
+
+  const clearAllFilters = () => {
+    setDateFrom("");
+    setDateTo("");
+    setSelectedAction("all");
+    setSelectedActor("all");
+    setIpFilter("");
+    setSelectedSeverity("all");
+    setAuditSearch("");
+    toast.success("All filters cleared.");
+  };
 
   // Pagination
   const [adminPage, setAdminPage] = useState(1);
@@ -301,9 +440,11 @@ export default function AdminsAndAuditsPage() {
     return filteredAuditLogs.slice(start, start + PAGE_SIZE);
   }, [filteredAuditLogs, auditPage]);
 
-  // Reset pagination when search changes
+  // Reset pagination when search or filters change
   useMemo(() => { setAdminPage(1); }, [adminSearch]);
-  useMemo(() => { setAuditPage(1); }, [auditSearch]);
+  useMemo(() => { 
+    setAuditPage(1); 
+  }, [auditSearch, dateFrom, dateTo, selectedAction, selectedActor, ipFilter, selectedSeverity]);
 
   const getActionBadgeColor = (action: string) => {
     switch (action) {
@@ -542,20 +683,143 @@ export default function AdminsAndAuditsPage() {
       {/* TAB CONTENTS: AUDITS */}
       {activeTab === "audits" && (
         <div className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-3 justify-between items-center bg-white p-4 rounded-xl border border-zinc-100 shadow-sm">
-            <div className="relative flex-1 max-w-md w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-              <Input 
-                placeholder="Search audit trail by actor, action or description..." 
-                className="pl-10 h-10 border-zinc-200 rounded-lg bg-white font-medium text-sm focus:border-primary transition-all w-full"
-                value={auditSearch}
-                onChange={(e) => setAuditSearch(e.target.value)}
-              />
+          {/* Audit Dashboard & Stats Strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-zinc-50/50 p-4 rounded-xl border border-zinc-150">
+            <div className="bg-white p-3 rounded-lg border border-zinc-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-bold">Total Logs Captured</span>
+              <span className="text-xl font-bold text-zinc-800 mt-1">{auditLogs.length} events</span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-500 font-semibold bg-zinc-50 border border-zinc-200 px-3 py-2 rounded-lg">
-              <Info className="h-4 w-4 text-[#0052cc]" />
-              Showing last 200 events in real-time.
+            <div className="bg-white p-3 rounded-lg border border-zinc-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-bold">Filtered Results</span>
+              <span className="text-xl font-bold text-[#0052cc] mt-1">{filteredAuditLogs.length} events</span>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-zinc-100 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-bold">Date Range Covered</span>
+              <span className="text-sm font-bold text-zinc-700 mt-2">{dateRangeCovered}</span>
+            </div>
+          </div>
+
+          {/* Advanced Filter Panel */}
+          <div className="bg-white p-5 rounded-xl border border-zinc-150 shadow-sm space-y-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <h3 className="font-bold text-sm text-zinc-800 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-[#0052cc]" />
+                Advanced Filtering Controls
+              </h3>
+              <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                {(dateFrom || dateTo || selectedAction !== "all" || selectedActor !== "all" || ipFilter || selectedSeverity !== "all" || auditSearch) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearAllFilters}
+                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 font-bold h-9 rounded-lg"
+                  >
+                    Clear All
+                  </Button>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={exportToCSV}
+                  className="text-xs border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-bold h-9 rounded-lg flex items-center gap-1.5 shadow-sm"
+                >
+                  <Download className="h-3.5 w-3.5" /> Export CSV
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pt-2">
+              {/* Search text query */}
+              <div className="space-y-1.5 md:col-span-2 lg:col-span-2">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Search Keyword</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                  <Input 
+                    placeholder="Search by action description, email, user name..." 
+                    className="pl-10 h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold"
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Date From */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Date From</label>
+                <Input 
+                  type="date"
+                  className="h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold text-zinc-600 focus:ring-1 focus:ring-primary/10"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </div>
+
+              {/* Date To */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Date To</label>
+                <Input 
+                  type="date"
+                  className="h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold text-zinc-600 focus:ring-1 focus:ring-primary/10"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </div>
+
+              {/* Action Type */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Action Type</label>
+                <select
+                  value={selectedAction}
+                  onChange={(e) => setSelectedAction(e.target.value)}
+                  className="h-10 w-full px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-white text-zinc-700 outline-none focus:ring-1 focus:ring-primary/10"
+                >
+                  <option value="all">All Actions ({uniqueActions.length})</option>
+                  {uniqueActions.map(action => (
+                    <option key={action} value={action}>{action.replace(/_/g, " ")}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Actor */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Actor / Performer</label>
+                <select
+                  value={selectedActor}
+                  onChange={(e) => setSelectedActor(e.target.value)}
+                  className="h-10 w-full px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-white text-zinc-700 outline-none focus:ring-1 focus:ring-primary/10"
+                >
+                  <option value="all">All Actors</option>
+                  {uniqueActors.map(actor => (
+                    <option key={actor.id} value={actor.id}>{actor.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* IP Address */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">IP Address</label>
+                <Input 
+                  placeholder="e.g. 127.0.0.1"
+                  className="h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold"
+                  value={ipFilter}
+                  onChange={(e) => setIpFilter(e.target.value)}
+                />
+              </div>
+
+              {/* Severity Grouping */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Severity Level</label>
+                <select
+                  value={selectedSeverity}
+                  onChange={(e) => setSelectedSeverity(e.target.value)}
+                  className="h-10 w-full px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-white text-zinc-700 outline-none focus:ring-1 focus:ring-primary/10"
+                >
+                  <option value="all">All Severities</option>
+                  <option value="info">Info (Read/Normal Updates)</option>
+                  <option value="warning">Warning (Auth/Admin Config)</option>
+                  <option value="danger">Danger (Deletions/Voids/Cancels)</option>
+                </select>
+              </div>
             </div>
           </div>
 

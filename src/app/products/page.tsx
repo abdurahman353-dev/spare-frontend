@@ -517,7 +517,7 @@ export default function PublicProductsPage() {
                   <Search className="absolute left-3 top-3 h-4 w-4 text-[#94a3b8]" />
                   <Input
                     className="pl-10 h-11 border-[#e2e8f0] text-[14px]"
-                    placeholder="SKU, Name or Brand..."
+                    placeholder="Part number, SKU, Name or Brand..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />

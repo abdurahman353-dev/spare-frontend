@@ -1083,9 +1083,11 @@ function AccountPortalInner() {
                 <div className="relative z-10">
                   <h3 className="text-2xl font-bold text-white mb-2 tracking-tight">Need assistance with your parts?</h3>
                   <p className="text-white/80 text-[15px] max-w-md mb-6 font-medium">Our expert team is available 24/7 to help you find the exact genuine part for your Mercedes-Benz.</p>
-                  <Button className="bg-white text-[#0052cc] hover:bg-slate-50 font-bold px-6 py-2 rounded-md transition-all shadow-sm">
-                    Contact Support
-                  </Button>
+                  <a href={`tel:${settings?.support_phone || settings?.contact_phone || ""}`}>
+                    <Button className="bg-white text-[#0052cc] hover:bg-slate-50 font-bold px-6 py-2 rounded-md transition-all shadow-sm flex items-center gap-2">
+                      <Smartphone className="h-4 w-4" /> Contact Support
+                    </Button>
+                  </a>
                 </div>
                 <div className="absolute -right-10 -bottom-10 opacity-10 rotate-12">
                    <Package className="h-60 w-60 text-white" />

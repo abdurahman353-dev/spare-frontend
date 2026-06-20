@@ -1018,56 +1018,57 @@ function AccountPortalInner() {
                         <CardTitle className="text-lg font-bold text-[#1e293b]">Verified Shipping Destinations</CardTitle>
                       </CardHeader>
                       <CardContent className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {orders.length === 0 ? (
-                            <div className="col-span-2 text-center py-10 text-[#64748b] bg-[#f8fafc] rounded-lg border border-dashed">
-                              No shipping destinations recorded yet.
-                            </div>
-                          ) : (
-                            // Extract unique locations from orders
-                            Array.from(new Set(orders.map((o: any) => `${o.shipping_city}|${o.shipping_address}`)))
-                              .filter(loc => !hiddenAddresses.includes(loc))
-                              .slice(0, 4) // Show top 4 unique locations
-                              .map((locString: string, idx: number) => {
-                                const [city, address] = locString.split('|');
-                                return (
-                                  <div key={idx} className="border border-[#e2e8f0] rounded-lg p-5 bg-[#f8fafc] relative">
-                                     {idx === 0 && <div className="absolute top-3 right-3 text-[#166534] bg-[#f0fdf4] text-[10px] font-bold px-2 py-0.5 rounded uppercase">Latest</div>}
-                                     <h3 className="font-bold text-[#1e293b] mb-1">{city}</h3>
-                                     <p className="text-[#64748b] text-[13px] mb-4">
-                                        {address}<br/>
-                                        {city}, Kenya
-                                     </p>
-                                     <div className="flex gap-2">
-                                       <button 
-                                         onClick={() => {
-                                           localStorage.setItem("spare_prefill_shipping", JSON.stringify({ city, address }));
-                                           toast.success(`Shipping to ${city} selected!`, {
-                                             style: { background: '#0052cc', color: '#fff', fontWeight: 'bold' }
-                                           });
-                                         }}
-                                         className="text-[12px] font-bold text-[#0052cc] hover:underline"
-                                       >
-                                         Select for Order
-                                       </button>
-                                       <button 
-                                         onClick={() => {
-                                           const updated = [...hiddenAddresses, locString];
-                                           setHiddenAddresses(updated);
-                                           localStorage.setItem("spare_hidden_addresses", JSON.stringify(updated));
-                                           toast.error(`Destination removed`, {
-                                             style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' }
-                                           });
-                                         }}
-                                         className="text-[12px] font-bold text-red-600 hover:underline"
-                                       >
-                                         Remove
-                                       </button>
-                                     </div>
-                                  </div>
-                                );
-                              })
-                          )}
+                        <div className="max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {orders.length === 0 ? (
+                              <div className="col-span-2 text-center py-10 text-[#64748b] bg-[#f8fafc] rounded-lg border border-dashed">
+                                No shipping destinations recorded yet.
+                              </div>
+                            ) : (
+                              // Extract unique locations from orders
+                              Array.from(new Set(orders.map((o: any) => `${o.shipping_city}|${o.shipping_address}`)))
+                                .filter(loc => !hiddenAddresses.includes(loc))
+                                .map((locString: string, idx: number) => {
+                                  const [city, address] = locString.split('|');
+                                  return (
+                                    <div key={idx} className="border border-[#e2e8f0] rounded-lg p-5 bg-[#f8fafc] relative">
+                                       {idx === 0 && <div className="absolute top-3 right-3 text-[#166534] bg-[#f0fdf4] text-[10px] font-bold px-2 py-0.5 rounded uppercase">Latest</div>}
+                                       <h3 className="font-bold text-[#1e293b] mb-1">{city}</h3>
+                                       <p className="text-[#64748b] text-[13px] mb-4">
+                                          {address}<br/>
+                                          {city}, Kenya
+                                       </p>
+                                       <div className="flex gap-2">
+                                         <button 
+                                           onClick={() => {
+                                             localStorage.setItem("spare_prefill_shipping", JSON.stringify({ city, address }));
+                                             toast.success(`Shipping to ${city} selected!`, {
+                                               style: { background: '#0052cc', color: '#fff', fontWeight: 'bold' }
+                                             });
+                                           }}
+                                           className="text-[12px] font-bold text-[#0052cc] hover:underline"
+                                         >
+                                           Select for Order
+                                         </button>
+                                         <button 
+                                           onClick={() => {
+                                             const updated = [...hiddenAddresses, locString];
+                                             setHiddenAddresses(updated);
+                                             localStorage.setItem("spare_hidden_addresses", JSON.stringify(updated));
+                                             toast.error(`Destination removed`, {
+                                               style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' }
+                                             });
+                                           }}
+                                           className="text-[12px] font-bold text-red-600 hover:underline"
+                                         >
+                                           Remove
+                                         </button>
+                                       </div>
+                                    </div>
+                                  );
+                                })
+                            )}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>

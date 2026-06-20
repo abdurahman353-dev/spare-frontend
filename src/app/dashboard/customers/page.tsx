@@ -241,6 +241,9 @@ export default function AdminCustomersPage() {
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
+      if ((c.name || "").toLowerCase() === "walk-in customer") {
+        return false;
+      }
       const sq = searchQuery.toLowerCase();
 
       const matchesProducts = (c as any).orders?.some((order: any) => {

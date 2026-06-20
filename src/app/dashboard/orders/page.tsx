@@ -345,7 +345,7 @@ function AdminOrdersPageInner() {
           warehouse_id: parseInt(selectedWarehouseId),
           warehouse_name: warehouseName,
           quantity: addQuantity,
-          price: parseFloat(product.price),
+          price: (product.is_on_offer && product.offer_price) ? parseFloat(product.offer_price) : parseFloat(product.price),
           stock: stockAvailable
         }
       ]);

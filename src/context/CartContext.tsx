@@ -12,6 +12,8 @@ interface Product {
   part_number?: string;
   suitable_vehicle?: string;
   engine_model?: string;
+  is_on_offer?: boolean;
+  offer_price?: number;
 }
 
 interface CartItem extends Product {
@@ -49,6 +51,15 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [cart]);
 
   const addToCart = (product: Product, warehouseId: number, warehouseName: string, quantity: number = 1) => {
+    const activePrice = (product.is_on_offer && product.offer_price)
+      ? Number(product.offer_price)
+      : Number(product.price);
+
+    const cartProduct = {
+      ...product,
+      price: activePrice
+    };
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id && item.warehouse_id === warehouseId);
       if (existing) {
@@ -57,7 +68,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             ? { ...item, quantity: item.quantity + quantity } : item
         );
       }
-      return [...prev, { ...product, quantity, warehouse_id: warehouseId, warehouse_name: warehouseName }];
+      return [...prev, { ...cartProduct, quantity, warehouse_id: warehouseId, warehouse_name: warehouseName }];
     });
   };
 

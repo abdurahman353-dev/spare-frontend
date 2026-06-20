@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, LogOut, Plus, Minus, Tag, Zap, Compass } from "lucide-react";
+import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, LogOut, Plus, Minus, Tag, Zap, Compass, ChevronDown } from "lucide-react";
 import api from "@/lib/axios";
 import { useCart } from "@/context/CartContext";
 import Image from "next/image";
@@ -353,10 +353,16 @@ export default function PublicProductsPage() {
       skipBeacon: true,
     },
     {
-      target: "#tour-search-filter",
+      target: "#tour-search-bar",
+      placement: "bottom" as const,
+      title: "Search Parts Catalog",
+      content: `Use this search box in the middle to find parts by Part number, SKU, name, or brand. All prices are displayed in ${bizCurrency}.`,
+    },
+    {
+      target: "#tour-categories-sidebar",
       placement: "right" as const,
-      title: "Search & Filter Parts",
-      content: `Use the search box to find ${bizName} parts by SKU, name, or brand. Tick one or more categories to narrow results instantly. All prices are displayed in ${bizCurrency}.`,
+      title: "Filter by Category",
+      content: `Select one or more categories in this sidebar to narrow down search results instantly.`,
     },
     {
       target: "#tour-product-grid",
@@ -396,6 +402,7 @@ export default function PublicProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(9);
@@ -520,70 +527,91 @@ export default function PublicProductsPage() {
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col md:flex-row gap-8">
             {/* Filters Sidebar */}
-            <aside id="tour-search-filter" className="w-full md:w-64 space-y-8">
-              <div>
-                <h3 className="font-bold mb-4 uppercase text-[11px] tracking-widest text-[#64748b]">Search</h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-[#94a3b8]" />
-                  <Input
-                    className="pl-10 h-11 border-[#e2e8f0] text-[14px]"
-                    placeholder="Part number, SKU, Name or Brand..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+            <aside id="tour-categories-sidebar" className="w-full md:w-64">
+              <div className="bg-white p-5 rounded-xl border border-zinc-200/80 shadow-sm space-y-6">
+                <div 
+                  className="flex justify-between items-center pb-3 border-b border-zinc-100 cursor-pointer md:cursor-default select-none"
+                  onClick={() => setShowMobileFilters(!showMobileFilters)}
+                >
+                  <h3 className="font-bold text-sm text-zinc-900 flex items-center gap-2 uppercase tracking-wider text-[11px]">
+                    <Filter className="h-4 w-4 text-[#0052cc]" />
+                    Filter by Categories
+                  </h3>
+                  <ChevronDown className={cn("h-4 w-4 text-zinc-500 transition-transform md:hidden", showMobileFilters ? "rotate-180" : "")} />
                 </div>
-              </div>
 
-              <div>
-                <h3 className="font-bold mb-4 uppercase text-[11px] tracking-widest text-[#64748b]">Categories</h3>
-                <div className="relative mb-4">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[#94a3b8]" />
-                  <Input
-                    className="pl-9 h-9 text-xs border-[#e2e8f0]"
-                    placeholder="Search categories..."
-                    value={categorySearch}
-                    onChange={(e) => setCategorySearch(e.target.value)}
-                  />
-                </div>
+                <div className={cn("space-y-6 md:block", showMobileFilters ? "block" : "hidden")}>
+                  {/* Category Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                    <Input
+                      className="pl-9 h-9 text-xs border-[#cbd5e1] placeholder:text-zinc-500 rounded-lg font-semibold"
+                      placeholder="Search categories..."
+                      value={categorySearch}
+                      onChange={(e) => setCategorySearch(e.target.value)}
+                    />
+                  </div>
+
+                {/* Category Checkbox List */}
                 <div
-                  className="space-y-2 max-h-[220px] overflow-y-auto pr-2 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
+                  className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
                   style={{ WebkitOverflowScrolling: "touch" }}
                 >
                   {categories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 ? (
-                    <p className="text-xs text-zinc-400 font-medium py-2 italic">No categories found</p>
+                    <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No categories found</p>
                   ) : (
                     categories
                       .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
-                      .map((cat) => (
-                        <label
-                          key={cat.id}
-                          className="flex items-center gap-2 cursor-pointer hover:text-[#0052cc] transition-colors py-1 group"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedCategoryIds.includes(cat.id)}
-                            onChange={() => toggleCategory(cat.id)}
-                            className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
-                          />
-                          <span className="text-[13px] font-medium text-[#475569] group-hover:text-[#1e293b] select-none">
-                            {cat.name}
-                          </span>
-                        </label>
-                      ))
+                      .map((cat) => {
+                        const isSelected = selectedCategoryIds.includes(cat.id);
+                        return (
+                          <label
+                            key={cat.id}
+                            className={cn(
+                              "flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all select-none border font-semibold text-xs",
+                              isSelected 
+                                ? "bg-blue-50/50 border-blue-200 text-[#0052cc]" 
+                                : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleCategory(cat.id)}
+                              className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
+                            />
+                            <span>
+                              {cat.name}
+                            </span>
+                          </label>
+                        );
+                      })
                   )}
+                  </div>
                 </div>
               </div>
             </aside>
 
             {/* Products Grid */}
             <div id="tour-product-grid" className="flex-1">
-              <div className="flex justify-between items-center mb-8 border-b border-[#f1f5f9] pb-4">
-                <p className="text-[#64748b] text-[14px] font-medium">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 border-b border-[#f1f5f9] pb-6">
+                <p className="text-[#64748b] text-[14px] font-medium w-full sm:w-auto text-left">
                   Showing <span className="text-[#1e293b] font-bold">{totalItems}</span> parts available
                 </p>
-                <Button variant="ghost" className="text-[13px] font-bold text-[#64748b]">
-                  <Filter className="mr-2 h-4 w-4" /> Sort by: Featured
-                </Button>
+                <div id="tour-search-bar" className="relative w-full max-w-md mx-auto sm:mx-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#475569] font-bold" />
+                  <Input
+                    className="pl-10 h-11 border-[#cbd5e1] text-[14px] font-semibold text-zinc-900 bg-white placeholder:text-zinc-500 rounded-lg shadow-sm focus-visible:ring-1 focus-visible:ring-primary/20 w-full"
+                    placeholder="Part number, SKU, Name or Brand..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <div className="w-full sm:w-auto text-right">
+                  <Button variant="ghost" className="text-[13px] font-bold text-[#64748b] hover:bg-zinc-100/50 rounded-lg">
+                    <Filter className="mr-2 h-4 w-4 text-zinc-500" /> Sort by: Featured
+                  </Button>
+                </div>
               </div>
 
               {loading ? (

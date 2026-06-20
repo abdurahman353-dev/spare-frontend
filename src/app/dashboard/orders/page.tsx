@@ -6,28 +6,28 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
-import { 
-  Search, 
-  Filter, 
-  MoreHorizontal, 
+import {
+  Search,
+  Filter,
+  MoreHorizontal,
   Eye,
   EyeOff,
-  Truck, 
-  Loader2, 
-  Download, 
-  CheckCircle2, 
-  ArrowRightLeft, 
-  MapPin, 
-  Calendar, 
-  CheckSquare, 
+  Truck,
+  Loader2,
+  Download,
+  CheckCircle2,
+  ArrowRightLeft,
+  MapPin,
+  Calendar,
+  CheckSquare,
   Square,
   Package,
   RefreshCw,
@@ -147,11 +147,11 @@ function AdminOrdersPageInner() {
   const [walkInDestFilter, setWalkInDestFilter] = useState("all");
   const [walkInDateFrom, setWalkInDateFrom] = useState("");
   const [walkInDateTo, setWalkInDateTo] = useState("");
-  
+
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [activeCities, setActiveCities] = useState<any[]>([]);
   const [countriesData, setCountriesData] = useState<any[]>([]);
-  
+
   // Selection
   const [selectedOrderIds, setSelectedOrderIds] = useState<number[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
@@ -167,7 +167,7 @@ function AdminOrdersPageInner() {
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
-  
+
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("walkin");
   const [customerSearch, setCustomerSearch] = useState("");
   const [newCustomerData, setNewCustomerData] = useState({
@@ -606,7 +606,7 @@ function AdminOrdersPageInner() {
     try {
       // Always fetch ALL orders with no filters — filtering is done 100% client-side
       // so that shipment filters never affect the Walk-In data pool and vice versa.
-      const res = await api.get("/orders");
+      const res = await api.get("/orders", { params: { per_page: -1 } });
       setOrders(res.data);
     } catch (err) {
       console.error("Failed to fetch orders:", err);
@@ -622,8 +622,8 @@ function AdminOrdersPageInner() {
     try {
       const [wRes, cRes, pRes, locRes] = await Promise.all([
         api.get("/warehouses"),
-        api.get("/customers"),
-        api.get("/products"),
+        api.get("/customers", { params: { per_page: -1 } }),
+        api.get("/products", { params: { per_page: -1 } }),
         api.get("/locations/countries"),
       ]);
       setWarehouses(wRes.data);
@@ -805,7 +805,7 @@ function AdminOrdersPageInner() {
 
   const handleExport = () => {
     if (orders.length === 0) return;
-    
+
     const headers = ["Order Ref", "Customer", "Origin", "Destination", "Date", "Amount", "Status"];
     const csvData = orders.map(o => [
       o.tracking_number || `ORD-${o.id}`,
@@ -816,7 +816,7 @@ function AdminOrdersPageInner() {
       o.total_amount,
       o.status
     ]);
-    
+
     const csvContent = [headers, ...csvData].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
@@ -846,14 +846,14 @@ function AdminOrdersPageInner() {
       settings.store_name || undefined,
       isWalkIn,
       {
-        tagline:   settings.store_tagline   || undefined,
-        address:   settings.store_address   || settings.physical_address || undefined,
-        phone:     settings.store_phone     || settings.contact_phone   || undefined,
-        email:     settings.store_email     || settings.contact_email   || undefined,
-        website:   settings.store_website   || undefined,
-        kraPin:    settings.store_kra_pin   || undefined,
+        tagline: settings.store_tagline || undefined,
+        address: settings.store_address || settings.physical_address || undefined,
+        phone: settings.store_phone || settings.contact_phone || undefined,
+        email: settings.store_email || settings.contact_email || undefined,
+        website: settings.store_website || undefined,
+        kraPin: settings.store_kra_pin || undefined,
         regNumber: settings.store_reg_number || undefined,
-        branch:    settings.store_branch    || undefined,
+        branch: settings.store_branch || undefined,
       },
       isFilterActive
     );
@@ -922,7 +922,7 @@ function AdminOrdersPageInner() {
           getWalkInDestinationLabel(order) === walkInDestFilter;
         const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
         const matchesDateFrom = !walkInDateFrom || orderDate >= new Date(walkInDateFrom).setHours(0, 0, 0, 0);
-        const matchesDateTo   = !walkInDateTo   || orderDate <= new Date(walkInDateTo).setHours(0, 0, 0, 0);
+        const matchesDateTo = !walkInDateTo || orderDate <= new Date(walkInDateTo).setHours(0, 0, 0, 0);
         return matchesSearch && matchesPayStatus && matchesWarehouse && matchesDest && matchesDateFrom && matchesDateTo;
       });
     }
@@ -960,7 +960,7 @@ function AdminOrdersPageInner() {
       const matchesStatus = statusFilter === "All Status" || order.status === statusFilter;
       const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
       const matchesDateFrom = !shipmentDateFrom || orderDate >= new Date(shipmentDateFrom).setHours(0, 0, 0, 0);
-      const matchesDateTo   = !shipmentDateTo   || orderDate <= new Date(shipmentDateTo).setHours(0, 0, 0, 0);
+      const matchesDateTo = !shipmentDateTo || orderDate <= new Date(shipmentDateTo).setHours(0, 0, 0, 0);
       return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesStatus && matchesDateFrom && matchesDateTo;
     });
   }, [
@@ -993,20 +993,18 @@ function AdminOrdersPageInner() {
           <p className="text-zinc-500 text-sm mt-1">Manage and dispatch customer orders across your logistics network.</p>
           {lastSyncedAt && (
             <div className="flex items-center gap-2 mt-2">
-              <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full border transition-colors duration-300 ${
-                secondsSinceSync < 15 
-                  ? "text-emerald-700 bg-emerald-50 border-emerald-200" 
-                  : secondsSinceSync < 30 
-                    ? "text-amber-700 bg-amber-50 border-amber-200" 
-                    : "text-red-700 bg-red-50 border-red-200"
-              }`}>
-                <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${
-                  secondsSinceSync < 15 
-                    ? "bg-emerald-500" 
-                    : secondsSinceSync < 30 
-                      ? "bg-amber-500" 
-                      : "bg-red-500"
-                }`} />
+              <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.5 rounded-full border transition-colors duration-300 ${secondsSinceSync < 15
+                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                : secondsSinceSync < 30
+                  ? "text-amber-700 bg-amber-50 border-amber-200"
+                  : "text-red-700 bg-red-50 border-red-200"
+                }`}>
+                <span className={`h-1.5 w-1.5 rounded-full animate-pulse ${secondsSinceSync < 15
+                  ? "bg-emerald-500"
+                  : secondsSinceSync < 30
+                    ? "bg-amber-500"
+                    : "bg-red-500"
+                  }`} />
                 {secondsSinceSync === 0 ? "Just synced" : `Last synced ${secondsSinceSync}s ago`} · Auto-refresh every 30s
               </span>
               <button
@@ -1019,7 +1017,7 @@ function AdminOrdersPageInner() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button 
+          <Button
             onClick={handleExportPDF}
             disabled={loading || orders.length === 0}
             className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 border-none text-xs sm:text-sm"
@@ -1027,7 +1025,7 @@ function AdminOrdersPageInner() {
             <FileText className="mr-1 h-4 w-4" /> {activeOrdersTab === "WalkIn" ? "Export Walk-In PDF" : "Export PDF"}
           </Button>
           {activeOrdersTab === "WalkIn" && (
-            <Button 
+            <Button
               onClick={() => { resetWalkInFormFields(); setIsWalkInModalOpen(true); }}
               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm font-bold flex items-center gap-1.5 text-xs sm:text-sm"
             >
@@ -1061,679 +1059,679 @@ function AdminOrdersPageInner() {
 
       {/* Filter Bar — Shipment Orders */}
       {activeOrdersTab === "Shipment" && (
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
-        {/* Search */}
-        <div className="relative lg:col-span-2">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <Input placeholder="Search Ref, Customer, Route..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
-            value={shipmentSearchQuery} onChange={(e) => setShipmentSearchQuery(e.target.value)} />
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+          {/* Search */}
+          <div className="relative lg:col-span-2">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+            <Input placeholder="Search Ref, Customer, Route..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
+              value={shipmentSearchQuery} onChange={(e) => setShipmentSearchQuery(e.target.value)} />
+          </div>
+          {/* Origin Warehouse */}
+          <div className="flex flex-col justify-center">
+            <SearchableDropdown
+              items={warehouseOptions}
+              value={warehouseFilter}
+              onChange={(val) => { setWarehouseFilter(val); setCountryFilter("all"); setCityFilter("all"); }}
+              placeholder="Origin Warehouse"
+            />
+          </div>
+          {/* Destination Country */}
+          <div className="flex flex-col justify-center">
+            <SearchableDropdown
+              items={countryOptions}
+              value={countryFilter}
+              onChange={(val) => { setCountryFilter(val); setCityFilter("all"); }}
+              placeholder="Destination Country"
+            />
+          </div>
+          {/* Destination City — cascades from Country */}
+          <div className="flex flex-col justify-center">
+            <SearchableDropdown
+              items={cityOptions}
+              value={cityFilter}
+              onChange={(val) => setCityFilter(val)}
+              placeholder="Destination City"
+            />
+          </div>
+          {/* Status */}
+          <div className="flex flex-col justify-center">
+            <select className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer"
+              value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          {/* Clear */}
+          <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearFilters}>
+            <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+          </Button>
+          {/* Date Range */}
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
+            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+              value={shipmentDateFrom} onChange={(e) => setShipmentDateFrom(e.target.value)} />
+            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+              value={shipmentDateTo} onChange={(e) => setShipmentDateTo(e.target.value)} />
+          </div>
         </div>
-        {/* Origin Warehouse */}
-        <div className="flex flex-col justify-center">
-          <SearchableDropdown
-            items={warehouseOptions}
-            value={warehouseFilter}
-            onChange={(val) => { setWarehouseFilter(val); setCountryFilter("all"); setCityFilter("all"); }}
-            placeholder="Origin Warehouse"
-          />
-        </div>
-        {/* Destination Country */}
-        <div className="flex flex-col justify-center">
-          <SearchableDropdown
-            items={countryOptions}
-            value={countryFilter}
-            onChange={(val) => { setCountryFilter(val); setCityFilter("all"); }}
-            placeholder="Destination Country"
-          />
-        </div>
-        {/* Destination City — cascades from Country */}
-        <div className="flex flex-col justify-center">
-          <SearchableDropdown
-            items={cityOptions}
-            value={cityFilter}
-            onChange={(val) => setCityFilter(val)}
-            placeholder="Destination City"
-          />
-        </div>
-        {/* Status */}
-        <div className="flex flex-col justify-center">
-          <select className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer"
-            value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            {statuses.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
-        {/* Clear */}
-        <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearFilters}>
-          <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
-        </Button>
-        {/* Date Range */}
-        <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
-          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={shipmentDateFrom} onChange={(e) => setShipmentDateFrom(e.target.value)} />
-          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={shipmentDateTo} onChange={(e) => setShipmentDateTo(e.target.value)} />
-        </div>
-      </div>
       )}
 
       {/* Filter Bar — Walk-In Orders */}
       {activeOrdersTab === "WalkIn" && (
-      <div className="bg-white p-5 rounded-xl shadow-sm border border-emerald-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Search */}
-        <div className="relative lg:col-span-2">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <Input placeholder="Search WK-Ref, Customer Name..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
-            value={walkInSearchQuery} onChange={(e) => setWalkInSearchQuery(e.target.value)} />
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-emerald-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {/* Search */}
+          <div className="relative lg:col-span-2">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+            <Input placeholder="Search WK-Ref, Customer Name..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
+              value={walkInSearchQuery} onChange={(e) => setWalkInSearchQuery(e.target.value)} />
+          </div>
+          {/* Source Warehouse */}
+          <div className="flex flex-col justify-center">
+            <SearchableDropdown
+              items={walkInWarehouseOptions}
+              value={walkInWarehouseFilter}
+              onChange={(val) => { setWalkInWarehouseFilter(val); setWalkInDestFilter("all"); }}
+              placeholder="Source Warehouse"
+            />
+          </div>
+          {/* Destination / Address (city) — cascades from warehouse */}
+          <div className="flex flex-col justify-center">
+            <SearchableDropdown
+              items={walkInDestOptions}
+              value={walkInDestFilter}
+              onChange={(val) => setWalkInDestFilter(val)}
+              placeholder="Destination / Address"
+            />
+          </div>
+          {/* Payment Status */}
+          <div className="flex flex-col justify-center">
+            <select
+              className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-emerald-200 w-full text-zinc-600 cursor-pointer"
+              value={walkInPayStatusFilter}
+              onChange={(e) => setWalkInPayStatusFilter(e.target.value)}
+            >
+              <option value="All">All Payment Statuses</option>
+              <option value="Paid">Paid</option>
+              <option value="Pending">Pending</option>
+              <option value="Refunded">Refunded</option>
+              <option value="Cancelled / Refunded">Cancelled / Refunded</option>
+            </select>
+          </div>
+          {/* Clear */}
+          <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearWalkInFilters}>
+            <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+          </Button>
+          {/* Date Range */}
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
+            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+              value={walkInDateFrom} onChange={(e) => setWalkInDateFrom(e.target.value)} />
+            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+              value={walkInDateTo} onChange={(e) => setWalkInDateTo(e.target.value)} />
+          </div>
         </div>
-        {/* Source Warehouse */}
-        <div className="flex flex-col justify-center">
-          <SearchableDropdown
-            items={walkInWarehouseOptions}
-            value={walkInWarehouseFilter}
-            onChange={(val) => { setWalkInWarehouseFilter(val); setWalkInDestFilter("all"); }}
-            placeholder="Source Warehouse"
-          />
-        </div>
-        {/* Destination / Address (city) — cascades from warehouse */}
-        <div className="flex flex-col justify-center">
-          <SearchableDropdown
-            items={walkInDestOptions}
-            value={walkInDestFilter}
-            onChange={(val) => setWalkInDestFilter(val)}
-            placeholder="Destination / Address"
-          />
-        </div>
-        {/* Payment Status */}
-        <div className="flex flex-col justify-center">
-          <select
-            className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-emerald-200 w-full text-zinc-600 cursor-pointer"
-            value={walkInPayStatusFilter}
-            onChange={(e) => setWalkInPayStatusFilter(e.target.value)}
-          >
-            <option value="All">All Payment Statuses</option>
-            <option value="Paid">Paid</option>
-            <option value="Pending">Pending</option>
-            <option value="Refunded">Refunded</option>
-            <option value="Cancelled / Refunded">Cancelled / Refunded</option>
-          </select>
-        </div>
-        {/* Clear */}
-        <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearWalkInFilters}>
-          <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
-        </Button>
-        {/* Date Range */}
-        <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
-          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={walkInDateFrom} onChange={(e) => setWalkInDateFrom(e.target.value)} />
-          <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
-            value={walkInDateTo} onChange={(e) => setWalkInDateTo(e.target.value)} />
-        </div>
-      </div>
       )}
 
-        {/* Bulk Action Bar - Normalized UI */}
-        <AnimatePresence>
-          {selectedOrderIds.length > 0 && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="bg-zinc-100 text-zinc-900 p-4 rounded-xl flex items-center justify-between border border-zinc-200 shadow-sm mb-6"
-            >
-              <div className="flex items-center gap-4 ml-2">
-                <Badge className="bg-zinc-900 text-white border-none rounded-full px-3">{selectedOrderIds.length} Selected</Badge>
-                <p className="text-sm font-semibold text-zinc-700">Batch Dispatch Operations</p>
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  size="sm" 
-                  disabled={isBulkProcessing}
-                  onClick={() => handleBulkStatusChange('Processing')}
-                  variant="outline"
-                  className="bg-white hover:bg-zinc-50 font-bold text-[10px] uppercase tracking-wider border-zinc-200 min-w-[140px]"
-                >
-                  {isBulkProcessing ? (
-                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
-                  ) : (
-                    "Mark Processing"
-                  )}
-                </Button>
-                <Button 
-                  size="sm" 
-                  disabled={isBulkProcessing}
-                  onClick={() => handleBulkStatusChange('Shipped')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
-                >
-                  {isBulkProcessing ? (
-                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
-                  ) : (
-                    "Mark Shipped"
-                  )}
-                </Button>
-                <Button 
-                  size="sm" 
-                  disabled={isBulkProcessing}
-                  onClick={() => handleBulkStatusChange('Delivered')}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
-                >
-                  {isBulkProcessing ? (
-                    <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
-                  ) : (
-                    "Mark Delivered"
-                  )}
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={() => setSelectedOrderIds([])}
-                  disabled={isBulkProcessing}
-                  className="text-zinc-500 hover:text-zinc-900 font-bold text-[10px] uppercase tracking-wider"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Bulk Action Bar - Normalized UI */}
+      <AnimatePresence>
+        {selectedOrderIds.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 10 }}
+            className="bg-zinc-100 text-zinc-900 p-4 rounded-xl flex items-center justify-between border border-zinc-200 shadow-sm mb-6"
+          >
+            <div className="flex items-center gap-4 ml-2">
+              <Badge className="bg-zinc-900 text-white border-none rounded-full px-3">{selectedOrderIds.length} Selected</Badge>
+              <p className="text-sm font-semibold text-zinc-700">Batch Dispatch Operations</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={() => handleBulkStatusChange('Processing')}
+                variant="outline"
+                className="bg-white hover:bg-zinc-50 font-bold text-[10px] uppercase tracking-wider border-zinc-200 min-w-[140px]"
+              >
+                {isBulkProcessing ? (
+                  <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                ) : (
+                  "Mark Processing"
+                )}
+              </Button>
+              <Button
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={() => handleBulkStatusChange('Shipped')}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
+              >
+                {isBulkProcessing ? (
+                  <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                ) : (
+                  "Mark Shipped"
+                )}
+              </Button>
+              <Button
+                size="sm"
+                disabled={isBulkProcessing}
+                onClick={() => handleBulkStatusChange('Delivered')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
+              >
+                {isBulkProcessing ? (
+                  <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                ) : (
+                  "Mark Delivered"
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedOrderIds([])}
+                disabled={isBulkProcessing}
+                className="text-zinc-500 hover:text-zinc-900 font-bold text-[10px] uppercase tracking-wider"
+              >
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
         <div className="overflow-x-auto">
-        {activeOrdersTab === "WalkIn" ? (
-          <Table>
-            <TableHeader className="bg-emerald-50/60">
-              <TableRow>
-                <TableHead className="px-4 font-semibold text-zinc-900">WK Reference</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Customer Profile</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
-                <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Source Warehouse</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Destination / Address</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Fulfillment</TableHead>
-                <TableHead className="font-semibold text-zinc-900 text-center">Pay Status</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Payment / Ref</TableHead>
-                <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
-                <TableHead className="px-6 w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={11} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
-              ) : filteredOrders.length === 0 ? (
-                <TableRow><TableCell colSpan={11} className="h-32 text-center text-zinc-400 font-medium">No walk-in orders found.</TableCell></TableRow>
-              ) : (
-                paginatedOrders.map((order) => {
-                  const isGuest = order.customer?.name?.toLowerCase() === "walk-in customer";
-                  const sourceWarehouse = order.items?.[0]?.warehouse?.name || "—";
-                  return (
-                  <TableRow key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
-                    <TableCell className="px-4 py-3">
-                      <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                        {order.tracking_number}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
-                        {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
-                        {isGuest ? (
-                          <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
-                        ) : (
-                          <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Registered</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
-                      <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                    </TableCell>
-                     <TableCell>
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{order.items?.[0]?.product?.name || "Spare Part"}</p>
-                        {order.items?.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{order.items.length - 1} more</p>}
-                        <p className="text-[10px] text-zinc-500">{order.items?.length || 0} item(s)</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        {order.items?.map((item: any, i: number) => (
-                          <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
-                            {item.product?.part_number || "—"}
+          {activeOrdersTab === "WalkIn" ? (
+            <Table>
+              <TableHeader className="bg-emerald-50/60">
+                <TableRow>
+                  <TableHead className="px-4 font-semibold text-zinc-900">WK Reference</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Customer Profile</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
+                  <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Source Warehouse</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Destination / Address</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Fulfillment</TableHead>
+                  <TableHead className="font-semibold text-zinc-900 text-center">Pay Status</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Payment / Ref</TableHead>
+                  <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
+                  <TableHead className="px-6 w-[50px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={11} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
+                ) : filteredOrders.length === 0 ? (
+                  <TableRow><TableCell colSpan={11} className="h-32 text-center text-zinc-400 font-medium">No walk-in orders found.</TableCell></TableRow>
+                ) : (
+                  paginatedOrders.map((order) => {
+                    const isGuest = order.customer?.name?.toLowerCase() === "walk-in customer";
+                    const sourceWarehouse = order.items?.[0]?.warehouse?.name || "—";
+                    return (
+                      <TableRow key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
+                        <TableCell className="px-4 py-3">
+                          <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                            {order.tracking_number}
                           </span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        {order.items?.map((item: any, i: number) => (
-                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
-                            {item.product?.engine_model || "—"}
-                          </span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        {order.items?.map((item: any, i: number) => (
-                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
-                            {item.product?.suitable_vehicle || "—"}
-                          </span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" />
-                        <p className="text-xs font-bold text-indigo-700">{sourceWarehouse}</p>
-                      </div>
-                    </TableCell>
-                    {/* Destination / Address column */}
-                    <TableCell>
-                      {order.shipping_method === "Pickup" ? (
-                        <span className="text-xs text-zinc-400 font-medium italic">In-Store — No Delivery</span>
-                      ) : (
-                        <div className="space-y-1">
-                          <p className="text-xs font-bold text-zinc-900">{order.shipping_city || "—"}</p>
-                          <p className="text-xs font-bold text-zinc-700 max-w-[160px] truncate">{order.shipping_address || "—"}</p>
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        {updatingOrderIds[order.id] && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 shrink-0" />}
-                        {order.shipping_method === "Pickup" ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
-                          </span>
-                        ) : (
-                          <div className="space-y-1">
-                            {(() => {
-                              let badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200";
-                              let dotClass = "bg-yellow-500";
-                              let label = "Pending";
-
-                              if (order.status === "Processing") {
-                                badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
-                                dotClass = "bg-indigo-500";
-                                label = "Processing";
-                              } else if (order.status === "Shipped" || order.status === "In Transit") {
-                                badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
-                                dotClass = "bg-blue-500";
-                                label = "Shipped";
-                              } else if (order.status === "Delivered") {
-                                badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                                dotClass = "bg-emerald-500";
-                                label = "Delivered";
-                              } else if (order.status === "Cancelled" || isOrderVoided(order)) {
-                                badgeClass = "bg-red-50 text-red-700 border-red-200";
-                                dotClass = "bg-red-500";
-                                label = "Cancelled";
-                              }
-
-                              return (
-                                <span className={cn("inline-flex items-center gap-1 text-[10px] font-black border px-2 py-0.5 rounded-full uppercase tracking-wider", badgeClass)}>
-                                  <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", dotClass)}></span>
-                                  Dispatch — {label}
-                                </span>
-                              );
-                            })()}
-                            <p className="text-[10px] font-bold text-zinc-500 ml-1">{order.shipping_city}</p>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
+                            {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
+                            {isGuest ? (
+                              <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
+                            ) : (
+                              <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Registered</span>
+                            )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
+                          <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{order.items?.[0]?.product?.name || "Spare Part"}</p>
+                            {order.items?.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{order.items.length - 1} more</p>}
+                            <p className="text-[10px] text-zinc-500">{order.items?.length || 0} item(s)</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            {order.items?.map((item: any, i: number) => (
+                              <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                {item.product?.part_number || "—"}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            {order.items?.map((item: any, i: number) => (
+                              <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                {item.product?.engine_model || "—"}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            {order.items?.map((item: any, i: number) => (
+                              <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                {item.product?.suitable_vehicle || "—"}
+                              </span>
+                            ))}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" />
+                            <p className="text-xs font-bold text-indigo-700">{sourceWarehouse}</p>
+                          </div>
+                        </TableCell>
+                        {/* Destination / Address column */}
+                        <TableCell>
+                          {order.shipping_method === "Pickup" ? (
+                            <span className="text-xs text-zinc-400 font-medium italic">In-Store — No Delivery</span>
+                          ) : (
+                            <div className="space-y-1">
+                              <p className="text-xs font-bold text-zinc-900">{order.shipping_city || "—"}</p>
+                              <p className="text-xs font-bold text-zinc-700 max-w-[160px] truncate">{order.shipping_address || "—"}</p>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5">
+                            {updatingOrderIds[order.id] && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 shrink-0" />}
+                            {order.shipping_method === "Pickup" ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
+                              </span>
+                            ) : (
+                              <div className="space-y-1">
+                                {(() => {
+                                  let badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200";
+                                  let dotClass = "bg-yellow-500";
+                                  let label = "Pending";
+
+                                  if (order.status === "Processing") {
+                                    badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
+                                    dotClass = "bg-indigo-500";
+                                    label = "Processing";
+                                  } else if (order.status === "Shipped" || order.status === "In Transit") {
+                                    badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
+                                    dotClass = "bg-blue-500";
+                                    label = "Shipped";
+                                  } else if (order.status === "Delivered") {
+                                    badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                    dotClass = "bg-emerald-500";
+                                    label = "Delivered";
+                                  } else if (order.status === "Cancelled" || isOrderVoided(order)) {
+                                    badgeClass = "bg-red-50 text-red-700 border-red-200";
+                                    dotClass = "bg-red-500";
+                                    label = "Cancelled";
+                                  }
+
+                                  return (
+                                    <span className={cn("inline-flex items-center gap-1 text-[10px] font-black border px-2 py-0.5 rounded-full uppercase tracking-wider", badgeClass)}>
+                                      <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", dotClass)}></span>
+                                      Dispatch — {label}
+                                    </span>
+                                  );
+                                })()}
+                                <p className="text-[10px] font-bold text-zinc-500 ml-1">{order.shipping_city}</p>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {(() => {
+                            const pay = getWalkInPayStatusDisplay(order);
+                            return (
+                              <Badge className={cn("rounded-full px-2 text-[10px] font-bold border-none", pay.className)}>
+                                {pay.label}
+                              </Badge>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">
+                            {order.payment_status === "Pending" ? "— (Pending Payment)" : (order.payment_method || "Cash")}
+                          </p>
+                          {order.payment_ref_code && (
+                            <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                              {order.payment_ref_code}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(() => {
+                            const refundedTotal = getOrderRefundedTotal(order);
+                            const hasCancelledItems = order.items?.some((i: any) => i.cancellation_status === "Cancelled");
+                            const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+
+                            if (isOrderVoided(order) || allCancelled) {
+                              return (
+                                <>
+                                  <p className="text-sm font-black text-red-500 line-through opacity-75">
+                                    Ksh {refundedTotal.toLocaleString()}
+                                  </p>
+                                  <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
+                                </>
+                              );
+                            }
+
+                            return (
+                              <>
+                                <p className="text-sm font-black text-zinc-900">
+                                  Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
+                                </p>
+                                {refundedTotal > 0 && (
+                                  <p className="text-[9px] font-bold text-red-500 uppercase">
+                                    Ksh {refundedTotal.toLocaleString()} Refunded
+                                  </p>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </TableCell>
+                        <TableCell className="px-6 text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-emerald-100")}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 rounded-xl border-zinc-200 shadow-xl p-1">
+                              <DropdownMenuGroup>
+                                <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Walk-In Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
+                                  <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+
+                                {/* ── Delivery Status Progression (Local Delivery only) ── */}
+                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Delivered" && (
+                                  <>
+                                    <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
+                                    {order.status === "Pending" && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
+                                      </DropdownMenuItem>
+                                    )}
+                                    {(order.status === "Pending" || order.status === "Processing") && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
+                                        <Truck className="mr-2 h-4 w-4" /> Mark Shipped
+                                      </DropdownMenuItem>
+                                    )}
+                                    {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped") && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Delivered")} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
+                                        <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
+                                      </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
+
+                                {/* ── Payment Controls ── */}
+                                {order.payment_status !== "Paid" && !isOrderVoided(order) ? (
+                                  <DropdownMenuItem
+                                    onClick={() => handleMarkWalkInPaid(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"
+                                  >
+                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Paid
+                                  </DropdownMenuItem>
+                                ) : order.payment_status === "Paid" && !isOrderVoided(order) ? (
+                                  <DropdownMenuItem
+                                    onClick={() => handleMarkWalkInPending(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
+                                  >
+                                    <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
+                                  </DropdownMenuItem>
+                                ) : null}
+                                {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
+                                    <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
+                                      <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {!isOrderVoided(order) && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenVoidDialog(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
+                                  </DropdownMenuItem>
+                                )}
+                                {!isOrderVoided(order) && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenEditWalkIn(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-zinc-600"
+                                  >
+                                    <Pencil className="mr-2 h-4 w-4" /> Edit Order
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          ) : (
+            <Table>
+              <TableHeader className="bg-zinc-50/50">
+                <TableRow>
+                  <TableHead className="w-[50px] px-6 text-center">
+                    <button onClick={() => {
+                      if (selectedOrderIds.length === filteredOrders.length) setSelectedOrderIds([]);
+                      else setSelectedOrderIds(filteredOrders.map(o => o.id));
+                    }} className="text-zinc-400 hover:text-zinc-900 transition-colors">
+                      {selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                    </button>
+                  </TableHead>
+                  <TableHead className="px-4 font-semibold text-zinc-900">Order Ref</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Customer</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Main Products</TableHead>
+                  <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
+                  <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Products Costs</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
+                  <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
+                  <TableHead className="font-semibold text-zinc-900 text-center">Status</TableHead>
+                  <TableHead className="px-6 w-[70px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow><TableCell colSpan={12} className="h-48 text-center"><div className="flex flex-col items-center justify-center gap-2"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="text-sm text-zinc-500 font-medium">Synchronizing orders...</p></div></TableCell></TableRow>
+                ) : filteredOrders.length === 0 ? (
+                  <TableRow><TableCell colSpan={12} className="h-48 text-center text-zinc-500">No shipment orders found.</TableCell></TableRow>
+                ) : (
+                  paginatedOrders.map((order) => (
+                    <TableRow key={order.id} className={cn("hover:bg-zinc-50/50 transition-colors group", selectedOrderIds.includes(order.id) && "bg-zinc-50/50")}>
+                      <TableCell className="px-6 text-center">
+                        <button onClick={() => {
+                          if (selectedOrderIds.includes(order.id)) setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id));
+                          else setSelectedOrderIds([...selectedOrderIds, order.id]);
+                        }} className={cn("transition-colors", selectedOrderIds.includes(order.id) ? "text-[#0052cc]" : "text-zinc-200 group-hover:text-zinc-400")}>
+                          {selectedOrderIds.includes(order.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                        </button>
+                      </TableCell>
+                      <TableCell className="px-4 py-4">
+                        <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
+                        {order.payment_ref_code && (
+                          <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                            M-Pesa: {order.payment_ref_code}
+                          </p>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(() => {
-                        const pay = getWalkInPayStatusDisplay(order);
-                        return (
-                          <Badge className={cn("rounded-full px-2 text-[10px] font-bold border-none", pay.className)}>
-                            {pay.label}
+                      </TableCell>
+                      <TableCell><div className="space-y-0.5"><p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p><p className="text-[11px] text-zinc-500 font-medium">{order.customer?.email}</p></div></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name || "Origin"}</div>
+                          <span className="text-[10px] font-black text-zinc-400 italic">TO</span>
+                          <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
+                            {order.shipping_city}
+                            {order.shipping_country ? `, ${order.shipping_country}` : ""}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
+                      <TableCell><div className="space-y-0.5 max-w-[150px]"><p className="text-xs font-bold text-zinc-800 truncate">{order.items?.[0]?.product?.name || "Genuine Spare Part"}</p>{order.items && order.items.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>}</div></TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          {order.items?.map((item: any, i: number) => (
+                            <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                              {item.product?.part_number || "—"}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          {order.items?.map((item: any, i: number) => (
+                            <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                              {item.product?.engine_model || "—"}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          {order.items?.map((item: any, i: number) => (
+                            <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                              {item.product?.suitable_vehicle || "—"}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
+                      <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+                        {(() => {
+                          const refundedTotal = getOrderRefundedTotal(order);
+                          const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+
+                          if (order.status === "Cancelled" || allCancelled) {
+                            return (
+                              <>
+                                <p className="text-xs font-black text-red-500 line-through opacity-75">
+                                  Ksh {refundedTotal.toLocaleString()}
+                                </p>
+                                <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
+                              </>
+                            );
+                          }
+
+                          return (
+                            <>
+                              <p className="text-xs font-black text-zinc-900">
+                                Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
+                              </p>
+                              {refundedTotal > 0 && (
+                                <p className="text-[9px] font-bold text-red-500 uppercase">
+                                  Ksh {refundedTotal.toLocaleString()} Refunded
+                                </p>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1.5">
+                            {updatingOrderIds[order.id] && <Loader2 className="h-3 w-3 animate-spin text-[#0052cc] shrink-0" />}
+                            <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                              order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : order.status === "Processing" ? "bg-orange-500 text-white" :
+                                order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white" :
+                                  order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                                    (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
+                            )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
+                          </div>
+                          <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",
+                            (order.payment_status === "Paid" || !isOrderVoided(order)) ? "bg-emerald-100 text-emerald-800" :
+                              order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "bg-red-100 text-red-800" :
+                                "bg-amber-100 text-amber-800"
+                          )}>
+                            {(order.payment_status === "Paid" || !isOrderVoided(order)) ? "✓ M-Pesa Paid" :
+                              order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "Refunded" :
+                                "Payment Pending"}
                           </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell>
-                      <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">
-                        {order.payment_status === "Pending" ? "— (Pending Payment)" : (order.payment_method || "Cash")}
-                      </p>
-                      {order.payment_ref_code && (
-                        <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
-                          {order.payment_ref_code}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {(() => {
-                        const refundedTotal = getOrderRefundedTotal(order);
-                        const hasCancelledItems = order.items?.some((i: any) => i.cancellation_status === "Cancelled");
-                        const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
-                        
-                        if (isOrderVoided(order) || allCancelled) {
-                          return (
-                            <>
-                              <p className="text-sm font-black text-red-500 line-through opacity-75">
-                                Ksh {refundedTotal.toLocaleString()}
-                              </p>
-                              <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
-                            </>
-                          );
-                        }
-                        
-                        return (
-                          <>
-                            <p className="text-sm font-black text-zinc-900">
-                              Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
-                            </p>
-                            {refundedTotal > 0 && (
-                              <p className="text-[9px] font-bold text-red-500 uppercase">
-                                Ksh {refundedTotal.toLocaleString()} Refunded
-                              </p>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="px-6 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-emerald-100")}>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 rounded-xl border-zinc-200 shadow-xl p-1">
-                          <DropdownMenuGroup>
-                            <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Walk-In Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
-                              <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-
-                            {/* ── Delivery Status Progression (Local Delivery only) ── */}
-                            {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Delivered" && (
-                              <>
-                                <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
-                                {order.status === "Pending" && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
-                                    <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
-                                  </DropdownMenuItem>
-                                )}
-                                {(order.status === "Pending" || order.status === "Processing") && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
-                                    <Truck className="mr-2 h-4 w-4" /> Mark Shipped
-                                  </DropdownMenuItem>
-                                )}
-                                {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped") && (
-                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Delivered")} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
-                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                              </>
-                            )}
-
-                            {/* ── Payment Controls ── */}
-                            {order.payment_status !== "Paid" && !isOrderVoided(order) ? (
-                              <DropdownMenuItem
-                                onClick={() => handleMarkWalkInPaid(order)}
-                                className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"
-                              >
-                                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Paid
-                              </DropdownMenuItem>
-                            ) : order.payment_status === "Paid" && !isOrderVoided(order) ? (
-                              <DropdownMenuItem
-                                onClick={() => handleMarkWalkInPending(order)}
-                                className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
-                              >
-                                <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
-                              </DropdownMenuItem>
-                            ) : null}
-                            {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
-                                  <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            {!isOrderVoided(order) && (
-                            <DropdownMenuItem
-                              onClick={() => handleOpenVoidDialog(order)}
-                              className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
-                            </DropdownMenuItem>
-                            )}
-                            {!isOrderVoided(order) && (
-                            <DropdownMenuItem
-                              onClick={() => handleOpenEditWalkIn(order)}
-                              className="cursor-pointer rounded-lg font-bold text-sm text-zinc-600"
-                            >
-                              <Pencil className="mr-2 h-4 w-4" /> Edit Order
-                            </DropdownMenuItem>
-                            )}
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        ) : (
-          <Table>
-            <TableHeader className="bg-zinc-50/50">
-              <TableRow>
-                <TableHead className="w-[50px] px-6 text-center">
-                  <button onClick={() => {
-                    if (selectedOrderIds.length === filteredOrders.length) setSelectedOrderIds([]);
-                    else setSelectedOrderIds(filteredOrders.map(o => o.id));
-                  }} className="text-zinc-400 hover:text-zinc-900 transition-colors">
-                    {selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                  </button>
-                </TableHead>
-                <TableHead className="px-4 font-semibold text-zinc-900">Order Ref</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Customer</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Main Products</TableHead>
-                <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
-                <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Products Costs</TableHead>
-                <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
-                <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
-                <TableHead className="font-semibold text-zinc-900 text-center">Status</TableHead>
-                <TableHead className="px-6 w-[70px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={12} className="h-48 text-center"><div className="flex flex-col items-center justify-center gap-2"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="text-sm text-zinc-500 font-medium">Synchronizing orders...</p></div></TableCell></TableRow>
-              ) : filteredOrders.length === 0 ? (
-                <TableRow><TableCell colSpan={12} className="h-48 text-center text-zinc-500">No shipment orders found.</TableCell></TableRow>
-              ) : (
-                paginatedOrders.map((order) => (
-                  <TableRow key={order.id} className={cn("hover:bg-zinc-50/50 transition-colors group", selectedOrderIds.includes(order.id) && "bg-zinc-50/50")}>
-                    <TableCell className="px-6 text-center">
-                      <button onClick={() => {
-                        if (selectedOrderIds.includes(order.id)) setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id));
-                        else setSelectedOrderIds([...selectedOrderIds, order.id]);
-                      }} className={cn("transition-colors", selectedOrderIds.includes(order.id) ? "text-[#0052cc]" : "text-zinc-200 group-hover:text-zinc-400")}>
-                        {selectedOrderIds.includes(order.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                      </button>
-                    </TableCell>
-                    <TableCell className="px-4 py-4">
-                      <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
-                      {order.payment_ref_code && (
-                        <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
-                          M-Pesa: {order.payment_ref_code}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell><div className="space-y-0.5"><p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p><p className="text-[11px] text-zinc-500 font-medium">{order.customer?.email}</p></div></TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name || "Origin"}</div>
-                        <span className="text-[10px] font-black text-zinc-400 italic">TO</span>
-                        <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
-                          {order.shipping_city}
-                          {order.shipping_country ? `, ${order.shipping_country}` : ""}
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
-                    <TableCell><div className="space-y-0.5 max-w-[150px]"><p className="text-xs font-bold text-zinc-800 truncate">{order.items?.[0]?.product?.name || "Genuine Spare Part"}</p>{order.items && order.items.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>}</div></TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        {order.items?.map((item: any, i: number) => (
-                          <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
-                            {item.product?.part_number || "—"}
-                          </span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        {order.items?.map((item: any, i: number) => (
-                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
-                            {item.product?.engine_model || "—"}
-                          </span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5">
-                        {order.items?.map((item: any, i: number) => (
-                          <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
-                            {item.product?.suitable_vehicle || "—"}
-                          </span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
-                    <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
-                    <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">
-                      {(() => {
-                        const refundedTotal = getOrderRefundedTotal(order);
-                        const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
-                        
-                        if (order.status === "Cancelled" || allCancelled) {
-                          return (
-                            <>
-                              <p className="text-xs font-black text-red-500 line-through opacity-75">
-                                Ksh {refundedTotal.toLocaleString()}
-                              </p>
-                              <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
-                            </>
-                          );
-                        }
-                        
-                        return (
-                          <>
-                            <p className="text-xs font-black text-zinc-900">
-                              Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
-                            </p>
-                            {refundedTotal > 0 && (
-                              <p className="text-[9px] font-bold text-red-500 uppercase">
-                                Ksh {refundedTotal.toLocaleString()} Refunded
-                              </p>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex flex-col items-center justify-center gap-1">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {updatingOrderIds[order.id] && <Loader2 className="h-3 w-3 animate-spin text-[#0052cc] shrink-0" />}
-                          <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                            order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : order.status === "Processing" ? "bg-orange-500 text-white" :
-                            order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white" :
-                            order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                            (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
-                          )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
-                        </div>
-                        <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",
-                          (order.payment_status === "Paid" || !isOrderVoided(order)) ? "bg-emerald-100 text-emerald-800" :
-                          order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "bg-red-100 text-red-800" :
-                          "bg-amber-100 text-amber-800"
-                        )}>
-                          {(order.payment_status === "Paid" || !isOrderVoided(order)) ? "✓ M-Pesa Paid" :
-                           order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "Refunded" :
-                           "Payment Pending"}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell className="px-6 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-zinc-100")}><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">
-                          <DropdownMenuGroup>
-                            <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Options</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm"><Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {order.status === "Pending" && (
-                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
-                                <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
-                              </DropdownMenuItem>
-                            )}
-                            {(order.status === "Pending" || order.status === "Processing") && (
-                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
-                                <Truck className="mr-2 h-4 w-4" /> Mark Shipped
-                              </DropdownMenuItem>
-                            )}
-                            {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") && (
-                              <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
-                                <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
-                              </DropdownMenuItem>
-                            )}
-                            
-                            {order.status === "Cancellation Requested" && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel className="text-[10px] font-black text-red-400 uppercase px-2 py-1.5">Cancellation</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsApproveCancelModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-red-600">
-                                  <CheckCircle2 className="mr-2 h-4 w-4" /> Approve Cancellation
+                      </TableCell>
+                      <TableCell className="px-6 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-zinc-100")}><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">
+                            <DropdownMenuGroup>
+                              <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Options</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm"><Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {order.status === "Pending" && (
+                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                  <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
                                 </DropdownMenuItem>
-                              </>
-                            )}
-                            
-                            {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
-                                  <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
+                              )}
+                              {(order.status === "Pending" || order.status === "Processing") && (
+                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
+                                  <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                 </DropdownMenuItem>
-                              </>
-                            )}
+                              )}
+                              {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") && (
+                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
+                                  <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
+                                </DropdownMenuItem>
+                              )}
 
-                            {!isOrderVoided(order) && order.status !== "Cancellation Requested" && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() => handleOpenVoidDialog(order)}
-                                  className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                          </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        )}
+                              {order.status === "Cancellation Requested" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuLabel className="text-[10px] font-black text-red-400 uppercase px-2 py-1.5">Cancellation</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsApproveCancelModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-red-600">
+                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Approve Cancellation
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+
+                              {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
+                                    <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+
+                              {!isOrderVoided(order) && order.status !== "Cancellation Requested" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenVoidDialog(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
         <PaginationControls
           currentPage={currentPage}
@@ -1758,67 +1756,67 @@ function AdminOrdersPageInner() {
             </div>
             <Badge className={cn(
               "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none",
-              currentSelectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
-              currentSelectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
-              currentSelectedOrder?.status === "Shipped" || currentSelectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
-              currentSelectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
-              "bg-zinc-200 text-zinc-700"
+              currentSelectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
+                currentSelectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
+                  currentSelectedOrder?.status === "Shipped" || currentSelectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
+                    currentSelectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+                      "bg-zinc-200 text-zinc-700"
             )}>
               {currentSelectedOrder?.status === "In Transit" ? "SHIPPED" : currentSelectedOrder?.status}
             </Badge>
           </DialogHeader>
           <div className="p-6 max-h-[60vh] overflow-y-auto">
             <div className="mb-6 space-y-4">
-                {/* Origin / Destination — hide destination for walk-in in-store */}
-                <div className="bg-zinc-50 p-5 rounded-xl border border-zinc-200">
-                  {currentSelectedOrder?.shipping_method === "Pickup" || currentSelectedOrder?.shipping_method === "In-Store Collection" ? (
-                    <div className="flex items-center gap-3">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Source Warehouse</p>
-                        <p className="text-sm font-bold text-slate-700 uppercase">{currentSelectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}</p>
-                      </div>
-                      <div className="ml-auto">
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store Collection
-                        </span>
-                      </div>
+              {/* Origin / Destination — hide destination for walk-in in-store */}
+              <div className="bg-zinc-50 p-5 rounded-xl border border-zinc-200">
+                {currentSelectedOrder?.shipping_method === "Pickup" || currentSelectedOrder?.shipping_method === "In-Store Collection" ? (
+                  <div className="flex items-center gap-3">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Source Warehouse</p>
+                      <p className="text-sm font-bold text-slate-700 uppercase">{currentSelectedOrder?.items?.[0]?.warehouse?.name || "Warehouse"}</p>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Origin</p>
-                        {/* Show only warehouse name — never append country */}
-                        <p className="text-sm font-bold text-slate-700 uppercase">
-                          {(currentSelectedOrder?.items?.[0]?.warehouse?.name || "Warehouse").split(',')[0].trim()}
-                        </p>
-                      </div>
-                      <ArrowRightLeft className="h-4 w-4 text-zinc-300" />
-                      <div className="space-y-1 text-right">
-                        <p className="text-[10px] font-bold text-emerald-400 uppercase">Final Destination</p>
-                        {/* Show ONLY shipping_city — exactly as typed, no country appended */}
-                        <p className="text-sm font-bold text-emerald-700 uppercase">
-                          {currentSelectedOrder?.shipping_city || "Delivery Address"}
-                        </p>
-                      </div>
+                    <div className="ml-auto">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store Collection
+                      </span>
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase">Origin</p>
+                      {/* Show only warehouse name — never append country */}
+                      <p className="text-sm font-bold text-slate-700 uppercase">
+                        {(currentSelectedOrder?.items?.[0]?.warehouse?.name || "Warehouse").split(',')[0].trim()}
+                      </p>
+                    </div>
+                    <ArrowRightLeft className="h-4 w-4 text-zinc-300" />
+                    <div className="space-y-1 text-right">
+                      <p className="text-[10px] font-bold text-emerald-400 uppercase">Final Destination</p>
+                      {/* Show ONLY shipping_city — exactly as typed, no country appended */}
+                      <p className="text-sm font-bold text-emerald-700 uppercase">
+                        {currentSelectedOrder?.shipping_city || "Delivery Address"}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
+            </div>
 
-              <div className="mb-6">
-                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Customer Information</h4>
-                <div className="bg-white p-4 rounded-xl border border-zinc-200">
-                  <p className="font-bold text-zinc-900">{currentSelectedOrder?.customer?.name || "Guest"}</p>
-                  {/* Hide auto-generated walk-in emails */}
-                  {currentSelectedOrder?.customer?.name?.toLowerCase() !== "walk-in customer" && (
-                    <p className="text-sm text-zinc-500 font-medium">{currentSelectedOrder?.customer?.email}</p>
-                  )}
-                  <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
-                </div>
+            <div className="mb-6">
+              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Customer Information</h4>
+              <div className="bg-white p-4 rounded-xl border border-zinc-200">
+                <p className="font-bold text-zinc-900">{currentSelectedOrder?.customer?.name || "Guest"}</p>
+                {/* Hide auto-generated walk-in emails */}
+                {currentSelectedOrder?.customer?.name?.toLowerCase() !== "walk-in customer" && (
+                  <p className="text-sm text-zinc-500 font-medium">{currentSelectedOrder?.customer?.email}</p>
+                )}
+                <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
               </div>
+            </div>
 
             <div className="space-y-4">
-               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
+              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
               {currentSelectedOrder?.items?.map((item: any, idx: number) => {
                 const isItemCancelled = item.cancellation_status === "Cancelled";
                 // Per-item refund total = product cost + proportional shipping share
@@ -1876,53 +1874,53 @@ function AdminOrdersPageInner() {
                 );
               })}
             </div>
-            
+
             {/* Cancellation / Refund Details — shows for ANY partial or full cancellation */}
-            {(currentSelectedOrder?.status === "Cancelled" || 
-              currentSelectedOrder?.status === "Cancellation Requested" || 
-              currentSelectedOrder?.refund_transaction_id || 
+            {(currentSelectedOrder?.status === "Cancelled" ||
+              currentSelectedOrder?.status === "Cancellation Requested" ||
+              currentSelectedOrder?.refund_transaction_id ||
               currentSelectedOrder?.refund_status ||
               currentSelectedOrder?.items?.some((i: any) => i.cancellation_status === "Cancelled")) && (
-              <div className="mt-6 bg-red-50 p-4 rounded-xl border border-red-200">
-                <h4 className="text-[11px] font-bold text-red-800 uppercase tracking-widest mb-3">Cancellation / Refund Details</h4>
-                <div className="space-y-2">
-                  {currentSelectedOrder.cancellation_reason && (
-                    <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Reason:</span> {currentSelectedOrder.cancellation_reason}</p>
-                  )}
-                  <p className="text-xs font-semibold text-red-900">
-                    <span className="text-red-700">Refund Status:</span>{" "}
-                    <span className={cn(
-                      "uppercase tracking-wider font-black",
-                      (currentSelectedOrder.refund_status === "Completed" || currentSelectedOrder.refund_transaction_id) ? "text-green-700" : "text-orange-600"
-                    )}>
-                      {currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id ? "Completed" : "Pending")}
-                    </span>
-                  </p>
-                  {/* Total refunded amount — reads from backend-persisted refunded_amount */}
-                  {(() => {
-                    const refunded = Number(currentSelectedOrder?.refunded_amount || 0);
-                    if (refunded <= 0) return null;
-                    return (
-                      <p className="text-xs font-semibold text-red-900">
-                        <span className="text-red-700">Total Refunded:</span>{" "}
-                        <span className="font-black">Ksh {Math.round(refunded).toLocaleString()}</span>
-                        <span className="text-[10px] text-zinc-500 ml-1">(product + shipping)</span>
-                      </p>
-                    );
-                  })()}
-                  {currentSelectedOrder.refund_transaction_id && (
-                    <p className="text-[11px] font-black text-green-700 bg-green-50 px-2.5 py-1.5 inline-block rounded border border-green-200 uppercase tracking-wider mt-1">
-                      Refund Evidence Tx Ref: {currentSelectedOrder.refund_transaction_id}
+                <div className="mt-6 bg-red-50 p-4 rounded-xl border border-red-200">
+                  <h4 className="text-[11px] font-bold text-red-800 uppercase tracking-widest mb-3">Cancellation / Refund Details</h4>
+                  <div className="space-y-2">
+                    {currentSelectedOrder.cancellation_reason && (
+                      <p className="text-xs font-semibold text-red-900"><span className="text-red-700">Reason:</span> {currentSelectedOrder.cancellation_reason}</p>
+                    )}
+                    <p className="text-xs font-semibold text-red-900">
+                      <span className="text-red-700">Refund Status:</span>{" "}
+                      <span className={cn(
+                        "uppercase tracking-wider font-black",
+                        (currentSelectedOrder.refund_status === "Completed" || currentSelectedOrder.refund_transaction_id) ? "text-green-700" : "text-orange-600"
+                      )}>
+                        {currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id ? "Completed" : "Pending")}
+                      </span>
                     </p>
-                  )}
+                    {/* Total refunded amount — reads from backend-persisted refunded_amount */}
+                    {(() => {
+                      const refunded = Number(currentSelectedOrder?.refunded_amount || 0);
+                      if (refunded <= 0) return null;
+                      return (
+                        <p className="text-xs font-semibold text-red-900">
+                          <span className="text-red-700">Total Refunded:</span>{" "}
+                          <span className="font-black">Ksh {Math.round(refunded).toLocaleString()}</span>
+                          <span className="text-[10px] text-zinc-500 ml-1">(product + shipping)</span>
+                        </p>
+                      );
+                    })()}
+                    {currentSelectedOrder.refund_transaction_id && (
+                      <p className="text-[11px] font-black text-green-700 bg-green-50 px-2.5 py-1.5 inline-block rounded border border-green-200 uppercase tracking-wider mt-1">
+                        Refund Evidence Tx Ref: {currentSelectedOrder.refund_transaction_id}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             <div className="mt-6 pt-4 border-t border-zinc-100 space-y-2">
               {(() => {
                 const originalShipping = Number(currentSelectedOrder?.shipping_fee || 0);
-                const refundedAmount   = Number(currentSelectedOrder?.refunded_amount || 0);
+                const refundedAmount = Number(currentSelectedOrder?.refunded_amount || 0);
                 const hasRefund = refundedAmount > 0;
                 return (
                   <div className="flex justify-between items-center text-zinc-500 font-bold text-[11px] uppercase tracking-tight">
@@ -1959,7 +1957,7 @@ function AdminOrdersPageInner() {
           </DialogHeader>
           <form onSubmit={handleSubmitWalkInOrder} className="flex flex-col">
             <div className="p-6 space-y-6 max-h-[60vh] sm:max-h-[70vh] overflow-y-auto">
-              
+
               {/* Section 1: Customer Profile */}
               <div className="space-y-4">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">1. Customer Identification</h4>
@@ -1990,7 +1988,7 @@ function AdminOrdersPageInner() {
                     items={customers
                       .filter(c => c.name.toLowerCase() !== "walk-in customer")
                       .map(c => ({ id: c.id.toString(), name: `${c.name} — ${c.email}` }))}
-                    value={!["walkin","new"].includes(selectedCustomerId) ? selectedCustomerId : ""}
+                    value={!["walkin", "new"].includes(selectedCustomerId) ? selectedCustomerId : ""}
                     onChange={(val) => setSelectedCustomerId(val || "walkin")}
                     placeholder="Search by name or email..."
                   />
@@ -2002,22 +2000,22 @@ function AdminOrdersPageInner() {
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
                         <Input placeholder="Customer Name" className="h-10 border-zinc-200 rounded-lg bg-white"
-                          value={newCustomerData.name} onChange={(e) => setNewCustomerData({...newCustomerData, name: e.target.value})} />
+                          value={newCustomerData.name} onChange={(e) => setNewCustomerData({ ...newCustomerData, name: e.target.value })} />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Gmail Address{registerAccount ? " *" : ""} <span className="text-zinc-400">(name@gmail.com)</span></label>
                         <Input type="email" placeholder="name@gmail.com" className="h-10 border-zinc-200 rounded-lg bg-white"
-                          value={newCustomerData.email} onChange={(e) => setNewCustomerData({...newCustomerData, email: e.target.value})} />
+                          value={newCustomerData.email} onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })} />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Phone <span className="text-zinc-400">(07XXXXXXXX)</span></label>
                         <Input placeholder="0712345678" className="h-10 border-zinc-200 rounded-lg bg-white"
-                          value={newCustomerData.phone} onChange={(e) => setNewCustomerData({...newCustomerData, phone: e.target.value})} />
+                          value={newCustomerData.phone} onChange={(e) => setNewCustomerData({ ...newCustomerData, phone: e.target.value })} />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">City / Town</label>
                         <Input placeholder="Nairobi" className="h-10 border-zinc-200 rounded-lg bg-white"
-                          value={newCustomerData.address} onChange={(e) => setNewCustomerData({...newCustomerData, address: e.target.value})} />
+                          value={newCustomerData.address} onChange={(e) => setNewCustomerData({ ...newCustomerData, address: e.target.value })} />
                       </div>
                     </div>
 
@@ -2027,7 +2025,7 @@ function AdminOrdersPageInner() {
                         <input
                           type="checkbox"
                           checked={registerAccount}
-                          onChange={(e) => { setRegisterAccount(e.target.checked); if (!e.target.checked) setNewCustomerData(p => ({...p, password: "", confirmPassword: ""})); }}
+                          onChange={(e) => { setRegisterAccount(e.target.checked); if (!e.target.checked) setNewCustomerData(p => ({ ...p, password: "", confirmPassword: "" })); }}
                           className="w-4 h-4 accent-blue-600 rounded"
                         />
                         <span className="text-xs font-bold text-zinc-700">Register Login Account for this Customer</span>
@@ -2044,7 +2042,7 @@ function AdminOrdersPageInner() {
                               placeholder="Min 8 characters"
                               className="h-10 border-zinc-200 rounded-lg bg-white pr-10"
                               value={newCustomerData.password}
-                              onChange={(e) => setNewCustomerData({...newCustomerData, password: e.target.value})}
+                              onChange={(e) => setNewCustomerData({ ...newCustomerData, password: e.target.value })}
                             />
                             <button type="button" onClick={() => setShowNewPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
                               {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -2059,7 +2057,7 @@ function AdminOrdersPageInner() {
                               placeholder="Repeat password"
                               className="h-10 border-zinc-200 rounded-lg bg-white pr-10"
                               value={newCustomerData.confirmPassword}
-                              onChange={(e) => setNewCustomerData({...newCustomerData, confirmPassword: e.target.value})}
+                              onChange={(e) => setNewCustomerData({ ...newCustomerData, confirmPassword: e.target.value })}
                             />
                             <button type="button" onClick={() => setShowConfirmPass(p => !p)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600">
                               {showConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -2285,7 +2283,7 @@ function AdminOrdersPageInner() {
                 </div>
               </div>
             </div>
-            
+
             <DialogFooter className="p-4 bg-zinc-50 border-t flex justify-end gap-3 m-0 shrink-0">
               <Button
                 type="button"
@@ -2334,7 +2332,7 @@ function AdminOrdersPageInner() {
                 <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Order status is updated with refund completed</li>
               </ul>
             </div>
-            
+
             {/* Products Checkbox List */}
             {voidOrderTarget?.items && voidOrderTarget.items.length > 0 && (
               <div className="space-y-2 border border-zinc-200 rounded-xl p-3 bg-zinc-50/50">
@@ -2403,11 +2401,11 @@ function AdminOrdersPageInner() {
                 })()}
               </div>
             )}
-            
+
             <div className="space-y-3">
               <div className="space-y-1 text-left">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Refund Reason *</label>
-                <textarea 
+                <textarea
                   rows={2}
                   placeholder="e.g., Customer requested refund, duplicate order..."
                   className="w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
@@ -2417,7 +2415,7 @@ function AdminOrdersPageInner() {
               </div>
               <div className="space-y-1 text-left">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Refund Evidence (Transaction ID / Reference) *</label>
-                <Input 
+                <Input
                   placeholder="e.g. M-Pesa Code or Receipt Ref..."
                   className="h-9 border-zinc-200 text-xs font-semibold"
                   value={voidTransactionId}
@@ -2425,7 +2423,7 @@ function AdminOrdersPageInner() {
                 />
               </div>
             </div>
-            
+
             <p className="text-[10px] text-zinc-400 font-medium text-center">This action cannot be undone.</p>
           </div>
           <DialogFooter className="px-6 pb-6 flex gap-3 m-0 shrink-0">
@@ -2594,7 +2592,7 @@ function AdminOrdersPageInner() {
               <p className="text-xs font-semibold text-red-700 mb-1">Customer Reason:</p>
               <p className="text-sm text-red-900 italic">"{currentSelectedOrder?.cancellation_reason || 'No reason provided'}"</p>
             </div>
-            
+
             {currentSelectedOrder?.items && (
               <div className="space-y-2">
                 <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Items Requested for Cancellation:</p>
@@ -2613,20 +2611,20 @@ function AdminOrdersPageInner() {
                 </div>
               </div>
             )}
-            
+
             <p className="text-sm font-black text-zinc-900 pt-3 border-t border-zinc-100">
               Total Refund Value: Ksh {
                 (() => {
                   const pendingItems = currentSelectedOrder?.items?.filter((i: any) => i.cancellation_status === "Pending") || [];
                   const totalUnits = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
                   const shippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
-                  
+
                   const amt = pendingItems.length > 0
                     ? pendingItems.reduce((acc: number, i: any) => {
-                        const itemProductCost = Number(i.price) * i.quantity;
-                        const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
-                        return acc + itemProductCost + itemShippingShare;
-                      }, 0)
+                      const itemProductCost = Number(i.price) * i.quantity;
+                      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
+                      return acc + itemProductCost + itemShippingShare;
+                    }, 0)
                     : parseFloat(currentSelectedOrder?.total_amount || 0);
                   return Math.round(amt).toLocaleString();
                 })()
@@ -2673,8 +2671,8 @@ function AdminOrdersPageInner() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-zinc-700 uppercase">Refund Transaction ID *</label>
-              <Input 
-                placeholder="e.g. MPESA-ABC123XYZ" 
+              <Input
+                placeholder="e.g. MPESA-ABC123XYZ"
                 value={refundTransactionId}
                 onChange={(e) => setRefundTransactionId(e.target.value)}
                 className="h-10 border-zinc-200"

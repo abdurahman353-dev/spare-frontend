@@ -4,13 +4,13 @@ import { useEffect, useState, useMemo } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn, getCategoryColor } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
 import { Plus, Search, Filter, MoreHorizontal, Edit, Trash2, Loader2, Package, ImageIcon, Eye, FileText, Upload, X, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,7 @@ export default function ProductsPage() {
   const [selectedBrandId, setSelectedBrandId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  
+
   // Selection State
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -58,17 +58,38 @@ export default function ProductsPage() {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
-  
+
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewingProduct, setViewingProduct] = useState<any>(null);
 
-
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/products");
-      setProducts(res.data);
+      const res = await api.get("/products", {
+        params: {
+          page: currentPage,
+          per_page: pageSize,
+          search: searchQuery,
+          category_id: selectedCategoryId,
+          brand_id: selectedBrandId,
+          status: selectedStatus,
+          name: selectedName
+        }
+      });
+
+      // If server-side pagination is active, res.data will be a Laravel Paginate object
+      if (res.data.data) {
+        setProducts(res.data.data);
+        setTotalItems(res.data.total);
+      } else {
+        // Fallback for non-paginated response
+        setProducts(res.data);
+        setTotalItems(res.data.length);
+      }
       setSelectedProductIds([]);
     } catch (err) {
       console.error("Failed to fetch products:", err);
@@ -79,7 +100,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [currentPage, pageSize, searchQuery, selectedCategoryId, selectedBrandId, selectedStatus, selectedName]);
 
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this product?")) {
@@ -107,45 +128,13 @@ export default function ProductsPage() {
     setIsViewModalOpen(true);
   };
 
-  // Advanced Filtering & Search
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  // We still use useMemo for search filtering if we want local filtering, 
+  // but since we moved to server-side search (handled in fetchProducts params), 
+  // we can simplify this. 
+  const filteredProducts = products;
 
-  const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      const name = product.name || "";
-      const sku = product.sku || "";
-      const brand = product.brand?.name || "";
-      const partNumber = product.part_number || "";
-      const suitableVehicle = product.suitable_vehicle || "";
-      const engineModel = product.engine_model || "";
-      
-      const matchesSearch = 
-        name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        partNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        suitableVehicle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        engineModel.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesCategory = !selectedCategoryId || product.category?.id.toString() === selectedCategoryId;
-      const matchesName = !selectedName || product.name === selectedName;
-      const matchesBrand = !selectedBrandId || product.brand?.id.toString() === selectedBrandId;
-      const matchesStatus = !selectedStatus || product.status === selectedStatus;
-      
-      return matchesSearch && matchesCategory && matchesName && matchesBrand && matchesStatus;
-    });
-  }, [products, searchQuery, selectedCategoryId, selectedName, selectedBrandId, selectedStatus]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedCategoryId, selectedName, selectedBrandId, selectedStatus]);
-
-  const totalPages = Math.ceil(filteredProducts.length / pageSize);
-  const paginatedProducts = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    return filteredProducts.slice(startIndex, startIndex + pageSize);
-  }, [filteredProducts, currentPage, pageSize]);
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const paginatedProducts = products;
 
   const uniqueCategories = Array.from(new Set(products.map(p => p.category).filter(Boolean).map(c => JSON.stringify(c)))).map(c => JSON.parse(c as string));
   const filterCategoryOptions = uniqueCategories.map(c => ({ id: c.id.toString(), name: c.name }));
@@ -216,15 +205,15 @@ export default function ProductsPage() {
       <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-zinc-200 shadow-sm">
         <div className="relative w-full sm:flex-1 sm:min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-          <Input 
-            placeholder="Search by SKU, Name or Brand..." 
+          <Input
+            placeholder="Search by SKU, Name or Brand..."
             className="pl-10 h-10 border-zinc-200 rounded-lg bg-white w-full"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
         <div className="w-full sm:w-[180px]">
-          <SearchableDropdown 
+          <SearchableDropdown
             items={filterNameOptions}
             value={selectedName}
             onChange={setSelectedName}
@@ -232,7 +221,7 @@ export default function ProductsPage() {
           />
         </div>
         <div className="w-full sm:w-[180px]">
-          <SearchableDropdown 
+          <SearchableDropdown
             items={filterBrandOptions}
             value={selectedBrandId}
             onChange={setSelectedBrandId}
@@ -240,7 +229,7 @@ export default function ProductsPage() {
           />
         </div>
         <div className="w-full sm:w-[180px]">
-          <SearchableDropdown 
+          <SearchableDropdown
             items={filterCategoryOptions}
             value={selectedCategoryId}
             onChange={setSelectedCategoryId}
@@ -248,7 +237,7 @@ export default function ProductsPage() {
           />
         </div>
         <div className="w-full sm:w-[150px]">
-          <select 
+          <select
             className="h-10 px-3 border border-zinc-200 rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-primary/20 w-full text-zinc-600"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
@@ -260,7 +249,7 @@ export default function ProductsPage() {
           </select>
         </div>
         <Button variant="outline" className="w-full sm:w-auto rounded-lg h-10 px-3 border-zinc-200" onClick={handleClearFilters}>
-           <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
+          <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
         </Button>
       </div>
 
@@ -310,7 +299,7 @@ export default function ProductsPage() {
             ) : filteredProducts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="h-48 text-center text-zinc-500">
-                   No products found in the catalog.
+                  No products found in the catalog.
                 </TableCell>
               </TableRow>
             ) : (
@@ -336,8 +325,8 @@ export default function ProductsPage() {
                   <TableCell className="font-semibold text-zinc-600 text-xs">{product.engine_model || "—"}</TableCell>
                   <TableCell className="font-semibold text-zinc-600 text-xs max-w-[150px] truncate" title={product.suitable_vehicle}>{product.suitable_vehicle || "—"}</TableCell>
                   <TableCell className="text-zinc-500 text-xs font-bold uppercase tracking-tight">
-                    <Badge 
-                      variant="outline" 
+                    <Badge
+                      variant="outline"
                       className={cn(
                         "px-2.5 py-0.5 border text-xs font-black uppercase tracking-wider rounded-md",
                         getCategoryColor(product.category?.name || "N/A")

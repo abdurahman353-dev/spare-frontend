@@ -1002,6 +1002,7 @@ export default function AdminsAndAuditsPage() {
                   >
                     <option value="admin">Admin (Logistics, Orders, Stock Management)</option>
                     <option value="superadmin">Super Admin (Full privileges including Admin management and Audits)</option>
+                    <option value="delivery">Delivery Driver (Mobile Delivery Hub & Digital Signature Pad)</option>
                   </select>
                 </div>
               </div>
@@ -1123,6 +1124,7 @@ export default function AdminsAndAuditsPage() {
                   >
                     <option value="admin">Admin (Logistics, Orders, Stock Management)</option>
                     <option value="superadmin">Super Admin (Full privileges including Admin management and Audits)</option>
+                    <option value="delivery">Delivery Driver (Mobile Delivery Hub & Digital Signature Pad)</option>
                   </select>
                 </div>
               </div>

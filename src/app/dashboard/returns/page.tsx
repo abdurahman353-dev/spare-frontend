@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   RotateCcw, CheckCircle2, XCircle, Loader2, Search,
-  Filter, RefreshCw, Eye, AlertCircle, MoreHorizontal, FileText
+  Filter, RefreshCw, Eye, AlertCircle, MoreHorizontal
 } from "lucide-react";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useSettings } from "@/components/providers/SettingsProvider";

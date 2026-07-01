@@ -13,7 +13,8 @@ import {
   Settings,
   ShieldAlert,
   ShieldCheck,
-  CarFront
+  CarFront,
+  RotateCcw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +25,7 @@ const sidebarLinks = [
   { name: "Products", href: "/dashboard/products", icon: Package },
   { name: "Inventory", href: "/dashboard/inventory", icon: Warehouse },
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+  { name: "Returns", href: "/dashboard/returns", icon: RotateCcw },
   { name: "Customers", href: "/dashboard/customers", icon: Users },
   { name: "Suppliers", href: "/dashboard/suppliers", icon: ShieldAlert },
   { name: "Logistics", href: "/dashboard/logistics", icon: Truck },

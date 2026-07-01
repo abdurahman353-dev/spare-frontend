@@ -1584,6 +1584,16 @@ export const exportSingleOrderInvoicePDF = async (
   doc.setTextColor(0, 82, 204);
   doc.text(`${currency} ${grandTotal.toLocaleString()}`, totalsX + totalsW - 3, ty, { align: "right" });
 
+  // Add Proof of Delivery Signature on the left side of the Totals card
+  if (order?.delivery_signature_url) {
+    const base64Sig = await loadImgAsBase64(order.delivery_signature_url);
+    if (base64Sig) {
+      doc.setFont("helvetica", "bold").setFontSize(7).setTextColor(100, 116, 139);
+      doc.text("CUSTOMER DIGITAL SIGNATURE (PROOF OF DELIVERY)", marginL, finalY + 4);
+      doc.addImage(base64Sig, "PNG", marginL, finalY + 6, 45, 18);
+    }
+  }
+
   doc.save(`invoice-${orderRef.replace(/[^a-zA-Z0-9-]/g, "-")}.pdf`);
 };
 

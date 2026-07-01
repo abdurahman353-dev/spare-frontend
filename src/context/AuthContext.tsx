@@ -115,6 +115,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push("/change-password");
     } else if (loginUser.role === "admin" || loginUser.role === "superadmin") {
       router.push("/dashboard");
+    } else if (loginUser.role === "delivery") {
+      router.push("/delivery");
     } else if (redirectUrl) {
       router.push(redirectUrl);
     } else {

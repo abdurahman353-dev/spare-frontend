@@ -10,7 +10,8 @@ import {
   Package, Clock, Settings, ShoppingBag, MapPin, CreditCard, 
   ChevronRight, LogOut, Loader2, User, Lock, ShieldCheck,
   Eye, EyeOff, CheckCircle2, AlertCircle, Plus, Home, Smartphone,
-  Search, Download, ArrowRightLeft, FileText, Truck, Star, Compass
+  Search, Download, ArrowRightLeft, FileText, Truck, Star, Compass,
+  RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 import { Joyride, Step } from "react-joyride";
@@ -244,12 +245,26 @@ function AccountPortalInner() {
   });
   const [passwordStatus, setPasswordStatus] = useState({ loading: false, success: false, error: "" });
 
+  // Return Request State
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returnReason, setReturnReason] = useState("");
+  const [returnExplanation, setReturnExplanation] = useState("");
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [myReturns, setMyReturns] = useState<any[]>([]);
+
+  const fetchReturns = () => {
+    api.get("/returns/my-returns")
+      .then(res => setMyReturns(res.data))
+      .catch(err => console.error("Failed to fetch returns history:", err));
+  };
+
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab === "orders") setActiveTab("My Orders");
     else if (tab === "settings") setActiveTab("Account Settings");
     else if (tab === "address") setActiveTab("Delivery Addresses");
     else if (tab === "payment") setActiveTab("Payment Methods");
+    else if (tab === "returns") setActiveTab("Returns & Refunds");
     else setActiveTab("Dashboard");
   }, [searchParams]);
 
@@ -263,6 +278,9 @@ function AccountPortalInner() {
         console.error(err);
         setLoading(false);
       });
+
+    // Load returns
+    fetchReturns();
   }, []);
 
   // Refresh live user profile on mount so loyalty badge is real-time
@@ -291,6 +309,43 @@ function AccountPortalInner() {
         success: false, 
         error: err.response?.data?.message || "Verification failed. Please check your current password." 
       });
+    }
+  };
+
+  const handleRequestReturn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+    if (!returnReason) {
+      toast.error("Please select a reason for the return");
+      return;
+    }
+    if (returnReason === "Other (Specify in text box)" && !returnExplanation.trim()) {
+      toast.error("Please provide a detailed explanation of your reason");
+      return;
+    }
+
+    setSubmittingReturn(true);
+    try {
+      await api.post("/returns/submit", {
+        order_id: selectedOrder.id,
+        reason: returnReason,
+        explanation: returnExplanation
+      });
+      toast.success("Return request submitted successfully! Administration will review your request.", {
+        duration: 5000,
+        icon: "🔄"
+      });
+      setIsReturnModalOpen(false);
+      setReturnReason("");
+      setReturnExplanation("");
+      
+      // Refresh list
+      api.get("/my-orders").then(res => setOrders(res.data));
+      fetchReturns();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to submit return request");
+    } finally {
+      setSubmittingReturn(false);
     }
   };
 
@@ -357,6 +412,7 @@ function AccountPortalInner() {
     { name: "Dashboard", icon: Package },
     { name: "My Orders", icon: ShoppingBag },
     { name: "Delivery Addresses", icon: MapPin },
+    { name: "Returns & Refunds", icon: RotateCcw },
     { name: "Account Settings", icon: Settings },
   ];
 
@@ -550,7 +606,7 @@ function AccountPortalInner() {
                         <div className="relative">
                           {/* Connector line */}
                           <div className="hidden md:block absolute top-8 left-8 right-8 h-0.5 bg-gradient-to-r from-[#0052cc] via-[#0052cc]/40 to-[#f1f5f9] z-0" />
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 relative z-10">
+                          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 relative z-10">
                             {[
                               {
                                 step: 1,
@@ -578,8 +634,8 @@ function AccountPortalInner() {
                                 step: 3,
                                 icon: Truck,
                                 status: "Shipped",
-                                title: "Dispatched & In Transit",
-                                color: "bg-[#0052cc]",
+                                title: "Dispatched",
+                                color: "bg-blue-500",
                                 borderColor: "border-blue-200",
                                 bgCard: "bg-blue-50",
                                 desc: "Your container has been dispatched! Click 'Inspect' on any order to view the Live Container Tracking section with waybill, carrier, and ETA.",
@@ -587,6 +643,17 @@ function AccountPortalInner() {
                               },
                               {
                                 step: 4,
+                                icon: MapPin,
+                                status: "Arrived",
+                                title: "Ready for Pickup",
+                                color: "bg-[#0052cc]",
+                                borderColor: "border-indigo-200",
+                                bgCard: "bg-indigo-50",
+                                desc: "Your parts have arrived at the destination office and are ready for pickup. Please collect them or coordinate final delivery.",
+                                tips: ["Bring your Order Ref for pickup", "SMS notification has pickup details"]
+                              },
+                              {
+                                step: 5,
                                 icon: CheckCircle2,
                                 status: "Delivered",
                                 title: "Delivery Confirmed",
@@ -754,7 +821,9 @@ function AccountPortalInner() {
                                       order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
                                       order.status === "Processing" ? "bg-orange-500 text-white" :
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
+                                      order.status === "Arrived" ? "bg-indigo-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
                                       (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
@@ -984,7 +1053,9 @@ function AccountPortalInner() {
                                       order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
                                       order.status === "Processing" ? "bg-orange-500 text-white" :
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
+                                      order.status === "Arrived" ? "bg-indigo-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
+                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
                                       (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
@@ -1075,6 +1146,60 @@ function AccountPortalInner() {
                   </motion.div>
                 )}
 
+                {activeTab === "Returns & Refunds" && (
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                    <Card className="border-[#e2e8f0] shadow-sm rounded-lg overflow-hidden">
+                      <CardHeader className="px-6 py-5 border-b border-[#e2e8f0]">
+                        <CardTitle className="text-lg font-bold text-[#1e293b]">Returns & Refunds Ledger</CardTitle>
+                        <p className="text-xs text-[#64748b] font-medium mt-1">Submit new return requests or check the status of your past requests.</p>
+                      </CardHeader>
+                      <CardContent className="p-6">
+                        {myReturns.length === 0 ? (
+                          <div className="text-center py-12 text-[#64748b] bg-[#f8fafc] rounded-lg border border-dashed text-xs font-semibold">
+                            No return requests logged yet. If you need to return a delivered part, select the order in "My Orders" and click "Request Return".
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-[13px] text-[#1e293b] border-collapse">
+                              <thead>
+                                <tr className="border-b border-[#e2e8f0] text-[#64748b] font-bold text-left bg-zinc-50/50">
+                                  <th className="px-4 py-3">Return Ref</th>
+                                  <th className="px-4 py-3">Order Ref</th>
+                                  <th className="px-4 py-3">Reason</th>
+                                  <th className="px-4 py-3">Explanation</th>
+                                  <th className="px-4 py-3">Date Filed</th>
+                                  <th className="px-4 py-3 text-center">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {myReturns.map((ret: any) => (
+                                  <tr key={ret.id} className="border-b border-[#f1f5f9] hover:bg-zinc-50/40 font-medium">
+                                    <td className="px-4 py-3.5 font-bold text-[#0052cc]">RET-{ret.id}</td>
+                                    <td className="px-4 py-3.5 font-semibold">{ret.order?.tracking_number || `#${ret.order_id}`}</td>
+                                    <td className="px-4 py-3.5 font-semibold text-slate-700">{ret.reason}</td>
+                                    <td className="px-4 py-3.5 text-zinc-500 max-w-[200px] truncate" title={ret.explanation}>{ret.explanation || "—"}</td>
+                                    <td className="px-4 py-3.5 text-zinc-500">{new Date(ret.created_at).toLocaleDateString()}</td>
+                                    <td className="px-4 py-3.5 text-center">
+                                      <Badge className={cn(
+                                        "rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase border-none tracking-wider",
+                                        ret.status === "Approved" ? "bg-emerald-500 text-white" :
+                                        ret.status === "Rejected" ? "bg-red-600 text-white" :
+                                        "bg-yellow-400 text-yellow-950"
+                                      )}>
+                                        {ret.status}
+                                      </Badge>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
 
 
               </AnimatePresence>
@@ -1116,8 +1241,10 @@ function AccountPortalInner() {
                "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
                selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
                selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
-               selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
-               selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+               (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" : 
+               selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" : 
+               selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" : 
+               selectedOrder?.status === "Returned" ? "bg-purple-600 text-white" : 
                (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                "bg-zinc-200 text-zinc-700"
              )}>
@@ -1328,7 +1455,7 @@ function AccountPortalInner() {
               </div>
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing") && (
                 <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700 text-white hover:text-white border-none shadow-none" onClick={() => { 
                   setIsOrderModalOpen(false); 
@@ -1340,6 +1467,25 @@ function AccountPortalInner() {
                 }}>
                   Request Cancellation
                 </Button>
+              )}
+              {selectedOrder?.status === "Delivered" && !myReturns.some((r: any) => r.order_id === selectedOrder?.id && (r.status === "Pending" || r.status === "Approved")) && (
+                <Button
+                  variant="outline"
+                  className="text-[12px] font-bold h-9 border-purple-200 text-purple-700 hover:bg-purple-50"
+                  onClick={() => { setIsOrderModalOpen(false); setIsReturnModalOpen(true); }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Request Return
+                </Button>
+              )}
+              {selectedOrder?.status === "Delivered" && myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Pending") && (
+                <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
+                  <RotateCcw className="h-3 w-3" /> Return Requested — Pending Review
+                </span>
+              )}
+              {selectedOrder?.status === "Delivered" && myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Approved") && (
+                <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3 w-3" /> Return Approved
+                </span>
               )}
             </div>
             <div className="flex gap-2">
@@ -1421,6 +1567,67 @@ function AccountPortalInner() {
               {isCancelling ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Submit Request
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return Request Modal */}
+      <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
+        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[480px] p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 bg-purple-50 border-b border-purple-100">
+            <DialogTitle className="font-bold text-[#1e293b] flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-purple-600" /> Request Return — {selectedOrder?.tracking_number}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748b] font-medium mt-1">
+              Please provide the reason for your return. Our team will review your request and get in touch within 2–3 business days.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRequestReturn}>
+            <div className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">Return Reason *</label>
+                <select
+                  className="w-full h-10 px-3 border border-[#e2e8f0] rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-purple-200 text-[#1e293b]"
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  required
+                >
+                  <option value="">Select a reason...</option>
+                  <option value="Wrong part delivered">Wrong part delivered</option>
+                  <option value="Part is defective or damaged">Part is defective or damaged</option>
+                  <option value="Part does not fit my vehicle">Part does not fit my vehicle</option>
+                  <option value="Ordered by mistake">Ordered by mistake</option>
+                  <option value="Duplicate order">Duplicate order</option>
+                  <option value="Part arrived too late">Part arrived too late</option>
+                  <option value="Quality not as described">Quality not as described</option>
+                  <option value="Other (Specify in text box)">Other (Specify in text box)</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">
+                  Additional Details {returnReason === "Other (Specify in text box)" ? "*" : "(Optional)"}
+                </label>
+                <textarea
+                  className="w-full h-24 px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-purple-200 text-[#1e293b] resize-none"
+                  placeholder="Provide more detail to help us process your return faster..."
+                  value={returnExplanation}
+                  onChange={(e) => setReturnExplanation(e.target.value)}
+                  required={returnReason === "Other (Specify in text box)"}
+                />
+              </div>
+              <p className="text-[10px] text-zinc-400 font-medium leading-relaxed bg-zinc-50 p-3 rounded-lg border border-zinc-100">
+                ⚠️ Return requests can only be submitted within the eligible return window. Approved returns must be shipped back in original condition. Refunds are processed within 5–7 business days of receiving the part.
+              </p>
+            </div>
+            <DialogFooter className="px-6 pb-5 flex gap-3">
+              <Button type="button" variant="outline" className="font-bold flex-1" onClick={() => setIsReturnModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingReturn} className="font-bold flex-1 bg-purple-600 hover:bg-purple-700 text-white">
+                {submittingReturn ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                Submit Return Request
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

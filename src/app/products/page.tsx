@@ -47,6 +47,7 @@ interface Product {
   is_on_offer?: boolean;
   offer_price?: number;
   original_price?: number;
+  variants?: any[];
 }
 
 const isVideo = (src: string) => {
@@ -131,22 +132,93 @@ function ProductCard({ product, priority = false }: { product: Product, priority
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | "">("");
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
-  const availableInventories = product.inventories?.filter(i => i.quantity > 0) || [];
 
-  const isInCart = cart.some(item => item.id === product.id && item.warehouse_id === selectedWarehouseId);
+  // Compile brand options: parent product + child variants
+  const brandOptions = useMemo(() => {
+    const list: any[] = [];
+    if (product.brand) {
+      list.push({
+        id: product.id,
+        brandName: product.brand.name,
+        price: product.price,
+        sku: product.sku,
+        part_number: product.part_number,
+        is_on_offer: product.is_on_offer,
+        offer_price: product.offer_price,
+        inventories: product.inventories || [],
+        status: product.status,
+        weight: product.weight
+      });
+    }
+    if (product.variants && (product.variants as any).length > 0) {
+      (product.variants as any).forEach((v: any) => {
+        list.push({
+          id: v.id,
+          brandName: v.brand?.name || "Alternative Brand",
+          price: v.price,
+          sku: v.sku,
+          part_number: v.part_number,
+          is_on_offer: v.is_on_offer,
+          offer_price: v.offer_price,
+          inventories: v.inventories || [],
+          status: v.status,
+          weight: v.weight
+        });
+      });
+    }
+    return list;
+  }, [product]);
+
+  // Selected option state (default to parent product ID, or first option if parent has no brand)
+  const [selectedOptionId, setSelectedOptionId] = useState<number>(() => {
+    return brandOptions[0]?.id || product.id;
+  });
+
+  const activeProduct = useMemo(() => {
+    return brandOptions.find(o => o.id === selectedOptionId) || brandOptions[0] || {
+      id: product.id,
+      brandName: product.brand?.name || "Unknown Brand",
+      price: product.price,
+      sku: product.sku,
+      part_number: product.part_number,
+      is_on_offer: product.is_on_offer,
+      offer_price: product.offer_price,
+      inventories: product.inventories || [],
+      status: product.status,
+      weight: product.weight
+    };
+  }, [brandOptions, selectedOptionId, product]);
+
+  const availableInventories = activeProduct.inventories?.filter((i: any) => i.quantity > 0) || [];
+  const isInCart = cart.some(item => item.id === activeProduct.id && item.warehouse_id === selectedWarehouseId);
+
+  const mergedProductForModal = useMemo(() => {
+    return {
+      ...product,
+      id: activeProduct.id,
+      sku: activeProduct.sku,
+      part_number: activeProduct.part_number,
+      price: activeProduct.price,
+      is_on_offer: activeProduct.is_on_offer,
+      offer_price: activeProduct.offer_price,
+      weight: activeProduct.weight,
+      brand: { name: activeProduct.brandName },
+      inventories: activeProduct.inventories
+    };
+  }, [product, activeProduct]);
 
   return (
     <Card
       className={cn(
         "overflow-hidden group border-zinc-100 shadow-sm hover:shadow-xl transition-all duration-300",
-        product.status === "Inactive" && "opacity-75 grayscale-[0.5]"
+        activeProduct.status === "Inactive" && "opacity-75 grayscale-[0.5]"
       )}
     >
       <div
         onClick={() => setIsViewModalOpen(true)}
         className="h-48 bg-zinc-50 flex items-center justify-center p-6 relative cursor-pointer"
       >
-        {product.status === "Inactive" ? (
+        {activeProduct.status === "Inactive" ? (
           <div className="absolute top-3 left-3 z-10">
             <Badge className="bg-red-600 text-white border-none font-bold text-[10px] px-2 py-0.5">INACTIVE</Badge>
           </div>
@@ -154,12 +226,12 @@ function ProductCard({ product, priority = false }: { product: Product, priority
           <div className="absolute top-3 left-3 z-10">
             <Badge className="bg-zinc-800 text-white border-none font-bold text-[10px] px-2 py-0.5">OUT OF STOCK</Badge>
           </div>
-        ) : availableInventories.reduce((acc, inv) => acc + inv.quantity, 0) <= 5 ? (
+        ) : availableInventories.reduce((acc: number, inv: any) => acc + inv.quantity, 0) <= 5 ? (
           <div className="absolute top-3 left-3 z-10">
             <Badge className="bg-orange-500 text-white border-none font-bold text-[10px] px-2 py-0.5 animate-pulse">LOW STOCK</Badge>
           </div>
         ) : null}
-        {product.is_on_offer && (
+        {activeProduct.is_on_offer && (
           <div className="absolute top-3 right-3 z-10">
             <Badge className="bg-rose-600 hover:bg-rose-700 text-white border-none font-black text-[10px] px-2.5 py-0.5 uppercase tracking-wider shadow-sm flex items-center gap-1 animate-pulse">
               <Zap className="h-3 w-3 fill-current" /> Save Big
@@ -170,17 +242,17 @@ function ProductCard({ product, priority = false }: { product: Product, priority
       </div>
       <CardContent className="p-6 pb-2">
         <div className="text-xs font-bold text-[#0052cc] mb-2 uppercase tracking-tighter line-clamp-1">
-          {product.brand?.name || "Unknown Brand"}
+          {activeProduct.brandName}
         </div>
         <h3 className="text-lg font-bold line-clamp-1 group-hover:text-[#0052cc] transition-colors">
           {product.name}
         </h3>
-        <p className="text-sm text-[#64748b] mt-1 font-medium">SKU: {product.sku}</p>
+        <p className="text-sm text-[#64748b] mt-1 font-medium">SKU: {activeProduct.sku}</p>
 
         <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs border-t border-[#f1f5f9] pt-2">
           <div>
             <span className="text-[#94a3b8] font-bold block uppercase tracking-wider text-[9px]">Part No (OEM)</span>
-            <span className="font-semibold text-zinc-700">{product.part_number || "—"}</span>
+            <span className="font-semibold text-zinc-700">{activeProduct.part_number || "—"}</span>
           </div>
           <div>
             <span className="text-[#94a3b8] font-bold block uppercase tracking-wider text-[9px]">Engine</span>
@@ -192,24 +264,45 @@ function ProductCard({ product, priority = false }: { product: Product, priority
           </div>
         </div>
 
+        {/* Dynamic Brand Dropdown Selector */}
+        {brandOptions.length > 1 && (
+          <div className="mt-4 pt-3 border-t border-[#f1f5f9]">
+            <label className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-widest mb-1.5 block">Select Brand Option</label>
+            <select
+              className="w-full h-10 px-3 border border-[#cbd5e1] rounded-md text-[12px] font-bold bg-white outline-none focus:ring-2 focus:ring-blue-50"
+              value={selectedOptionId}
+              onChange={(e) => {
+                setSelectedOptionId(Number(e.target.value));
+                setSelectedWarehouseId(""); // reset selected warehouse when brand changes
+              }}
+            >
+              {brandOptions.map(opt => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.brandName} - {currency} {Number(opt.is_on_offer ? opt.offer_price : opt.price).toLocaleString()} {opt.is_on_offer ? "(On Offer)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="mt-4 flex items-center justify-between">
-          {product.is_on_offer ? (
+          {activeProduct.is_on_offer ? (
             <div className="flex flex-col">
               <span className="line-through text-xs font-bold text-zinc-400">
-                {currency} {Number(product.price).toLocaleString()}
+                {currency} {Number(activeProduct.price).toLocaleString()}
               </span>
               <span className="text-xl font-black text-rose-600 tracking-tight flex items-center gap-1 animate-pulse">
-                {currency} {Number(product.offer_price).toLocaleString()}
+                {currency} {Number(activeProduct.offer_price).toLocaleString()}
               </span>
             </div>
           ) : (
             <span className="text-xl font-bold text-[#1e293b] tracking-tight">
-              {currency} {Number(product.price).toLocaleString()}
+              {currency} {Number(activeProduct.price).toLocaleString()}
             </span>
           )}
           <div className="flex gap-1.5">
             <span className="text-[10px] font-bold bg-[#eff6ff] text-[#0052cc] px-2 py-1 rounded uppercase tracking-wider">
-              {product.weight ? `${Number(product.weight).toFixed(2)} KG` : "1.00 KG"}
+              {activeProduct.weight ? `${Number(activeProduct.weight).toFixed(2)} KG` : "1.00 KG"}
             </span>
             <span className={cn("text-[10px] font-black border px-2.5 py-1 rounded uppercase tracking-wider", getCategoryColor(product.category?.name || "N/A"))}>
               {product.category?.name || "Uncategorized"}
@@ -229,14 +322,14 @@ function ProductCard({ product, priority = false }: { product: Product, priority
             )}
             value={selectedWarehouseId}
             onChange={(e) => setSelectedWarehouseId(Number(e.target.value))}
-            disabled={product.status === "Inactive" || availableInventories.length === 0}
+            disabled={activeProduct.status === "Inactive" || availableInventories.length === 0}
           >
             {availableInventories.length === 0 ? (
               <option>Out of Stock Globally</option>
             ) : (
               <>
                 <option value="">Select Warehouse...</option>
-                {availableInventories.map(inv => (
+                {availableInventories.map((inv: any) => (
                   <option key={inv.warehouse_id} value={inv.warehouse_id}>
                     {inv.warehouse.name} ({inv.quantity} PCS)
                   </option>
@@ -250,7 +343,7 @@ function ProductCard({ product, priority = false }: { product: Product, priority
         <Button
           className={cn(
             "w-full group font-bold uppercase text-[11px] tracking-wider h-12 transition-all duration-300 rounded-md shadow-sm",
-            product.status === "Inactive" || availableInventories.length === 0
+            activeProduct.status === "Inactive" || availableInventories.length === 0
               ? "bg-[#f1f5f9] text-[#94a3b8] cursor-not-allowed"
               : !selectedWarehouseId
                 ? "bg-white text-[#0052cc] border border-[#e2e8f0] hover:border-[#0052cc] cursor-default"
@@ -258,7 +351,7 @@ function ProductCard({ product, priority = false }: { product: Product, priority
                   ? "bg-[#ef4444] text-white hover:bg-[#dc2626] shadow-red-100" // Red for Remove
                   : "bg-[#22c55e] text-white hover:bg-[#16a34a] shadow-green-100" // Green for Add
           )}
-          disabled={product.status === "Inactive" || availableInventories.length === 0}
+          disabled={activeProduct.status === "Inactive" || availableInventories.length === 0}
           onClick={() => {
             if (!selectedWarehouseId) {
               selectRef.current?.focus();
@@ -269,15 +362,24 @@ function ProductCard({ product, priority = false }: { product: Product, priority
             }
 
             if (isInCart) {
-              removeFromCart(product.id, Number(selectedWarehouseId));
+              removeFromCart(activeProduct.id, Number(selectedWarehouseId));
               toast.error(`${product.name} removed from cart`, {
                 style: { background: '#ef4444', color: '#fff', fontWeight: 'bold', fontSize: '12px' }
               });
             } else {
-              const inv = availableInventories.find(i => i.warehouse_id === selectedWarehouseId);
+              const inv = availableInventories.find((i: any) => i.warehouse_id === selectedWarehouseId);
               if (inv) {
-                addToCart(product, inv.warehouse_id, inv.warehouse.name);
-                toast.success(`${product.name} added to cart!`, {
+                const cartProduct = {
+                  ...product,
+                  id: activeProduct.id,
+                  sku: activeProduct.sku,
+                  price: activeProduct.price,
+                  is_on_offer: activeProduct.is_on_offer,
+                  offer_price: activeProduct.offer_price,
+                  brand: { name: activeProduct.brandName }
+                };
+                addToCart(cartProduct, inv.warehouse_id, inv.warehouse.name);
+                toast.success(`${product.name} (${activeProduct.brandName}) added to cart!`, {
                   style: {
                     background: '#22c55e',
                     color: '#fff',
@@ -292,7 +394,7 @@ function ProductCard({ product, priority = false }: { product: Product, priority
             }
           }}
         >
-          {product.status === "Inactive"
+          {activeProduct.status === "Inactive"
             ? "Unavailable"
             : availableInventories.length === 0
               ? "Out of Stock"
@@ -307,7 +409,7 @@ function ProductCard({ product, priority = false }: { product: Product, priority
       <ProductViewModal
         isOpen={isViewModalOpen}
         onClose={() => setIsViewModalOpen(false)}
-        product={product}
+        product={mergedProductForModal}
       />
     </Card>
   );

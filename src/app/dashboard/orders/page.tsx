@@ -716,7 +716,7 @@ function AdminOrdersPageInner() {
 
   const handleStatusChange = async (id: number, status: string) => {
     const statusRank: Record<string, number> = {
-      Pending: 1, Processing: 2, Shipped: 3, Delivered: 4, Cancelled: 5,
+      Pending: 1, Processing: 2, Shipped: 3, Arrived: 4, Delivered: 5, Returned: 6, Cancelled: 6,
     };
     const order = orders.find((o: any) => o.id === id);
     const currentRank = statusRank[order?.status ?? ""] ?? 0;
@@ -755,7 +755,7 @@ function AdminOrdersPageInner() {
 
     // Status progression rank — orders cannot be moved to a lower rank
     const statusRank: Record<string, number> = {
-      Pending: 1, Processing: 2, Shipped: 3, Delivered: 4, Cancelled: 5,
+      Pending: 1, Processing: 2, Shipped: 3, Arrived: 4, Delivered: 5, Returned: 6, Cancelled: 6,
     };
     const targetRank = statusRank[status] ?? 0;
 
@@ -983,7 +983,7 @@ function AdminOrdersPageInner() {
     return filteredOrders.slice(startIndex, startIndex + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
 
-  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Delivered", "Cancelled", "Cancellation Requested"];
+  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Arrived", "Delivered", "Returned", "Cancelled", "Cancellation Requested"];
 
   return (
     <div className="space-y-4 p-3 sm:p-6">
@@ -1650,10 +1650,13 @@ function AdminOrdersPageInner() {
                           <div className="flex items-center justify-center gap-1.5">
                             {updatingOrderIds[order.id] && <Loader2 className="h-3 w-3 animate-spin text-[#0052cc] shrink-0" />}
                             <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                              order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : order.status === "Processing" ? "bg-orange-500 text-white" :
-                                order.status === "Shipped" || order.status === "In Transit" ? "bg-blue-600 text-white" :
-                                  order.status === "Delivered" ? "bg-emerald-500 text-white" :
-                                    (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
+                              order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+                              order.status === "Processing" ? "bg-orange-500 text-white" :
+                              (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
+                              order.status === "Arrived" ? "bg-indigo-600 text-white" :
+                              order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                              order.status === "Returned" ? "bg-purple-600 text-white" :
+                              (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
                             )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
                           </div>
                           <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",
@@ -1685,9 +1688,14 @@ function AdminOrdersPageInner() {
                                   <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                 </DropdownMenuItem>
                               )}
-                              {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped" || order.status === "In Transit") && (
+                              {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped") && (
+                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Arrived')} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                  <MapPin className="mr-2 h-4 w-4 text-indigo-400" /> Mark Arrived
+                                </DropdownMenuItem>
+                              )}
+                              {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped" || order.status === "Arrived" || order.status === "In Transit") && (
                                 <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
-                                  <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
+                                  <CheckCircle2 className="mr-2 h-4 w-4 animate-pulse" /> Mark Delivered
                                 </DropdownMenuItem>
                               )}
 
@@ -1759,8 +1767,10 @@ function AdminOrdersPageInner() {
               currentSelectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
                 currentSelectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
                   currentSelectedOrder?.status === "Shipped" || currentSelectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
-                    currentSelectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
-                      "bg-zinc-200 text-zinc-700"
+                    currentSelectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" :
+                      currentSelectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+                        currentSelectedOrder?.status === "Returned" ? "bg-purple-600 text-white" :
+                          "bg-zinc-200 text-zinc-700"
             )}>
               {currentSelectedOrder?.status === "In Transit" ? "SHIPPED" : currentSelectedOrder?.status}
             </Badge>

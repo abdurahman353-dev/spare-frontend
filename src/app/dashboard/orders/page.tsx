@@ -1896,11 +1896,11 @@ function AdminOrdersPageInner() {
                       <div className="h-9 w-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-700 font-black text-xs border border-indigo-200">
                         {currentSelectedOrder.driver.name.substring(0, 2).toUpperCase()}
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-zinc-800">{currentSelectedOrder.driver.name}</p>
-                        {currentSelectedOrder.driver.phone && <p className="text-xs text-zinc-500">{currentSelectedOrder.driver.phone}</p>}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-zinc-800 truncate">{currentSelectedOrder.driver.name}</p>
+                        {currentSelectedOrder.driver.phone && <p className="text-xs text-zinc-500 truncate">{currentSelectedOrder.driver.phone}</p>}
                         {currentSelectedOrder.driver.vehicle_plate && (
-                          <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                          <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block truncate max-w-full">
                             Plate: {currentSelectedOrder.driver.vehicle_plate}
                           </p>
                         )}
@@ -2841,11 +2841,11 @@ function AdminOrdersPageInner() {
                   <div className="h-9 w-9 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-700 font-black text-xs border border-indigo-200">
                     {d.name.substring(0, 2).toUpperCase()}
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-zinc-800">{d.name}</p>
-                    {d.phone && <p className="text-xs text-zinc-500">{d.phone}</p>}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-zinc-800 truncate">{d.name}</p>
+                    {d.phone && <p className="text-xs text-zinc-500 truncate">{d.phone}</p>}
                     {d.vehicle_plate && (
-                      <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">{d.vehicle_plate}</p>
+                      <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block truncate max-w-full">{d.vehicle_plate}</p>
                     )}
                   </div>
                 </div>

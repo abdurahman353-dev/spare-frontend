@@ -16,7 +16,7 @@ const navLinks = [
   { name: "Contact", href: "/contact" },
 ];
 
-import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, CreditCard, ChevronDown, LayoutDashboard, MapPin } from "lucide-react";
+import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, CreditCard, ChevronDown, LayoutDashboard, MapPin, Truck } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/components/providers/SettingsProvider";
@@ -117,7 +117,7 @@ export function Navbar() {
                     </div>
                     <div className="hidden lg:flex flex-col items-start leading-none">
                       <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                        {user?.role === "superadmin" ? "Super Admin" : user?.role === "admin" ? "Admin" : "Customer"}
+                        {user?.role === "superadmin" ? "Super Admin" : user?.role === "admin" ? "Admin" : user?.role === "delivery" ? "Driver" : "Customer"}
                       </span>
                       <span className="text-sm font-bold text-zinc-900 uppercase tracking-tighter flex items-center gap-1 group-hover:text-primary transition-colors">
                         {user?.name.split(' ')[0]}
@@ -134,6 +134,13 @@ export function Navbar() {
                           <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">System Role</p>
                           <p className="text-sm font-black text-primary tracking-tighter uppercase mt-0.5">
                             {user?.role === "superadmin" ? "SUPER ADMINISTRATOR" : "ADMINISTRATOR"}
+                          </p>
+                        </>
+                      ) : user?.role === "delivery" ? (
+                        <>
+                          <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">System Role</p>
+                          <p className="text-sm font-black text-indigo-600 tracking-tighter uppercase mt-0.5">
+                            DELIVERY DRIVER
                           </p>
                         </>
                       ) : (
@@ -166,6 +173,12 @@ export function Navbar() {
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push("/dashboard/settings")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
                           <SettingsIcon className="h-4 w-4" /> System Settings
+                        </DropdownMenuItem>
+                      </>
+                    ) : user?.role === "delivery" ? (
+                      <>
+                        <DropdownMenuItem onClick={() => router.push("/delivery")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
+                          <Truck className="h-4 w-4" /> Delivery Portal
                         </DropdownMenuItem>
                       </>
                     ) : (
@@ -265,7 +278,7 @@ export function Navbar() {
                   </div>
                   <div className="flex flex-col leading-tight">
                     <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                      {user?.role === "superadmin" ? "Super Admin" : user?.role === "admin" ? "Admin" : "Customer"}
+                      {user?.role === "superadmin" ? "Super Admin" : user?.role === "admin" ? "Admin" : user?.role === "delivery" ? "Driver" : "Customer"}
                     </span>
                     <span className="text-sm font-bold text-zinc-900">{user?.name}</span>
                   </div>
@@ -281,6 +294,12 @@ export function Navbar() {
                     </Link>
                     <Link href="/dashboard/settings" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
                       <SettingsIcon className="h-4 w-4" /> System Settings
+                    </Link>
+                  </>
+                ) : user?.role === "delivery" ? (
+                  <>
+                    <Link href="/delivery" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
+                      <Truck className="h-4 w-4" /> Delivery Portal
                     </Link>
                   </>
                 ) : (

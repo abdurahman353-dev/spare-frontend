@@ -57,7 +57,13 @@ export default function ChangePasswordPage() {
         password_confirmation: confirmPassword,
       });
       toast.success("Password updated! Welcome to AutoSpare.");
-      router.replace("/account");
+      if (user?.role === "admin" || user?.role === "superadmin") {
+        router.replace("/dashboard");
+      } else if (user?.role === "delivery") {
+        router.replace("/delivery");
+      } else {
+        router.replace("/account");
+      }
     } catch (err: any) {
       // Show every individual validation error as its own toast (e.g. missing uppercase, missing symbol)
       toastErrors(err, "Something went wrong. Please try again.");

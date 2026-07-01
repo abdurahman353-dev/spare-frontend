@@ -77,6 +77,13 @@ function AccountPortalInner() {
     }
   }, []);
 
+  // Redirect delivery drivers to their portal immediately
+  useEffect(() => {
+    if (user && user.role === "delivery") {
+      router.replace("/delivery");
+    }
+  }, [user, router]);
+
   const bizName     = settings.store_name      || "our store";
   const bizTagline  = settings.store_tagline   || "";
   const bizCurrency = settings.currency        || "Ksh";

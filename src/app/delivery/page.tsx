@@ -119,7 +119,8 @@ export default function DeliveryPortal() {
   const [markingArrived, setMarkingArrived]   = useState<number | null>(null);
 
   // Polling refs
-  const knownOrderIdsRef = useRef<Set<number>>(new Set());
+  // Track orderId → assigned driver ID so we detect reassignment of already-visible unassigned orders
+  const knownAssignmentsRef = useRef<Map<number, number | null>>(new Map());
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const secondsRef = useRef<NodeJS.Timeout | null>(null);
   const [secondsSinceSync, setSecondsSinceSync] = useState(0);
@@ -160,31 +161,43 @@ export default function DeliveryPortal() {
     else setIsSyncing(true);
     try {
       const res = await api.get("/delivery/orders");
-      const incoming: Order[] = res.data;
+      const incoming: Order[] = (res.data as any[]);
 
-      // Detect newly assigned orders
-      const incomingIds = new Set(incoming.map(o => o.id));
-      if (knownOrderIdsRef.current.size > 0) {
-        const newIds = [...incomingIds].filter(id => !knownOrderIdsRef.current.has(id));
-        if (newIds.length > 0) {
-          const newOrders = incoming.filter(o => newIds.includes(o.id));
+      // Detect newly ASSIGNED orders — compare delivered_by_user_id changes
+      // This catches both: brand new orders AND previously-unassigned orders that got assigned
+      if (knownAssignmentsRef.current.size > 0 && user) {
+        const newlyAssigned = incoming.filter(o => {
+          const prevAssignee = knownAssignmentsRef.current.get(o.id);
+          const nowAssignedToMe = (o as any).delivered_by_user_id === user.id;
+          const wasNotAssignedToMe = prevAssignee !== user.id;
+          // Fire if: order is NOW assigned to me but previously wasn't (or didn't exist)
+          return nowAssignedToMe && wasNotAssignedToMe;
+        });
+
+        if (newlyAssigned.length > 0) {
           playNotificationSound();
-          newOrders.forEach(o => {
-            toast(`🚚 New order assigned: ${o.tracking_number} — ${o.customer?.name ?? ""} in ${o.shipping_city}`, {
-              duration: 8000,
+          newlyAssigned.forEach(o => {
+            toast(`🚚 Order assigned to you: ${o.tracking_number} — ${o.customer?.name ?? ""} in ${o.shipping_city}`, {
+              duration: 10000,
               style: { background: "#0052cc", color: "#fff", fontWeight: "bold", borderRadius: "12px" },
             });
-            // Browser push notification
             if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
               new Notification("New Delivery Assigned!", {
-                body: `Order ${o.tracking_number} for ${o.customer?.name ?? "Customer"} in ${o.shipping_city}`,
+                body: `Waybill ${o.tracking_number} — ${o.customer?.name ?? "Customer"} in ${o.shipping_city}`,
                 icon: "/favicon.ico",
               });
             }
           });
+          // Bump unread bell count for new assignments
+          setNotifUnread(prev => prev + newlyAssigned.length);
         }
       }
-      knownOrderIdsRef.current = incomingIds;
+
+      // Update the known assignments map with current state
+      const newMap = new Map<number, number | null>();
+      incoming.forEach(o => newMap.set(o.id, (o as any).delivered_by_user_id ?? null));
+      knownAssignmentsRef.current = newMap;
+
       setOrders(incoming);
       setLastSynced(new Date());
       setSecondsSinceSync(0);
@@ -194,7 +207,7 @@ export default function DeliveryPortal() {
       setLoading(false);
       setIsSyncing(false);
     }
-  }, []);
+  }, [user]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -206,8 +219,13 @@ export default function DeliveryPortal() {
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await api.get("/delivery/notifications");
-      setNotifications(res.data.notifications ?? []);
-      setNotifUnread(res.data.unread_count ?? 0);
+      const incoming: Notification[] = res.data.notifications ?? [];
+      setNotifications(incoming);
+      // Bell unread: only count notifications NEWER than last-seen timestamp
+      // stored in localStorage so it persists across polls without re-alerting
+      const lastSeen = parseInt(localStorage.getItem("delivery_notif_last_seen") || "0", 10);
+      const unseen = incoming.filter(n => new Date(n.assigned_at).getTime() > lastSeen);
+      setNotifUnread(unseen.length);
     } catch (_) {}
   }, []);
 
@@ -426,7 +444,12 @@ export default function DeliveryPortal() {
 
             {/* Notification bell */}
             <button
-              onClick={() => { setShowNotifications(true); setNotifUnread(0); }}
+              onClick={() => {
+              setShowNotifications(true);
+              setNotifUnread(0);
+              // Mark all current notifications as seen
+              localStorage.setItem("delivery_notif_last_seen", Date.now().toString());
+            }}
               className="relative h-9 w-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-colors text-white"
             >
               <Bell className="h-4 w-4" />

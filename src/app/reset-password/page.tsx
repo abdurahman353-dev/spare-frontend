@@ -11,6 +11,7 @@ import { motion } from "framer-motion";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import api from "@/lib/axios";
 import toast from "react-hot-toast";
+import { toastErrors } from "@/lib/utils";
 
 function ResetPasswordForm() {
   const searchParams = useSearchParams();
@@ -54,9 +55,13 @@ function ResetPasswordForm() {
       toast.success("Password reset successfully! Please log in.");
       router.push("/login");
     } catch (err: any) {
-      const msg = err.response?.data?.message || "Password reset failed. Please make sure your token is valid and password meets requirements.";
-      setErrorMsg(msg);
-      toast.error(msg);
+      // Collect all password field errors for the inline error block
+      const firstMsg = err.response?.data?.errors?.password?.[0]
+        || err.response?.data?.message
+        || "Password reset failed. Please check the requirements and try again.";
+      setErrorMsg(firstMsg);
+      // Show every individual validation error as its own toast
+      toastErrors(err, "Password reset failed. Please check the requirements and try again.");
     } finally {
       setLoading(false);
     }

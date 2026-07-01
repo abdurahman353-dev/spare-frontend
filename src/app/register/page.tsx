@@ -12,6 +12,7 @@ import { useSettings } from "@/components/providers/SettingsProvider";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { getPasswordStrength, isValidEmail } from "@/lib/validation";
+import { toastErrors } from "@/lib/utils";
 
 function RegisterPageInner() {
   const { register } = useAuth();
@@ -118,7 +119,7 @@ function RegisterPageInner() {
       }, redirect);
       toast.success("Account created successfully!");
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Registration failed. Please check your details.");
+      toastErrors(err, "Registration failed. Please check your details.");
     } finally {
       setLoading(false);
     }

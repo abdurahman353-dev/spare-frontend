@@ -1,8 +1,29 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { toast } from "react-hot-toast"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+export function toastErrors(err: any, fallbackMessage: string = "An error occurred") {
+  if (err.response?.data?.errors) {
+    const errorData = err.response.data.errors;
+    Object.keys(errorData).forEach((field) => {
+      const messages = errorData[field];
+      if (Array.isArray(messages)) {
+        messages.forEach((msg) => {
+          toast.error(msg, { duration: 5000 });
+        });
+      } else if (typeof messages === "string") {
+        toast.error(messages, { duration: 5000 });
+      }
+    });
+  } else if (err.response?.data?.message) {
+    toast.error(err.response.data.message);
+  } else {
+    toast.error(fallbackMessage);
+  }
 }
 
 export function getCategoryColor(categoryName: string) {

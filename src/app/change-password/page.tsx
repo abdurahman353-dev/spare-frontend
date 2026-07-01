@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { motion } from "framer-motion";
+import { toastErrors } from "@/lib/utils";
 
 export default function ChangePasswordPage() {
   const { user, changePassword, logout, loading } = useAuth();
@@ -58,10 +59,9 @@ export default function ChangePasswordPage() {
       toast.success("Password updated! Welcome to AutoSpare.");
       router.replace("/account");
     } catch (err: any) {
-      const msg = err.response?.data?.errors?.current_password?.[0]
-        || err.response?.data?.message
-        || "Something went wrong. Please try again.";
-      toast.error(msg);
+      // Show every individual validation error as its own toast (e.g. missing uppercase, missing symbol)
+      toastErrors(err, "Something went wrong. Please try again.");
+      // Also set inline field error for current_password if that's what failed
       if (err.response?.data?.errors?.current_password) {
         setErrors({ currentPassword: err.response.data.errors.current_password[0] });
       }

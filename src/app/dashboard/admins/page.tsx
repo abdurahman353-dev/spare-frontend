@@ -36,7 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import api from "@/lib/axios";
-import { cn } from "@/lib/utils";
+import { cn, toastErrors } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
 interface User {
@@ -265,7 +265,7 @@ export default function AdminsAndAuditsPage() {
       fetchAuditLogs();
     } catch (err: any) {
       console.error("Failed to create admin:", err);
-      toast.error(err.response?.data?.message || "Failed to create administrator. Email may already be in use.");
+      toastErrors(err, "Failed to create administrator. Email may already be in use.");
     } finally {
       setIsSaving(false);
     }

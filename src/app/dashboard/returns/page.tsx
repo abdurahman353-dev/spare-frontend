@@ -76,8 +76,8 @@ export default function ReturnsManagementPage() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/returns");
-      setReturns(res.data);
+      const res = await api.get("/returns?per_page=-1");
+      setReturns(Array.isArray(res.data) ? res.data : res.data.data ?? []);
     } catch (err) {
       console.error("Failed to fetch returns:", err);
       toast.error("Failed to load return requests");

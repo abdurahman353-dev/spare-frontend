@@ -221,11 +221,9 @@ export default function DeliveryPortal() {
       const res = await api.get("/delivery/notifications");
       const incoming: Notification[] = res.data.notifications ?? [];
       setNotifications(incoming);
-      // Bell unread: only count notifications NEWER than last-seen timestamp
-      // stored in localStorage so it persists across polls without re-alerting
-      const lastSeen = parseInt(localStorage.getItem("delivery_notif_last_seen") || "0", 10);
-      const unseen = incoming.filter(n => new Date(n.assigned_at).getTime() > lastSeen);
-      setNotifUnread(unseen.length);
+      // NOTE: notifUnread is ONLY controlled by fetchOrders (when a new assignment
+      // is detected). fetchNotifications just populates the drawer content.
+      // Do NOT set notifUnread here — it would overwrite the badge every 30s.
     } catch (_) {}
   }, []);
 

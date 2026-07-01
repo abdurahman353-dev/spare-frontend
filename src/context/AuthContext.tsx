@@ -15,6 +15,8 @@ interface User {
   address?: string;
   phone?: string | null;
   total_spent?: number;
+  vehicle_plate?: string | null;
+  license_number?: string | null;
 }
 
 interface AuthContextType {

@@ -229,6 +229,38 @@ function AdminOrdersPageInner() {
   const [isProcessingAction, setIsProcessingAction] = useState(false);
   const [updatingOrderIds, setUpdatingOrderIds] = useState<Record<number, boolean>>({});
 
+  // Assign Driver State
+  const [isAssignDriverModalOpen, setIsAssignDriverModalOpen] = useState(false);
+  const [assignDriverTarget, setAssignDriverTarget] = useState<any>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [isAssigningDriver, setIsAssigningDriver] = useState(false);
+
+  const handleOpenAssignDriver = (order: any) => {
+    setAssignDriverTarget(order);
+    setSelectedDriverId(order.delivered_by_user_id?.toString() || "");
+    setIsAssignDriverModalOpen(true);
+  };
+
+  const handleAssignDriver = async () => {
+    if (!assignDriverTarget) return;
+    setIsAssigningDriver(true);
+    try {
+      const res = await api.post(`/delivery/orders/${assignDriverTarget.id}/assign-driver`, {
+        driver_user_id: selectedDriverId ? parseInt(selectedDriverId) : null,
+      });
+      toast.success(res.data.message || "Driver assigned successfully!");
+      setIsAssignDriverModalOpen(false);
+      setAssignDriverTarget(null);
+      setSelectedDriverId("");
+      fetchOrders(true);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to assign driver.");
+    } finally {
+      setIsAssigningDriver(false);
+    }
+  };
+
   const handleApproveCancel = async () => {
     if (!currentSelectedOrder) return;
     setIsProcessingAction(true);
@@ -620,16 +652,18 @@ function AdminOrdersPageInner() {
 
   const fetchMetadata = async () => {
     try {
-      const [wRes, cRes, pRes, locRes] = await Promise.all([
+      const [wRes, cRes, pRes, locRes, dRes] = await Promise.all([
         api.get("/warehouses"),
         api.get("/customers", { params: { per_page: -1 } }),
         api.get("/products", { params: { per_page: -1 } }),
         api.get("/locations/countries"),
+        api.get("/admins"),
       ]);
       setWarehouses(wRes.data);
       setCustomers(cRes.data);
       setProducts(pRes.data);
       setCountriesData(locRes.data);
+      setDrivers((dRes.data || []).filter((u: any) => u.role === "delivery" && u.is_active));
     } catch (err) {
       console.error("Failed to fetch metadata:", err);
     }
@@ -1668,6 +1702,20 @@ function AdminOrdersPageInner() {
                               order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "Refunded" :
                                 "Payment Pending"}
                           </Badge>
+                          {/* Driver badge for Shipped/Arrived/Delivered orders */}
+                          {(order.status === "Shipped" || order.status === "Arrived" || order.status === "Delivered") && (() => {
+                            const assignedDriver = drivers.find((d: any) => d.id === order.delivered_by_user_id);
+                            return assignedDriver ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full">
+                                <Truck className="h-2.5 w-2.5" />
+                                {assignedDriver.name.split(" ")[0]}
+                              </span>
+                            ) : (order.status === "Shipped" || order.status === "Arrived") ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
+                                No Driver
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell className="px-6 text-right">
@@ -1727,6 +1775,20 @@ function AdminOrdersPageInner() {
                                     className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
                                   >
                                     <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                              {/* Assign Driver — visible for Shipped or Arrived orders */}
+                              {(order.status === "Shipped" || order.status === "Arrived") && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuLabel className="text-[10px] font-black text-indigo-400 uppercase px-2 py-1.5">Delivery Assignment</DropdownMenuLabel>
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenAssignDriver(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600"
+                                  >
+                                    <UserPlus className="mr-2 h-4 w-4" />
+                                    {order.delivered_by_user_id ? "Reassign Driver" : "Assign Driver"}
                                   </DropdownMenuItem>
                                 </>
                               )}
@@ -1824,6 +1886,42 @@ function AdminOrdersPageInner() {
                 <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
               </div>
             </div>
+
+            {currentSelectedOrder?.shipping_method !== "Pickup" && (currentSelectedOrder?.driver || currentSelectedOrder?.delivery_signature_url) && (
+              <div className="mb-6">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Delivery &amp; Driver Details</h4>
+                <div className="bg-white p-4 rounded-xl border border-zinc-200 space-y-3">
+                  {currentSelectedOrder?.driver && (
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-700 font-black text-xs border border-indigo-200">
+                        {currentSelectedOrder.driver.name.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-zinc-800">{currentSelectedOrder.driver.name}</p>
+                        {currentSelectedOrder.driver.phone && <p className="text-xs text-zinc-500">{currentSelectedOrder.driver.phone}</p>}
+                        {currentSelectedOrder.driver.vehicle_plate && (
+                          <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                            Plate: {currentSelectedOrder.driver.vehicle_plate}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {currentSelectedOrder?.delivery_signature_url && (
+                    <div className="pt-2 border-t border-zinc-100">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Recipient Signature (POD)</p>
+                      <div className="border border-zinc-200 rounded-lg p-2 bg-zinc-50/50 inline-block">
+                        <img
+                          src={currentSelectedOrder.delivery_signature_url}
+                          alt="Customer Signature"
+                          className="h-20 max-w-full object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
@@ -2693,6 +2791,76 @@ function AdminOrdersPageInner() {
             <Button variant="outline" className="font-bold" onClick={() => setIsCompleteRefundModalOpen(false)}>Cancel</Button>
             <Button className="bg-amber-600 hover:bg-amber-700 text-white font-bold" onClick={handleCompleteRefund} disabled={isProcessingAction || !refundTransactionId.trim()}>
               {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Submit Refund Ref
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ── Assign Driver Modal ─────────────────────────────────────── */}
+      <Dialog open={isAssignDriverModalOpen} onOpenChange={setIsAssignDriverModalOpen}>
+        <DialogContent className="rounded-2xl shadow-2xl sm:max-w-[420px] bg-white border-none p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-4 border-b bg-indigo-50">
+            <DialogTitle className="font-bold text-zinc-900 flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-indigo-600" />
+              Assign Delivery Driver
+            </DialogTitle>
+            <DialogDescription className="text-xs text-zinc-500">
+              Order: <span className="font-bold text-zinc-700">{assignDriverTarget?.tracking_number}</span>
+              {assignDriverTarget?.delivered_by_user_id && (
+                <span className="ml-2 text-indigo-600 font-bold">(currently assigned)</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Select Driver</label>
+              {drivers.length === 0 ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-xs text-amber-700 font-bold">No active delivery drivers found.</p>
+                  <p className="text-xs text-amber-600 mt-1">Create delivery drivers in Admins &amp; Audits → Delivery Drivers.</p>
+                </div>
+              ) : (
+                <select
+                  value={selectedDriverId}
+                  onChange={(e) => setSelectedDriverId(e.target.value)}
+                  className="w-full h-11 px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-300"
+                >
+                  <option value="">— Unassign / No Driver —</option>
+                  {drivers.map((d) => (
+                    <option key={d.id} value={d.id.toString()}>
+                      {d.name}{d.vehicle_plate ? ` · ${d.vehicle_plate}` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            {selectedDriverId && (() => {
+              const d = drivers.find((dr) => dr.id.toString() === selectedDriverId);
+              if (!d) return null;
+              return (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-center gap-3">
+                  <div className="h-9 w-9 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-700 font-black text-xs border border-indigo-200">
+                    {d.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-zinc-800">{d.name}</p>
+                    {d.phone && <p className="text-xs text-zinc-500">{d.phone}</p>}
+                    {d.vehicle_plate && (
+                      <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">{d.vehicle_plate}</p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter className="p-4 bg-zinc-50 border-t m-0">
+            <Button variant="outline" className="font-bold" onClick={() => setIsAssignDriverModalOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+              onClick={handleAssignDriver}
+              disabled={isAssigningDriver}
+            >
+              {isAssigningDriver ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
+              {selectedDriverId ? "Assign Driver" : "Remove Assignment"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -234,7 +234,9 @@ export default function DeliveryPortal() {
             </div>
             <div>
               <h1 className="text-sm font-black uppercase tracking-wider text-slate-800">Delivery Hub</h1>
-              <p className="text-[10px] text-zinc-500 font-bold uppercase">{user.name}</p>
+              <p className="text-[10px] text-zinc-500 font-bold uppercase">
+                {user.name} {user.vehicle_plate ? `| ${user.vehicle_plate}` : ""}
+              </p>
             </div>
           </div>
           <button 

@@ -30,7 +30,8 @@ import {
   Smartphone,
   Info,
   Pencil,
-  Download
+  Download,
+  Truck
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -49,6 +50,8 @@ interface User {
   city: string | null;
   address: string | null;
   created_at: string;
+  vehicle_plate?: string | null;
+  license_number?: string | null;
 }
 
 interface AuditLog {
@@ -63,7 +66,7 @@ interface AuditLog {
 }
 
 export default function AdminsAndAuditsPage() {
-  const [activeTab, setActiveTab] = useState<"admins" | "audits">("admins");
+  const [activeTab, setActiveTab] = useState<"admins" | "delivery" | "audits">("admins");
   
   // Data State
   const [admins, setAdmins] = useState<User[]>([]);
@@ -76,6 +79,7 @@ export default function AdminsAndAuditsPage() {
   const [isTogglingId, setIsTogglingId] = useState<number | null>(null);
 
   const [adminSearch, setAdminSearch] = useState("");
+  const [driverSearch, setDriverSearch] = useState("");
   const [auditSearch, setAuditSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -97,7 +101,9 @@ export default function AdminsAndAuditsPage() {
     phone: "",
     country: "",
     city: "",
-    address: ""
+    address: "",
+    vehicle_plate: "",
+    license_number: ""
   });
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -109,7 +115,9 @@ export default function AdminsAndAuditsPage() {
     phone: "",
     country: "",
     city: "",
-    address: ""
+    address: "",
+    vehicle_plate: "",
+    license_number: ""
   });
 
   const handleOpenEditModal = (admin: User) => {
@@ -121,7 +129,9 @@ export default function AdminsAndAuditsPage() {
       phone: admin.phone || "",
       country: admin.country || "",
       city: admin.city || "",
-      address: admin.address || ""
+      address: admin.address || "",
+      vehicle_plate: admin.vehicle_plate || "",
+      license_number: admin.license_number || ""
     });
     setIsEditModalOpen(true);
   };
@@ -244,7 +254,9 @@ export default function AdminsAndAuditsPage() {
         phone: "",
         country: "",
         city: "",
-        address: ""
+        address: "",
+        vehicle_plate: "",
+        license_number: ""
       });
       setShowPassword(false);
       setShowConfirmPassword(false);
@@ -275,13 +287,28 @@ export default function AdminsAndAuditsPage() {
   };
 
   const filteredAdmins = useMemo(() => {
-    return admins.filter(admin => 
-      admin.name.toLowerCase().includes(adminSearch.toLowerCase()) ||
-      admin.email.toLowerCase().includes(adminSearch.toLowerCase()) ||
-      (admin.phone && admin.phone.includes(adminSearch)) ||
-      (admin.city && admin.city.toLowerCase().includes(adminSearch.toLowerCase()))
-    );
+    return admins
+      .filter(admin => admin.role === "admin" || admin.role === "superadmin")
+      .filter(admin => 
+        admin.name.toLowerCase().includes(adminSearch.toLowerCase()) ||
+        admin.email.toLowerCase().includes(adminSearch.toLowerCase()) ||
+        (admin.phone && admin.phone.includes(adminSearch)) ||
+        (admin.city && admin.city.toLowerCase().includes(adminSearch.toLowerCase()))
+      );
   }, [admins, adminSearch]);
+
+  const filteredDrivers = useMemo(() => {
+    return admins
+      .filter(admin => admin.role === "delivery")
+      .filter(admin => 
+        admin.name.toLowerCase().includes(driverSearch.toLowerCase()) ||
+        admin.email.toLowerCase().includes(driverSearch.toLowerCase()) ||
+        (admin.phone && admin.phone.includes(driverSearch)) ||
+        (admin.city && admin.city.toLowerCase().includes(driverSearch.toLowerCase())) ||
+        (admin.vehicle_plate && admin.vehicle_plate.toLowerCase().includes(driverSearch.toLowerCase())) ||
+        (admin.license_number && admin.license_number.toLowerCase().includes(driverSearch.toLowerCase()))
+      );
+  }, [admins, driverSearch]);
 
   const getActionSeverity = (action: string) => {
     const act = action.toUpperCase();
@@ -427,6 +454,7 @@ export default function AdminsAndAuditsPage() {
 
   // Pagination
   const [adminPage, setAdminPage] = useState(1);
+  const [driverPage, setDriverPage] = useState(1);
   const [auditPage, setAuditPage] = useState(1);
   const PAGE_SIZE = 15;
 
@@ -435,6 +463,11 @@ export default function AdminsAndAuditsPage() {
     return filteredAdmins.slice(start, start + PAGE_SIZE);
   }, [filteredAdmins, adminPage]);
 
+  const paginatedDrivers = useMemo(() => {
+    const start = (driverPage - 1) * PAGE_SIZE;
+    return filteredDrivers.slice(start, start + PAGE_SIZE);
+  }, [filteredDrivers, driverPage]);
+
   const paginatedAuditLogs = useMemo(() => {
     const start = (auditPage - 1) * PAGE_SIZE;
     return filteredAuditLogs.slice(start, start + PAGE_SIZE);
@@ -442,6 +475,7 @@ export default function AdminsAndAuditsPage() {
 
   // Reset pagination when search or filters change
   useMemo(() => { setAdminPage(1); }, [adminSearch]);
+  useMemo(() => { setDriverPage(1); }, [driverSearch]);
   useMemo(() => { 
     setAuditPage(1); 
   }, [auditSearch, dateFrom, dateTo, selectedAction, selectedActor, ipFilter, selectedSeverity]);
@@ -486,15 +520,29 @@ export default function AdminsAndAuditsPage() {
           {activeTab === "admins" && (
             <Button 
               className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
-              onClick={() => setIsCreateModalOpen(true)}
+              onClick={() => {
+                setFormData(prev => ({ ...prev, role: "admin" }));
+                setIsCreateModalOpen(true);
+              }}
             >
               <Plus className="mr-2 h-4 w-4" /> Create Administrator
+            </Button>
+          )}
+          {activeTab === "delivery" && (
+            <Button 
+              className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
+              onClick={() => {
+                setFormData(prev => ({ ...prev, role: "delivery" }));
+                setIsCreateModalOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Create Delivery Driver
             </Button>
           )}
           <Button
             variant="outline"
             className="rounded-lg h-10 border-zinc-200"
-            onClick={activeTab === "admins" ? fetchAdmins : fetchAuditLogs}
+            onClick={activeTab === "audits" ? fetchAuditLogs : fetchAdmins}
           >
             <RefreshCw className="h-4 w-4 text-zinc-500" />
           </Button>
@@ -514,6 +562,18 @@ export default function AdminsAndAuditsPage() {
         >
           <UserCheck className="h-4 w-4" />
           Administrators
+        </button>
+        <button
+          onClick={() => setActiveTab("delivery")}
+          className={cn(
+            "py-2.5 px-6 font-semibold text-sm border-b-2 transition-all -mb-px flex items-center gap-2",
+            activeTab === "delivery"
+              ? "border-primary text-primary"
+              : "border-transparent text-zinc-500 hover:text-zinc-800"
+          )}
+        >
+          <Truck className="h-4 w-4" />
+          Delivery Drivers
         </button>
         <button
           onClick={() => setActiveTab("audits")}
@@ -680,7 +740,143 @@ export default function AdminsAndAuditsPage() {
         </div>
       )}
 
-      {/* TAB CONTENTS: AUDITS */}
+      {/* TAB CONTENTS: DELIVERY DRIVERS */}
+      {activeTab === "delivery" && (
+        <div className="space-y-4">
+          {/* Search Bar */}
+          <div className="relative max-w-md bg-white rounded-lg shadow-sm border border-zinc-100 p-1.5 flex items-center">
+            <Search className="h-4 w-4 text-zinc-400 ml-3" />
+            <Input 
+              placeholder="Search drivers by name, plate, license or phone..." 
+              className="pl-3 h-9 border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm font-medium"
+              value={driverSearch}
+              onChange={(e) => setDriverSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Table Container */}
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-100 overflow-x-auto custom-scrollbar">
+            <Table>
+              <TableHeader className="bg-zinc-50/50 border-b border-zinc-100">
+                <TableRow>
+                  <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Driver</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Contact Info</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Vehicle Plate</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">License Number</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Status</TableHead>
+                  <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px] text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loadingAdmins ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-48 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm text-zinc-500 font-medium">Loading delivery team...</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredDrivers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-48 text-center text-zinc-500 font-medium">
+                      No delivery drivers matching criteria found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedDrivers.map((driver) => (
+                    <TableRow key={driver.id} className="hover:bg-zinc-50/50 transition-colors">
+                      <TableCell className="px-6">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 bg-zinc-100 rounded-lg flex items-center justify-center text-zinc-600 font-bold text-xs border border-zinc-200">
+                            {driver.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-zinc-900 text-sm">{driver.name}</div>
+                            <div className="text-zinc-400 text-xs font-mono">ID: {driver.id}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-xs text-zinc-600">
+                            <Mail className="h-3.5 w-3.5 text-zinc-400" /> {driver.email}
+                          </div>
+                          {driver.phone && (
+                            <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+                              <Phone className="h-3.5 w-3.5 text-zinc-400" /> {driver.phone}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-semibold text-sm text-zinc-700">
+                        {driver.vehicle_plate ? (
+                          <span className="bg-zinc-100 border border-zinc-200 px-2 py-1 rounded text-xs font-black tracking-wider uppercase text-zinc-800">
+                            {driver.vehicle_plate}
+                          </span>
+                        ) : (
+                          <span className="text-zinc-400 text-xs italic">Not Assigned</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium text-xs text-zinc-600 font-mono">
+                        {driver.license_number || <span className="text-zinc-400 italic">N/A</span>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={cn(
+                          "rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase border tracking-wider",
+                          driver.is_active
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-red-50 text-red-700 border-red-200"
+                        )}>
+                          {driver.is_active ? "Active" : "Deactivated"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="px-6 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="font-bold text-xs h-8 rounded-lg flex items-center gap-1 border-zinc-200 text-zinc-700 hover:bg-zinc-50"
+                            onClick={() => handleOpenEditModal(driver)}
+                          >
+                            <Pencil className="h-3 w-3" /> Edit
+                          </Button>
+                          <Button
+                            variant={driver.is_active ? "destructive" : "outline"}
+                            size="sm"
+                            className={cn(
+                              "font-bold text-xs h-8 rounded-lg",
+                              !driver.is_active && "bg-emerald-600 hover:bg-emerald-700 text-white border-none shadow-xs"
+                            )}
+                            onClick={() => handleToggleStatus(driver.id)}
+                            disabled={isTogglingId === driver.id}
+                          >
+                            {isTogglingId === driver.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : driver.is_active ? (
+                              "Deactivate"
+                            ) : (
+                              "Activate"
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <PaginationControls
+            currentPage={driverPage}
+            setCurrentPage={setDriverPage}
+            pageSize={PAGE_SIZE}
+            setPageSize={() => {}}
+            totalItems={filteredDrivers.length}
+            itemName="drivers"
+          />
+        </div>
+      )}
       {activeTab === "audits" && (
         <div className="space-y-4">
           {/* Audit Dashboard & Stats Strip */}
@@ -1053,6 +1249,35 @@ export default function AdminsAndAuditsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Driver & Vehicle Details (Only for delivery role) */}
+              {formData.role === "delivery" && (
+                <div className="space-y-4 pt-3 border-t border-zinc-100">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-primary">3. Driver & Vehicle Profile</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Vehicle Plate Number *</label>
+                      <Input 
+                        placeholder="e.g. KAA 123A" 
+                        className="h-10 border-zinc-200 rounded-lg" 
+                        value={formData.vehicle_plate}
+                        onChange={(e) => setFormData({...formData, vehicle_plate: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Driver License Number *</label>
+                      <Input 
+                        placeholder="e.g. DL-12345678" 
+                        className="h-10 border-zinc-200 rounded-lg" 
+                        value={formData.license_number}
+                        onChange={(e) => setFormData({...formData, license_number: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
               <Button 
@@ -1175,6 +1400,35 @@ export default function AdminsAndAuditsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Driver & Vehicle Details (Only for delivery role) */}
+              {editFormData.role === "delivery" && (
+                <div className="space-y-4 pt-3 border-t border-zinc-100">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-primary">3. Driver & Vehicle Profile</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Vehicle Plate Number *</label>
+                      <Input 
+                        placeholder="e.g. KAA 123A" 
+                        className="h-10 border-zinc-200 rounded-lg" 
+                        value={editFormData.vehicle_plate}
+                        onChange={(e) => setEditFormData({...editFormData, vehicle_plate: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Driver License Number *</label>
+                      <Input 
+                        placeholder="e.g. DL-12345678" 
+                        className="h-10 border-zinc-200 rounded-lg" 
+                        value={editFormData.license_number}
+                        onChange={(e) => setEditFormData({...editFormData, license_number: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
               <Button 

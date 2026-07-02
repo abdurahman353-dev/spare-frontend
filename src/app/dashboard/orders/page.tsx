@@ -132,7 +132,12 @@ function AdminOrdersPageInner() {
   const [isIncidentActionLoading, setIsIncidentActionLoading] = useState<Record<number, boolean>>({});
 
   const activeIncidents = useMemo(() => {
-    return orders.filter(o => o.pin_locked || (o.failed_attempts_count && o.failed_attempts_count > 0));
+    return orders.filter(o => 
+      (o.pin_locked || (o.failed_attempts_count && o.failed_attempts_count > 0)) &&
+      o.status !== "Delivered" && 
+      o.status !== "Cancelled" && 
+      o.status !== "Returned"
+    );
   }, [orders]);
 
   // Audio alert chime using web audio api when a new incident arrives
@@ -1137,85 +1142,85 @@ function AdminOrdersPageInner() {
 
       {/* ── REAL-TIME CRITICAL INCIDENT REPORT CENTER ── */}
       {activeIncidents.length > 0 && (
-        <div className="bg-red-50/70 border border-red-200/80 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-ping shrink-0" />
-            <h2 className="text-sm font-black text-red-800 uppercase tracking-widest flex items-center gap-1.5">
-              <ShieldAlert className="h-4.5 w-4.5 text-red-600" />
+            <div className="h-2.5 w-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
+            <h2 className="text-base font-bold tracking-tight text-zinc-900 flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-red-600" />
               Live Delivery Security Incidents ({activeIncidents.length})
             </h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {activeIncidents.map((inc: any) => {
-              const hasFailure = inc.failed_attempts_count && inc.failed_attempts_count > 0;
               return (
                 <div
                   key={inc.id}
                   className={cn(
-                    "bg-white p-4 rounded-xl border shadow-sm transition-all duration-300 flex flex-col justify-between gap-3 text-left",
+                    "bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between gap-4 text-left",
                     inc.pin_locked
-                      ? "border-red-200 hover:border-red-300 bg-gradient-to-br from-white to-red-50/20"
-                      : "border-amber-200 hover:border-amber-300 bg-gradient-to-br from-white to-amber-50/20"
+                      ? "border-red-200 bg-gradient-to-br from-white to-red-50/10"
+                      : "border-amber-200 bg-gradient-to-br from-white to-amber-50/10"
                   )}
                 >
-                  <div className="space-y-1.5 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">
+                  <div className="space-y-2.5 min-w-0">
+                    <div className="flex items-start justify-between gap-2 border-b border-zinc-100 pb-2">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
                         {inc.tracking_number}
                       </span>
                       <Badge
                         className={cn(
-                          "rounded-full text-[9px] font-black tracking-wider uppercase border-none px-2 py-0.5",
+                          "rounded-full text-[9px] font-bold tracking-wider uppercase border-none px-2.5 py-0.5",
                           inc.pin_locked ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                         )}
                       >
                         {inc.pin_locked ? "🔒 Locked" : "⚠️ Failed Attempt"}
                       </Badge>
                     </div>
-                    <p className="font-extrabold text-slate-800 text-xs truncate">
-                      Cust: {inc.customer?.name || "Retail Customer"}
-                    </p>
-                    <p className="text-[11px] text-zinc-500 font-semibold leading-snug">
-                      {inc.pin_locked ? (
-                        <span className="text-red-600">Locked out after 3 wrong PIN attempts. Delivery blocked.</span>
-                      ) : (
-                        <span className="text-amber-600">
-                          {inc.failed_attempts_count} failed delivery attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
-                        </span>
-                      )}
-                    </p>
+                    <div>
+                      <p className="font-bold text-zinc-900 text-sm truncate">
+                        Cust: {inc.customer?.name || "Retail Customer"}
+                      </p>
+                      <p className="text-xs text-zinc-600 font-medium mt-1 leading-snug">
+                        {inc.pin_locked ? (
+                          <span className="text-red-600 font-semibold">Order locked after 3 incorrect PIN entries. Handover blocked.</span>
+                        ) : (
+                          <span className="text-amber-700 font-semibold">
+                            {inc.failed_attempts_count} failed delivery attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
+                          </span>
+                        )}
+                      </p>
+                    </div>
                     {inc.driver && (
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide">
+                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
                         Driver: {inc.driver.name}
                       </p>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-zinc-100">
+                  <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => { setSelectedOrder(inc); setIsOrderModalOpen(true); }}
-                      className="text-[10px] font-bold h-8 flex-1 border-zinc-200 hover:bg-zinc-50 text-zinc-700"
+                      className="text-xs font-bold h-9 flex-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg transition-colors"
                     >
-                      Inspect GPS / Logs
+                      Inspect Logs
                     </Button>
                     {inc.pin_locked && (
-                      <div className="flex gap-1 flex-1">
+                      <div className="flex gap-1.5 flex-1">
                         <Button
                           size="sm"
                           disabled={isIncidentActionLoading[inc.id]}
                           onClick={() => handleUnlockPin(inc.id)}
-                          className="text-[10px] font-bold h-8 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white border-none"
+                          className="text-xs font-bold h-9 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm border-none transition-colors"
                         >
                           Unlock
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
                           disabled={isIncidentActionLoading[inc.id]}
                           onClick={() => handleRegeneratePin(inc.id)}
-                          className="text-[10px] font-black h-8 px-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                          className="text-xs font-bold h-9 flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm border-none transition-colors"
                         >
                           New PIN
                         </Button>

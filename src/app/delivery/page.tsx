@@ -1412,6 +1412,23 @@ function SlaTimer({ order }: { order: Order }) {
   return <span className={`text-xs font-bold ${color}`}>{timeLeft}</span>;
 }
 
+function formatWhatsAppNumber(phone: string): string {
+  const clean = phone.replace(/[^0-9]/g, "");
+  if (/^254\d{9}$/.test(clean)) {
+    return clean;
+  }
+  if (/^0\d{9}$/.test(clean)) {
+    return "254" + clean.substring(1);
+  }
+  if (/^\d{9}$/.test(clean)) {
+    return "254" + clean;
+  }
+  if (clean.startsWith("0")) {
+    return "254" + clean.substring(1);
+  }
+  return clean;
+}
+
 function OrderCard({
   order,
   myId,
@@ -1517,7 +1534,7 @@ function OrderCard({
                   </div>
                   <span className="font-black text-[#0052cc] text-xs group-hover:underline truncate">{order.customer.phone}</span>
                 </a>
-                <a href={`https://wa.me/${order.customer.phone.replace(/[^0-9]/g, "")}`}
+                <a href={`https://wa.me/${formatWhatsAppNumber(order.customer.phone)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors group px-3.5">

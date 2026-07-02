@@ -1245,6 +1245,18 @@ function AdminOrdersPageInner() {
               <Button
                 size="sm"
                 disabled={isBulkProcessing}
+                onClick={() => handleBulkStatusChange('Arrived')}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
+              >
+                {isBulkProcessing ? (
+                  <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                ) : (
+                  "Mark Arrived"
+                )}
+              </Button>
+              <Button
+                size="sm"
+                disabled={isBulkProcessing}
                 onClick={() => handleBulkStatusChange('Delivered')}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
               >

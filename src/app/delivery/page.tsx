@@ -147,9 +147,8 @@ export default function DeliveryPortal() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [strokeCount, setStrokeCount]             = useState(0);
 
-  // Doorstep photo & GPS
+  // Doorstep photo
   const [photoBase64, setPhotoBase64]             = useState<string | null>(null);
-  const [gpsCoords, setGpsCoords]                 = useState<{lat: number; lng: number} | null>(null);
 
   // Failed delivery attempt
   const [failedAttemptOrder, setFailedAttemptOrder] = useState<Order | null>(null);
@@ -410,26 +409,7 @@ export default function DeliveryPortal() {
     reader.readAsDataURL(file);
   };
 
-  // Returns GPS coords as a Promise — awaited at submission time for accuracy
-  const resolveGps = (): Promise<{ lat: number; lng: number } | null> =>
-    new Promise((resolve) => {
-      if (typeof window === "undefined" || !("geolocation" in navigator)) {
-        resolve(null);
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setGpsCoords(coords);
-          resolve(coords);
-        },
-        (err) => {
-          console.warn("GPS denied or unavailable", err);
-          resolve(null);
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      );
-    });
+
 
   // PIN flow
   const openPinDialog = (order: Order) => {
@@ -438,7 +418,6 @@ export default function DeliveryPortal() {
     setPinVerified(false);
     setPinError("");
     setPhotoBase64(null);
-    setGpsCoords(null);
     setShowPinDialog(true);
   };
 
@@ -544,16 +523,11 @@ export default function DeliveryPortal() {
     }
 
     setSubmittingSignature(true);
-    // Resolve GPS at the exact moment of submission
-    const coords = await resolveGps();
-    if (!coords) {
-      toast("⚠️ Location unavailable — delivery will be logged without GPS. Ensure location access is enabled.", { duration: 4000 });
-    }
     try {
       await api.post(`/delivery/orders/${signatureOrder.id}/deliver`, {
         signature: canvas.toDataURL("image/png"),
-        delivery_lat: coords?.lat ?? null,
-        delivery_lng: coords?.lng ?? null,
+        delivery_lat: null,
+        delivery_lng: null,
         delivery_photo: photoBase64 || null,
         manifest_acknowledged: true,
       });
@@ -590,17 +564,12 @@ export default function DeliveryPortal() {
       return;
     }
     setFailedLoading(true);
-    // Resolve GPS at exact submission moment
-    const coords = await resolveGps();
-    if (!coords) {
-      toast("⚠️ Location unavailable — attempt will be logged without GPS coordinates.", { duration: 3500 });
-    }
     try {
       const res = await api.post(`/delivery/orders/${failedAttemptOrder.id}/log-failed-attempt`, {
         reason: failedReason,
         notes: failedNotes,
-        lat: coords?.lat ?? null,
-        lng: coords?.lng ?? null,
+        lat: null,
+        lng: null,
       });
       toast.success(res.data.message || "Failed delivery attempt logged successfully.", { icon: "📝" });
       setShowFailedModal(false);
@@ -1203,19 +1172,6 @@ export default function DeliveryPortal() {
                 )}
               </div>
 
-              {/* GPS status display */}
-              <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3 flex items-center justify-between text-xs">
-                <span className="text-zinc-500 font-bold">GPS Coordinate Capture</span>
-                {gpsCoords ? (
-                  <span className="text-emerald-600 font-bold flex items-center gap-1">
-                    <Check className="h-3.5 w-3.5" /> Captured
-                  </span>
-                ) : (
-                  <span className="text-amber-600 font-bold flex items-center gap-1 animate-pulse">
-                    ⚠️ Fetching coordinates...
-                  </span>
-                )}
-              </div>
 
               {/* Action buttons */}
               <div className="flex gap-3 pt-2">
@@ -1282,19 +1238,6 @@ export default function DeliveryPortal() {
                 />
               </div>
 
-              {/* GPS status display */}
-              <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3 flex items-center justify-between text-xs">
-                <span className="text-zinc-500 font-bold">GPS Coordinate Capture</span>
-                {gpsCoords ? (
-                  <span className="text-emerald-600 font-bold flex items-center gap-1">
-                    <Check className="h-3.5 w-3.5" /> Captured
-                  </span>
-                ) : (
-                  <span className="text-amber-600 font-bold flex items-center gap-1 animate-pulse">
-                    ⚠️ Fetching coordinates...
-                  </span>
-                )}
-              </div>
 
               <div className="flex gap-3 pt-2">
                 <Button

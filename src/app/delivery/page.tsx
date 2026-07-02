@@ -42,6 +42,7 @@ interface Order {
   customer?: { name: string; phone?: string; email?: string };
   items?: OrderItem[];
   delivery_signature_url?: string;
+  driver?: { name: string; phone?: string };
 }
 
 interface DeliveryNotification {
@@ -1479,14 +1480,15 @@ function OrderCard({
 }) {
   const badge = getStatusBadge(order, myId);
 
-  // Check duplicate destinations locally (non-blocking warning banner)
-  const isDuplicateDestination = useMemo(() => {
-    if (tab !== "pool" || !order.shipping_address || !order.shipping_city) return false;
-    return allOrders.some(o =>
+  // Check duplicate destinations locally (non-blocking warning banner with driver details)
+  const duplicateOrders = useMemo(() => {
+    if (tab !== "pool" || !order.shipping_address || !order.shipping_city) return [];
+    return allOrders.filter(o =>
       o.id !== order.id &&
       o.shipping_address === order.shipping_address &&
       o.shipping_city === order.shipping_city &&
       o.delivered_by_user_id !== null &&
+      o.driver &&
       (o.status === "Shipped" || o.status === "Arrived")
     );
   }, [order, allOrders, tab]);
@@ -1495,12 +1497,33 @@ function OrderCard({
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
       <Card className="border-zinc-200 bg-white shadow-sm rounded-2xl overflow-hidden">
         {/* Anti-theft warning if duplicate address */}
-        {isDuplicateDestination && (
-          <div className="bg-amber-50 border-b border-amber-100 px-4 py-2.5 text-left">
-            <p className="text-[10px] font-bold text-amber-800 flex items-center gap-1.5 leading-snug">
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-              <span>Another driver already has an order for this exact destination. Coordinate with them to avoid wrong delivery.</span>
+        {duplicateOrders.length > 0 && (
+          <div className="bg-amber-50 border-b border-amber-100 px-4 py-3 text-left space-y-1.5">
+            <p className="text-[10px] font-black text-amber-800 flex items-center gap-1.5 leading-snug uppercase tracking-wider">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 animate-pulse" />
+              <span>Duplicate Destination Warning</span>
             </p>
+            <p className="text-[11px] font-bold text-amber-700 leading-tight">
+              Another driver has secured an order for this exact address. Coordinate to avoid wrong delivery:
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {duplicateOrders.map(o => (
+                <div key={o.id} className="flex items-center justify-between bg-white p-2 rounded-xl border border-amber-100 shadow-sm gap-2">
+                  <div className="min-w-0">
+                    <p className="font-extrabold text-slate-800 text-xs truncate">{o.driver?.name}</p>
+                    <p className="text-[10px] text-zinc-500 font-bold">Order: {o.tracking_number}</p>
+                  </div>
+                  {o.driver?.phone && (
+                    <a
+                      href={`tel:${o.driver.phone}`}
+                      className="text-[10px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors shrink-0"
+                    >
+                      📞 Call Driver
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

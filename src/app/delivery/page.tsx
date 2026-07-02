@@ -409,19 +409,26 @@ export default function DeliveryPortal() {
     reader.readAsDataURL(file);
   };
 
-  const requestGps = () => {
-    if (typeof window !== "undefined" && "geolocation" in navigator) {
+  // Returns GPS coords as a Promise — awaited at submission time for accuracy
+  const resolveGps = (): Promise<{ lat: number; lng: number } | null> =>
+    new Promise((resolve) => {
+      if (typeof window === "undefined" || !("geolocation" in navigator)) {
+        resolve(null);
+        return;
+      }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setGpsCoords(coords);
+          resolve(coords);
         },
         (err) => {
-          console.warn("GPS lookup denied or failed", err);
+          console.warn("GPS denied or unavailable", err);
+          resolve(null);
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
       );
-    }
-  };
+    });
 
   // PIN flow
   const openPinDialog = (order: Order) => {
@@ -431,7 +438,6 @@ export default function DeliveryPortal() {
     setPinError("");
     setPhotoBase64(null);
     setGpsCoords(null);
-    requestGps();
     setShowPinDialog(true);
   };
 
@@ -537,11 +543,16 @@ export default function DeliveryPortal() {
     }
 
     setSubmittingSignature(true);
+    // Resolve GPS at the exact moment of submission
+    const coords = await resolveGps();
+    if (!coords) {
+      toast("⚠️ Location unavailable — delivery will be logged without GPS. Ensure location access is enabled.", { duration: 4000 });
+    }
     try {
       await api.post(`/delivery/orders/${signatureOrder.id}/deliver`, {
         signature: canvas.toDataURL("image/png"),
-        delivery_lat: gpsCoords?.lat || null,
-        delivery_lng: gpsCoords?.lng || null,
+        delivery_lat: coords?.lat ?? null,
+        delivery_lng: coords?.lng ?? null,
         delivery_photo: photoBase64 || null,
         manifest_acknowledged: true,
       });
@@ -570,7 +581,6 @@ export default function DeliveryPortal() {
     setFailedNotes("");
     setFailedLoading(false);
     setShowFailedModal(true);
-    requestGps();
   };
 
   const handleFailedAttempt = async () => {
@@ -579,12 +589,17 @@ export default function DeliveryPortal() {
       return;
     }
     setFailedLoading(true);
+    // Resolve GPS at exact submission moment
+    const coords = await resolveGps();
+    if (!coords) {
+      toast("⚠️ Location unavailable — attempt will be logged without GPS coordinates.", { duration: 3500 });
+    }
     try {
       const res = await api.post(`/delivery/orders/${failedAttemptOrder.id}/log-failed-attempt`, {
         reason: failedReason,
         notes: failedNotes,
-        lat: gpsCoords?.lat || null,
-        lng: gpsCoords?.lng || null,
+        lat: coords?.lat ?? null,
+        lng: coords?.lng ?? null,
       });
       toast.success(res.data.message || "Failed delivery attempt logged successfully.", { icon: "📝" });
       setShowFailedModal(false);

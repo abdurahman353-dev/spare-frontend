@@ -1935,6 +1935,48 @@ function AdminOrdersPageInner() {
               </div>
             )}
 
+            {/* ── Failed Delivery Attempts — visible to admin only ── */}
+            {currentSelectedOrder?.delivery_attempts && currentSelectedOrder.delivery_attempts.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                  Failed Delivery Attempts ({currentSelectedOrder.delivery_attempts.length})
+                </h4>
+                <div className="space-y-2">
+                  {currentSelectedOrder.delivery_attempts.map((attempt: any, i: number) => (
+                    <div key={attempt.id} className="bg-red-50 border border-red-100 rounded-xl p-3 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black text-red-700 uppercase bg-red-100 px-2 py-0.5 rounded-full">
+                          Attempt #{i + 1} — {attempt.reason}
+                        </span>
+                        <span className="text-[10px] text-zinc-400 font-medium shrink-0">
+                          {new Date(attempt.attempted_at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      {attempt.driver && (
+                        <p className="text-[11px] text-zinc-600 font-semibold">Driver: {attempt.driver.name}</p>
+                      )}
+                      {attempt.notes && (
+                        <p className="text-[11px] text-zinc-500 italic">"{attempt.notes}"</p>
+                      )}
+                      {(attempt.lat && attempt.lng) ? (
+                        <a
+                          href={`https://maps.google.com/?q=${attempt.lat},${attempt.lng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          📍 View GPS Location ({Number(attempt.lat).toFixed(5)}, {Number(attempt.lng).toFixed(5)})
+                        </a>
+                      ) : (
+                        <p className="text-[10px] text-zinc-400 font-medium">📍 No GPS coordinates captured</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-4">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
               {currentSelectedOrder?.items?.map((item: any, idx: number) => {

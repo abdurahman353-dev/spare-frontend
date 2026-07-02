@@ -1289,7 +1289,7 @@ export default function AdminLogisticsPage() {
                           </Badge>
                         ) : (
                           <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                            shipment.status === "Delivered" ? "bg-emerald-100 text-emerald-700" :
+                            shipment.status === "Arrived" ? "bg-indigo-100 text-indigo-700" :
                               shipment.status === "In Transit" ? "bg-blue-100 text-[#0052cc]" : "bg-zinc-100 text-zinc-500"
                           )}>{shipment.status}</Badge>
                         )}
@@ -1314,7 +1314,7 @@ export default function AdminLogisticsPage() {
                               <DropdownMenuSeparator />
                               <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Change Status</DropdownMenuLabel>
                               <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => updateShipmentStatus(shipment.id, "In Transit")}>In Transit</DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => updateShipmentStatus(shipment.id, "Delivered")}>Delivered</DropdownMenuItem>
+                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => updateShipmentStatus(shipment.id, "Arrived")}>Arrived</DropdownMenuItem>
                             </DropdownMenuGroup>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1995,7 +1995,7 @@ export default function AdminLogisticsPage() {
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 >
                   <option value="In Transit">In Transit</option>
-                  <option value="Delivered">Delivered</option>
+                  <option value="Arrived">Arrived</option>
                 </select>
               </div>
             </div>

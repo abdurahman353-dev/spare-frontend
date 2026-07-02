@@ -37,7 +37,8 @@ import {
   User,
   UserPlus,
   CreditCard,
-  Pencil
+  Pencil,
+  Home
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -1163,38 +1164,87 @@ function AdminOrdersPageInner() {
                   )}
                 >
                   <div className="space-y-2.5 min-w-0">
+                    {/* Header: Tracking + Status Badge */}
                     <div className="flex items-start justify-between gap-2 border-b border-zinc-100 pb-2">
                       <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
                         {inc.tracking_number}
                       </span>
                       <Badge
                         className={cn(
-                          "rounded-full text-[9px] font-bold tracking-wider uppercase border-none px-2.5 py-0.5",
+                          "rounded-full text-[9px] font-bold tracking-wider uppercase border-none px-2.5 py-0.5 shrink-0",
                           inc.pin_locked ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
                         )}
                       >
                         {inc.pin_locked ? "🔒 Locked" : "⚠️ Failed Attempt"}
                       </Badge>
                     </div>
+
+                    {/* Customer + Incident Alert */}
                     <div>
                       <p className="font-bold text-zinc-900 text-sm truncate">
-                        Cust: {inc.customer?.name || "Retail Customer"}
+                        {inc.customer?.name || "Retail Customer"}
                       </p>
-                      <p className="text-xs text-zinc-600 font-medium mt-1 leading-snug">
+                      <p className="text-xs mt-0.5 leading-snug">
                         {inc.pin_locked ? (
-                          <span className="text-red-600 font-semibold">Order locked after 3 incorrect PIN entries. Handover blocked.</span>
+                          <span className="text-red-600 font-semibold">Locked after 3 wrong PIN attempts. Handover blocked.</span>
                         ) : (
                           <span className="text-amber-700 font-semibold">
-                            {inc.failed_attempts_count} failed delivery attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
+                            {inc.failed_attempts_count} failed attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
                           </span>
                         )}
                       </p>
                     </div>
-                    {inc.driver && (
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                        Driver: {inc.driver.name}
-                      </p>
-                    )}
+
+                    {/* ── Delivery Info ── */}
+                    <div className="bg-zinc-50 border border-zinc-100 rounded-lg px-3 py-2.5 space-y-1.5">
+                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Delivery Info</p>
+
+                      {/* Destination */}
+                      {(inc.shipping_city || inc.shipping_country) && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3 w-3 text-zinc-400 shrink-0" />
+                          <span className="text-xs text-zinc-700 font-semibold truncate">
+                            {[inc.shipping_city, inc.shipping_country].filter(Boolean).join(", ")}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Address */}
+                      {inc.shipping_address && (
+                        <div className="flex items-start gap-1.5">
+                          <Home className="h-3 w-3 text-zinc-400 shrink-0 mt-0.5" />
+                          <span className="text-xs text-zinc-500 font-medium leading-snug line-clamp-1">
+                            {inc.shipping_address}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Order Value + Item Count */}
+                      <div className="flex items-center justify-between pt-1 border-t border-zinc-100">
+                        <div className="flex items-center gap-1">
+                          <Package className="h-3 w-3 text-zinc-400" />
+                          <span className="text-[11px] text-zinc-500 font-semibold">
+                            {inc.items?.length ?? 0} item{(inc.items?.length ?? 0) !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-black text-zinc-800">
+                          {settings.currency || "Ksh"} {parseFloat(inc.total_amount || 0).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Driver + Order Status row */}
+                    <div className="flex items-center justify-between">
+                      {inc.driver ? (
+                        <div className="flex items-center gap-1">
+                          <Truck className="h-3 w-3 text-zinc-400" />
+                          <span className="text-[10px] text-zinc-500 font-bold truncate">{inc.driver.name}</span>
+                        </div>
+                      ) : <span />}
+                      <Badge className="rounded-full text-[9px] font-bold border border-zinc-200 bg-zinc-100 text-zinc-600 px-2 py-0.5 uppercase tracking-wider">
+                        {inc.status}
+                      </Badge>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">

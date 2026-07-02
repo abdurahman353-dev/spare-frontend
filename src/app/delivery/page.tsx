@@ -3,25 +3,26 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Package, MapPin, Phone, CheckCircle2, Loader2, LogOut,
-  User, Check, X, ArrowLeft, Bell, Search, Filter,
-  Truck, Clock, TrendingUp, RefreshCw, ChevronRight,
-  AlertCircle, Shield, Key, Info, BarChart3, Wifi, WifiOff,
-  SortAsc, SortDesc, Navigation
+  User, Check, X, Bell, Search, RefreshCw,
+  Truck, TrendingUp, Shield, Navigation,
+  ChevronRight, Filter, BarChart3,
+  WifiOff, Key, Lock, AlertTriangle, SortDesc, SortAsc,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { toast } from "react-hot-toast";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { motion, AnimatePresence } from "framer-motion";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface OrderItem {
   id: number;
-  product: { name: string; part_number?: string };
+  product: { name: string };
   quantity: number;
   price: number;
 }
@@ -36,12 +37,14 @@ interface Order {
   shipping_address: string;
   shipping_method: string;
   total_amount: number;
+  delivered_by_user_id: number | null;
+  delivery_pin?: string;
   customer?: { name: string; phone?: string; email?: string };
   items?: OrderItem[];
   delivery_signature_url?: string;
 }
 
-interface Notification {
+interface DeliveryNotification {
   id: number;
   tracking_number: string;
   status: string;
@@ -58,17 +61,27 @@ interface Stats {
   total_delivered: number;
 }
 
-// Status badge config
-const statusConfig: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  Shipped:   { label: "SHIPPED",   bg: "bg-blue-600",    text: "text-white",        dot: "bg-blue-400"    },
-  Arrived:   { label: "ARRIVED",   bg: "bg-emerald-500", text: "text-white",        dot: "bg-emerald-300" },
-  Delivered: { label: "DELIVERED", bg: "bg-emerald-100", text: "text-emerald-800",  dot: "bg-emerald-400" },
-};
+// ── Status badge config (by pool type) ────────────────────────────────────────
+function getStatusBadge(order: Order, myId: number) {
+  const isMe = order.delivered_by_user_id === myId;
+  if (order.status === "Shipped") {
+    if (isMe) return { label: "IN TRANSIT", bg: "bg-blue-600 text-white", dot: "bg-blue-300" };
+    return { label: "PENDING DISPATCH", bg: "bg-amber-500 text-white", dot: "bg-amber-200" };
+  }
+  if (order.status === "Arrived") {
+    if (isMe) return { label: "OUT FOR DELIVERY", bg: "bg-emerald-500 text-white", dot: "bg-emerald-200" };
+    return { label: "AT HUB — READY", bg: "bg-purple-600 text-white", dot: "bg-purple-300" };
+  }
+  if (order.status === "Delivered") {
+    return { label: "DELIVERED", bg: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-400" };
+  }
+  return { label: order.status.toUpperCase(), bg: "bg-zinc-200 text-zinc-700", dot: "bg-zinc-400" };
+}
 
-// Notification sound (Web Audio API)
+// ── Audio alert ───────────────────────────────────────────────────────────────
 function playNotificationSound() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     const oscillator = ctx.createOscillator();
     const gainNode = ctx.createGain();
     oscillator.connect(gainNode);
@@ -79,55 +92,83 @@ function playNotificationSound() {
     gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.6);
-  } catch (_) {}
+  } catch { /* silently ignore if audio is blocked */ }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 export default function DeliveryPortal() {
   const { user, loading: authLoading, logout } = useAuth();
   const { settings } = useSettings();
   const router = useRouter();
 
-  // Core state
-  const [orders, setOrders]           = useState<Order[]>([]);
-  const [stats, setStats]             = useState<Stats>({ today_completed: 0, active_count: 0, total_delivered: 0 });
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [isOnline, setIsOnline]       = useState(true);
-  const [lastSynced, setLastSynced]   = useState<Date | null>(null);
-  const [isSyncing, setIsSyncing]     = useState(false);
+  // Core data
+  const [orders, setOrders]   = useState<Order[]>([]);
+  const [stats, setStats]     = useState<Stats>({ today_completed: 0, active_count: 0, total_delivered: 0 });
+  const [notifications, setNotifications] = useState<DeliveryNotification[]>([]);
 
-  // UI panels
-  const [activeTab, setActiveTab]             = useState<"active" | "completed">("active");
-  const [showProfile, setShowProfile]         = useState(false);
+  // Loading states
+  const [loading, setLoading]     = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline]   = useState(true);
+
+  // Tabs: "pool" | "mine" | "completed"
+  const [activeTab, setActiveTab] = useState<"pool" | "mine" | "completed">("pool");
+
+  // UI drawers
+  const [showProfile, setShowProfile]           = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifUnread, setNotifUnread]         = useState(0);
+  const [notifUnread, setNotifUnread]           = useState(0);
 
-  // Filter & search
-  const [searchQuery, setSearchQuery]         = useState("");
-  const [statusFilter, setStatusFilter]       = useState<"all" | "Shipped" | "Arrived">("all");
-  const [sortOrder, setSortOrder]             = useState<"newest" | "oldest">("newest");
+  // Search & filter
+  const [searchQuery, setSearchQuery]     = useState("");
+  const [cityFilter, setCityFilter]       = useState("all");
+  const [sortOrder, setSortOrder]         = useState<"newest" | "oldest">("newest");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
-  // Signature pad
-  const [selectedOrder, setSelectedOrder]     = useState<Order | null>(null);
-  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
-  const [submittingSignature, setSubmittingSignature]   = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isDrawing, setIsDrawing]             = useState(false);
+  // Order actions
+  const [claimingId, setClaimingId]     = useState<number | null>(null);
+  const [releasingId, setReleasingId]   = useState<number | null>(null);
+  const [markingId, setMarkingId]       = useState<number | null>(null);
 
-  // Arriving action
-  const [markingArrived, setMarkingArrived]   = useState<number | null>(null);
+  // PIN verification
+  const [pinOrder, setPinOrder]           = useState<Order | null>(null);
+  const [pinValue, setPinValue]           = useState("");
+  const [pinLoading, setPinLoading]       = useState(false);
+  const [pinVerified, setPinVerified]     = useState(false);
+  const [pinError, setPinError]           = useState("");
+  const [showPinDialog, setShowPinDialog] = useState(false);
+
+  // Signature capture
+  const [signatureOrder, setSignatureOrder]       = useState<Order | null>(null);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [submittingSignature, setSubmittingSignature] = useState(false);
+  const [isDrawing, setIsDrawing]                 = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [strokeCount, setStrokeCount]             = useState(0);
+
+  // Doorstep photo & GPS
+  const [photoBase64, setPhotoBase64]             = useState<string | null>(null);
+  const [gpsCoords, setGpsCoords]                 = useState<{lat: number; lng: number} | null>(null);
+
+  // Failed delivery attempt
+  const [failedAttemptOrder, setFailedAttemptOrder] = useState<Order | null>(null);
+  const [failedReason, setFailedReason]           = useState("");
+  const [failedNotes, setFailedNotes]             = useState("");
+  const [failedLoading, setFailedLoading]         = useState(false);
+  const [showFailedModal, setShowFailedModal]     = useState(false);
+
+  // Manifest acknowledgement per order
+  const [manifestChecked, setManifestChecked]     = useState<{[orderId: number]: boolean}>({});
 
   // Polling refs
-  // Track orderId → assigned driver ID so we detect reassignment of already-visible unassigned orders
   const knownAssignmentsRef = useRef<Map<number, number | null>>(new Map());
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const secondsRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingRef          = useRef<NodeJS.Timeout | null>(null);
+  const secondsRef          = useRef<NodeJS.Timeout | null>(null);
   const [secondsSinceSync, setSecondsSinceSync] = useState(0);
 
-  const currency = settings.currency || "Ksh";
+  const currency = settings?.currency ?? "Ksh";
 
-  // Auth guard
+  // ── Auth Guard ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!authLoading) {
       if (!user) { window.location.href = "/login"; return; }
@@ -137,47 +178,43 @@ export default function DeliveryPortal() {
     }
   }, [user, authLoading, router]);
 
-  // Request browser notification permission
+  // ── Browser notification permission ───────────────────────────────────────
   useEffect(() => {
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === "default") {
-        Notification.requestPermission();
-      }
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
     }
   }, []);
 
-  // Network online/offline detection
+  // ── Online/offline detection ───────────────────────────────────────────────
   useEffect(() => {
-    const online  = () => { setIsOnline(true);  toast.success("Connection restored", { icon: "📶" }); };
-    const offline = () => { setIsOnline(false); toast.error("You are offline. Data may be stale.", { icon: "📵", duration: 6000 }); };
-    window.addEventListener("online",  online);
-    window.addEventListener("offline", offline);
-    return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); };
+    const handleOnline  = () => { setIsOnline(true);  toast.success("Connection restored", { icon: "📶" }); };
+    const handleOffline = () => { setIsOnline(false); toast.error("You are offline. Data may be stale.", { duration: 6000 }); };
+    window.addEventListener("online",  handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online",  handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
 
-  // Fetch orders (silent poll)
+  // ── Data Fetching ─────────────────────────────────────────────────────────
   const fetchOrders = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setIsSyncing(true);
+    if (!user) return;
+    if (!silent) setLoading(true); else setIsSyncing(true);
     try {
       const res = await api.get("/delivery/orders");
-      const incoming: Order[] = (res.data as any[]);
+      const incoming: Order[] = res.data as Order[];
 
-      // Detect newly ASSIGNED orders — compare delivered_by_user_id changes
-      // This catches both: brand new orders AND previously-unassigned orders that got assigned
-      if (knownAssignmentsRef.current.size > 0 && user) {
+      // Detect newly assigned orders (delivered_by_user_id changed to my id)
+      if (knownAssignmentsRef.current.size > 0) {
         const newlyAssigned = incoming.filter(o => {
-          const prevAssignee = knownAssignmentsRef.current.get(o.id);
-          const nowAssignedToMe = (o as any).delivered_by_user_id === user.id;
-          const wasNotAssignedToMe = prevAssignee !== user.id;
-          // Fire if: order is NOW assigned to me but previously wasn't (or didn't exist)
-          return nowAssignedToMe && wasNotAssignedToMe;
+          const prev = knownAssignmentsRef.current.get(o.id);
+          return o.delivered_by_user_id === user.id && prev !== user.id;
         });
-
         if (newlyAssigned.length > 0) {
           playNotificationSound();
           newlyAssigned.forEach(o => {
-            toast(`🚚 Order assigned to you: ${o.tracking_number} — ${o.customer?.name ?? ""} in ${o.shipping_city}`, {
+            toast(`🚚 Assigned: ${o.tracking_number} — ${o.customer?.name ?? ""} in ${o.shipping_city}`, {
               duration: 10000,
               style: { background: "#0052cc", color: "#fff", fontWeight: "bold", borderRadius: "12px" },
             });
@@ -188,21 +225,18 @@ export default function DeliveryPortal() {
               });
             }
           });
-          // Bump unread bell count for new assignments
           setNotifUnread(prev => prev + newlyAssigned.length);
         }
       }
 
-      // Update the known assignments map with current state
       const newMap = new Map<number, number | null>();
-      incoming.forEach(o => newMap.set(o.id, (o as any).delivered_by_user_id ?? null));
+      incoming.forEach(o => newMap.set(o.id, o.delivered_by_user_id));
       knownAssignmentsRef.current = newMap;
 
       setOrders(incoming);
-      setLastSynced(new Date());
       setSecondsSinceSync(0);
-    } catch (err: any) {
-      if (!silent) toast.error("Failed to sync delivery manifests");
+    } catch {
+      if (!silent) toast.error("Failed to load delivery manifests");
     } finally {
       setLoading(false);
       setIsSyncing(false);
@@ -212,19 +246,15 @@ export default function DeliveryPortal() {
   const fetchStats = useCallback(async () => {
     try {
       const res = await api.get("/delivery/stats");
-      setStats(res.data);
-    } catch (_) {}
+      setStats(res.data as Stats);
+    } catch { /* silently fail */ }
   }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
       const res = await api.get("/delivery/notifications");
-      const incoming: Notification[] = res.data.notifications ?? [];
-      setNotifications(incoming);
-      // NOTE: notifUnread is ONLY controlled by fetchOrders (when a new assignment
-      // is detected). fetchNotifications just populates the drawer content.
-      // Do NOT set notifUnread here — it would overwrite the badge every 30s.
-    } catch (_) {}
+      setNotifications((res.data.notifications ?? []) as DeliveryNotification[]);
+    } catch { /* silently fail */ }
   }, []);
 
   // Initial load
@@ -239,46 +269,25 @@ export default function DeliveryPortal() {
   // 30-second polling
   useEffect(() => {
     if (!user) return;
-    pollingIntervalRef.current = setInterval(() => {
-      if (isOnline) {
-        fetchOrders(true);
-        fetchStats();
-        fetchNotifications();
-      }
+    pollingRef.current = setInterval(() => {
+      if (isOnline) { fetchOrders(true); fetchStats(); fetchNotifications(); }
     }, 30000);
-    secondsRef.current = setInterval(() => {
-      setSecondsSinceSync(s => s + 1);
-    }, 1000);
+    secondsRef.current = setInterval(() => setSecondsSinceSync(s => s + 1), 1000);
     return () => {
-      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
-      if (secondsRef.current) clearInterval(secondsRef.current);
+      if (pollingRef.current)  clearInterval(pollingRef.current);
+      if (secondsRef.current)  clearInterval(secondsRef.current);
     };
   }, [user, isOnline, fetchOrders, fetchStats, fetchNotifications]);
 
-  // Filtered & sorted active orders
-  const activeDeliveries = useMemo(() => {
-    let list = orders.filter(o => o.status === "Shipped" || o.status === "Arrived");
-    if (statusFilter !== "all") list = list.filter(o => o.status === statusFilter);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(o =>
-        o.tracking_number.toLowerCase().includes(q) ||
-        (o.customer?.name ?? "").toLowerCase().includes(q) ||
-        o.shipping_city.toLowerCase().includes(q) ||
-        (o.customer?.phone ?? "").includes(q)
-      );
-    }
-    list = [...list].sort((a, b) => {
-      const da = new Date(a.updated_at).getTime();
-      const db = new Date(b.updated_at).getTime();
-      return sortOrder === "newest" ? db - da : da - db;
-    });
-    return list;
-  }, [orders, statusFilter, searchQuery, sortOrder]);
+  // ── Filtered lists ─────────────────────────────────────────────────────────
+  const myId = user?.id ?? 0;
 
-  const completedDeliveries = useMemo(() => {
-    let list = orders.filter(o => o.status === "Delivered");
-    if (searchQuery.trim() && activeTab === "completed") {
+  const myTasks = useMemo(() => {
+    let list = orders.filter(o =>
+      (o.status === "Shipped" || o.status === "Arrived") &&
+      o.delivered_by_user_id === myId
+    );
+    if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(o =>
         o.tracking_number.toLowerCase().includes(q) ||
@@ -286,12 +295,93 @@ export default function DeliveryPortal() {
         o.shipping_city.toLowerCase().includes(q)
       );
     }
-    return [...list].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  }, [orders, searchQuery, activeTab]);
+    return list.sort((a, b) =>
+      sortOrder === "newest"
+        ? new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+    );
+  }, [orders, myId, searchQuery, sortOrder]);
 
-  // Actions
+  const openPool = useMemo(() => {
+    let list = orders.filter(o =>
+      (o.status === "Shipped" || o.status === "Arrived") &&
+      o.delivered_by_user_id === null
+    );
+    if (cityFilter !== "all") list = list.filter(o => o.shipping_city === cityFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(o =>
+        o.tracking_number.toLowerCase().includes(q) ||
+        (o.customer?.name ?? "").toLowerCase().includes(q) ||
+        o.shipping_city.toLowerCase().includes(q)
+      );
+    }
+    return list.sort((a, b) =>
+      sortOrder === "newest"
+        ? new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+    );
+  }, [orders, cityFilter, searchQuery, sortOrder]);
+
+  const completedOrders = useMemo(() => {
+    let list = orders.filter(o => o.status === "Delivered" && o.delivered_by_user_id === myId);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(o =>
+        o.tracking_number.toLowerCase().includes(q) ||
+        (o.customer?.name ?? "").toLowerCase().includes(q) ||
+        o.shipping_city.toLowerCase().includes(q)
+      );
+    }
+    return list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  }, [orders, myId, searchQuery]);
+
+  // Unique cities for filter selector
+  const availableCities = useMemo(() => {
+    const cities = orders
+      .filter(o => (o.status === "Shipped" || o.status === "Arrived") && o.delivered_by_user_id === null)
+      .map(o => o.shipping_city)
+      .filter(Boolean);
+    return Array.from(new Set(cities)).sort();
+  }, [orders]);
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+  const handleClaim = async (order: Order) => {
+    setClaimingId(order.id);
+    try {
+      await api.post(`/delivery/orders/${order.id}/claim`);
+      toast.success(`Order ${order.tracking_number} secured! It is now assigned to you.`, {
+        icon: "🔒",
+        style: { background: "#0052cc", color: "#fff", fontWeight: "bold" },
+      });
+      await fetchOrders(true);
+      await fetchStats();
+      setActiveTab("mine");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to secure order";
+      toast.error(msg);
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
+  const handleRelease = async (order: Order) => {
+    setReleasingId(order.id);
+    try {
+      await api.post(`/delivery/orders/${order.id}/release`);
+      toast.success(`Order ${order.tracking_number} released back to the pool.`);
+      await fetchOrders(true);
+      await fetchStats();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to release order";
+      toast.error(msg);
+    } finally {
+      setReleasingId(null);
+    }
+  };
+
   const handleMarkArrived = async (order: Order) => {
-    setMarkingArrived(order.id);
+    setMarkingId(order.id);
     try {
       await api.post(`/delivery/orders/${order.id}/mark-arrived`);
       toast.success(`Order ${order.tracking_number} marked as Arrived!`, {
@@ -300,97 +390,218 @@ export default function DeliveryPortal() {
       });
       await fetchOrders(true);
       await fetchStats();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to mark as Arrived");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to mark as arrived";
+      toast.error(msg);
     } finally {
-      setMarkingArrived(null);
+      setMarkingId(null);
     }
   };
 
-  // Signature canvas
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPhotoBase64(reader.result as string);
+      toast.success("Doorstep photo captured successfully!");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const requestGps = () => {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => {
+          console.warn("GPS lookup denied or failed", err);
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+  };
+
+  // PIN flow
+  const openPinDialog = (order: Order) => {
+    setPinOrder(order);
+    setPinValue("");
+    setPinVerified(false);
+    setPinError("");
+    setPhotoBase64(null);
+    setGpsCoords(null);
+    requestGps();
+    setShowPinDialog(true);
+  };
+
+  const handleVerifyPin = async () => {
+    if (!pinOrder || pinValue.length !== 4) { setPinError("Enter the 4-digit PIN from the customer's portal"); return; }
+    setPinLoading(true);
+    setPinError("");
+    try {
+      const res = await api.post(`/delivery/orders/${pinOrder.id}/verify-pin`, { pin: pinValue });
+      setPinVerified(true);
+      toast.success(res.data.message || "PIN verified! You may now capture the signature.");
+    } catch (err: unknown) {
+      const data = (err as { response?: { data?: { message?: string, pin_locked?: boolean } } })?.response?.data;
+      const msg = data?.message ?? "Incorrect PIN";
+      setPinError(msg);
+      if (data?.pin_locked) {
+        toast.error("🔒 Security Lock: This order is locked. Please contact your supervisor.");
+      }
+    } finally {
+      setPinLoading(false);
+    }
+  };
+
+  const openSignatureModal = () => {
+    if (!pinOrder) return;
+    setSignatureOrder(pinOrder);
+    setShowPinDialog(false);
+    setPinOrder(null);
+    setStrokeCount(0);
+    setTimeout(() => {
+      setShowSignatureModal(true);
+      initCanvas();
+    }, 150);
+  };
+
+  // Canvas helpers
   const initCanvas = () => {
     setTimeout(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
       ctx.strokeStyle = "#1e293b";
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }, 100);
+      setStrokeCount(0);
+    }, 80);
   };
 
-  useEffect(() => {
-    if (isSignatureModalOpen) initCanvas();
-  }, [isSignatureModalOpen]);
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const startDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     setIsDrawing(true);
-    draw(e);
+    moveDraw(e);
   };
-  const stopDrawing = () => {
+  const stopDraw = () => {
     setIsDrawing(false);
     canvasRef.current?.getContext("2d")?.beginPath();
   };
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const moveDraw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const rect = canvas.getBoundingClientRect();
-    let clientX: number, clientY: number;
+    let cx: number, cy: number;
     if ("touches" in e) {
       if (e.cancelable) e.preventDefault();
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
+      cx = e.touches[0].clientX - rect.left;
+      cy = e.touches[0].clientY - rect.top;
     } else {
-      clientX = e.clientX;
-      clientY = e.clientY;
+      cx = e.clientX - rect.left;
+      cy = e.clientY - rect.top;
     }
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.lineTo(cx, cy);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    ctx.moveTo(cx, cy);
+    setStrokeCount(prev => prev + 1);
   };
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    setStrokeCount(0);
   };
 
-  const handleSaveSignature = async () => {
+  const handleDeliver = async () => {
     const canvas = canvasRef.current;
-    if (!canvas || !selectedOrder) return;
+    if (!canvas || !signatureOrder) return;
+    // Check canvas is not blank
     const blank = document.createElement("canvas");
-    blank.width = canvas.width;
-    blank.height = canvas.height;
+    blank.width = canvas.width; blank.height = canvas.height;
     if (canvas.toDataURL() === blank.toDataURL()) {
-      toast.error("Please capture signature");
+      toast.error("Please capture the recipient's signature first");
       return;
     }
+
+    // SECURITY: Minimum stroke length verification
+    if (strokeCount < 20) {
+      toast.error("Signature too short. Please ask the recipient to sign properly.");
+      return;
+    }
+
     setSubmittingSignature(true);
     try {
-      await api.post(`/delivery/orders/${selectedOrder.id}/deliver`, { signature: canvas.toDataURL("image/png") });
-      toast.success(`Order ${selectedOrder.tracking_number} delivered successfully!`, {
+      await api.post(`/delivery/orders/${signatureOrder.id}/deliver`, {
+        signature: canvas.toDataURL("image/png"),
+        delivery_lat: gpsCoords?.lat || null,
+        delivery_lng: gpsCoords?.lng || null,
+        delivery_photo: photoBase64 || null,
+        manifest_acknowledged: true,
+      });
+      toast.success(`Order ${signatureOrder.tracking_number} delivered successfully!`, {
         icon: "📦",
         style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
       });
-      setIsSignatureModalOpen(false);
-      setSelectedOrder(null);
-      fetchOrders(true);
-      fetchStats();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to submit signature");
+      setShowSignatureModal(false);
+      setSignatureOrder(null);
+      setPhotoBase64(null);
+      await fetchOrders(true);
+      await fetchStats();
+      setActiveTab("completed");
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to complete delivery";
+      toast.error(msg);
     } finally {
       setSubmittingSignature(false);
     }
   };
 
-  if (authLoading || !user || (user.role !== "delivery" && user.role !== "admin" && user.role !== "superadmin")) {
+  // Log Failed Attempt Handler
+  const openFailedAttemptModal = (order: Order) => {
+    setFailedAttemptOrder(order);
+    setFailedReason("");
+    setFailedNotes("");
+    setFailedLoading(false);
+    setShowFailedModal(true);
+    requestGps();
+  };
+
+  const handleFailedAttempt = async () => {
+    if (!failedAttemptOrder || !failedReason) {
+      toast.error("Please select a failure reason");
+      return;
+    }
+    setFailedLoading(true);
+    try {
+      const res = await api.post(`/delivery/orders/${failedAttemptOrder.id}/log-failed-attempt`, {
+        reason: failedReason,
+        notes: failedNotes,
+        lat: gpsCoords?.lat || null,
+        lng: gpsCoords?.lng || null,
+      });
+      toast.success(res.data.message || "Failed delivery attempt logged successfully.", { icon: "📝" });
+      setShowFailedModal(false);
+      setFailedAttemptOrder(null);
+      setFailedReason("");
+      setFailedNotes("");
+      await fetchOrders(true);
+    } catch (err: any) {
+      const msg = err.response?.data?.message ?? "Failed to log attempt";
+      toast.error(msg);
+    } finally {
+      setFailedLoading(false);
+    }
+  };
+
+  // ── Loading screen ─────────────────────────────────────────────────────────
+  if (authLoading || !user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[#0052cc]">
         <div className="flex flex-col items-center gap-4">
@@ -402,31 +613,33 @@ export default function DeliveryPortal() {
     );
   }
 
-  const initials = user.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+  const initials = (user.name ?? "?").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase();
+  const isDriver = user.role === "delivery";
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#f0f4f8] flex flex-col font-sans text-slate-900">
 
-      {/* ── TOP HEADER ──────────────────────────────────────────────────── */}
+      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
       <header className="bg-[#0052cc] sticky top-0 z-30 shadow-lg">
         <div className="container mx-auto px-4 max-w-xl h-16 flex items-center justify-between">
-          {/* Left: Avatar + name */}
-          <button onClick={() => setShowProfile(true)} className="flex items-center gap-3 group text-left">
+          <button onClick={() => setShowProfile(true)} className="flex items-center gap-3 group">
             <div className="h-10 w-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-black text-sm border border-white/30 group-hover:bg-white/30 transition-colors">
               {initials}
             </div>
             <div className="text-left">
               <p className="text-[10px] font-bold text-blue-200 uppercase tracking-widest leading-none">Delivery Hub</p>
-              <p className="text-sm font-black text-white tracking-tight leading-tight truncate max-w-[150px]">
+              <p className="text-sm font-black text-white truncate max-w-[160px] leading-tight">
                 {user.name}
-                {(user as any).vehicle_plate ? <span className="text-blue-200 font-bold"> | {(user as any).vehicle_plate}</span> : ""}
+                {(user as { vehicle_plate?: string }).vehicle_plate
+                  ? <span className="text-blue-200 font-bold"> | {(user as { vehicle_plate?: string }).vehicle_plate}</span>
+                  : ""}
               </p>
             </div>
           </button>
 
-          {/* Right: Online dot + Notification bell + Logout */}
           <div className="flex items-center gap-2">
-            {/* Sync status */}
+            {/* Sync indicator */}
             <div className="hidden sm:flex items-center gap-1.5 bg-white/10 rounded-lg px-2 py-1.5">
               {isSyncing ? (
                 <RefreshCw className="h-3 w-3 text-blue-200 animate-spin" />
@@ -436,18 +649,12 @@ export default function DeliveryPortal() {
                 <WifiOff className="h-3 w-3 text-red-300" />
               )}
               <span className="text-[9px] font-bold text-blue-200 uppercase tracking-wide">
-                {isSyncing ? "Syncing..." : lastSynced ? `${secondsSinceSync}s ago` : "---"}
+                {isSyncing ? "Syncing..." : `${secondsSinceSync}s ago`}
               </span>
             </div>
 
-            {/* Notification bell */}
             <button
-              onClick={() => {
-              setShowNotifications(true);
-              setNotifUnread(0);
-              // Mark all current notifications as seen
-              localStorage.setItem("delivery_notif_last_seen", Date.now().toString());
-            }}
+              onClick={() => { setShowNotifications(true); setNotifUnread(0); localStorage.setItem("delivery_notif_seen", Date.now().toString()); }}
               className="relative h-9 w-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 transition-colors text-white"
             >
               <Bell className="h-4 w-4" />
@@ -458,7 +665,6 @@ export default function DeliveryPortal() {
               )}
             </button>
 
-            {/* Logout */}
             <button
               onClick={logout}
               className="h-9 w-9 flex items-center justify-center rounded-xl bg-white/10 hover:bg-red-500/40 transition-colors text-white"
@@ -470,74 +676,83 @@ export default function DeliveryPortal() {
         </div>
       </header>
 
-      {/* ── STATS BAR ───────────────────────────────────────────────────── */}
-      <div className="bg-[#003d99] border-b border-[#0044aa]">
+      {/* ── STATS BAR ──────────────────────────────────────────────────────── */}
+      <div className="bg-[#003d99] border-b border-[#004bbf]">
         <div className="container mx-auto px-4 max-w-xl py-3">
           <div className="grid grid-cols-3 gap-3">
-            {[
-              { icon: CheckCircle2, label: "Today's Deliveries", value: stats.today_completed, color: "text-emerald-300" },
-              { icon: Package,      label: "Active Tasks",       value: stats.active_count,    color: "text-amber-300"   },
-              { icon: TrendingUp,   label: "All-Time Delivered", value: stats.total_delivered, color: "text-blue-200"    },
-            ].map((stat) => (
-              <div key={stat.label} className="flex flex-col items-center gap-0.5">
-                <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                <p className={`text-lg font-black ${stat.color}`}>{stat.value}</p>
-                <p className="text-[8px] font-bold text-blue-300 uppercase tracking-wider text-center leading-tight">{stat.label}</p>
-              </div>
-            ))}
+            <div className="flex flex-col items-center gap-0.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+              <p className="text-xl font-black text-emerald-300">{stats.today_completed}</p>
+              <p className="text-[8px] font-bold text-blue-300 uppercase tracking-wider">Today</p>
+            </div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Package className={`h-4 w-4 ${myTasks.length >= 5 ? "text-rose-400" : "text-amber-300"}`} />
+              <p className={`text-xl font-black ${myTasks.length >= 5 ? "text-rose-400 font-extrabold animate-pulse" : "text-amber-300"}`}>
+                {myTasks.length} / 5
+              </p>
+              <p className="text-[8px] font-bold text-blue-300 uppercase tracking-wider">My Active (Cap)</p>
+            </div>
+            <div className="flex flex-col items-center gap-0.5">
+              <TrendingUp className="h-4 w-4 text-blue-200" />
+              <p className="text-xl font-black text-blue-200">{stats.total_delivered}</p>
+              <p className="text-[8px] font-bold text-blue-300 uppercase tracking-wider">Total Done</p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── MAIN CONTENT ────────────────────────────────────────────────── */}
-      <main className="flex-1 container mx-auto px-4 max-w-xl pt-4 pb-16">
+      {/* ── MAIN ───────────────────────────────────────────────────────────── */}
+      <main className="flex-1 container mx-auto px-4 max-w-xl pt-4 pb-20">
 
-        {/* Tabs */}
+        {/* 3-Tab Navigation */}
         <div className="bg-white p-1 rounded-xl border border-zinc-200 shadow-sm flex mb-4">
-          {(["active", "completed"] as const).map(tab => (
+          {([
+            { key: "pool",      label: "Open Pool", icon: Package,       count: openPool.length },
+            { key: "mine",      label: "My Tasks",  icon: Truck,         count: myTasks.length },
+            { key: "completed", label: "Completed", icon: CheckCircle2,  count: completedOrders.length },
+          ] as const).map(tab => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2.5 text-[11px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-2 ${
-                activeTab === tab ? "bg-[#0052cc] text-white shadow-sm" : "text-zinc-500 hover:text-slate-800"
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                activeTab === tab.key ? "bg-[#0052cc] text-white shadow-sm" : "text-zinc-500 hover:text-slate-800"
               }`}
             >
-              {tab === "active" ? <Package className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-              {tab === "active" ? "Active Tasks" : "Completed"}
-              {tab === "active" && activeDeliveries.length > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${activeTab === "active" ? "bg-white text-[#0052cc]" : "bg-blue-50 text-[#0052cc]"}`}>
-                  {activeDeliveries.length}
-                </span>
-              )}
-              {tab === "completed" && completedDeliveries.length > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${activeTab === "completed" ? "bg-white text-[#0052cc]" : "bg-zinc-100 text-zinc-600"}`}>
-                  {completedDeliveries.length}
+              <tab.icon className="h-3.5 w-3.5" />
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                  activeTab === tab.key ? "bg-white text-[#0052cc]" : "bg-zinc-100 text-zinc-600"
+                }`}>
+                  {tab.count}
                 </span>
               )}
             </button>
           ))}
         </div>
 
-        {/* Search + Filter Row */}
-        <div className="flex gap-2 mb-4">
+        {/* Search + Filter row */}
+        <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
             <Input
-              placeholder={activeTab === "active" ? "Search waybill, customer, city..." : "Search completed deliveries..."}
+              placeholder="Search waybill, customer, city..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="pl-9 h-10 bg-white border-zinc-200 text-sm font-medium rounded-xl shadow-sm"
+              className="pl-9 h-10 bg-white border-zinc-200 text-sm rounded-xl shadow-sm"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700">
+              <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400">
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
-          {activeTab === "active" && (
+          {activeTab === "pool" && (
             <button
               onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className={`h-10 w-10 flex items-center justify-center rounded-xl border shadow-sm transition-all ${showFilterPanel ? "bg-[#0052cc] text-white border-[#0052cc]" : "bg-white border-zinc-200 text-zinc-600 hover:border-zinc-300"}`}
+              className={`h-10 w-10 flex items-center justify-center rounded-xl border shadow-sm transition-all shrink-0 ${
+                showFilterPanel ? "bg-[#0052cc] text-white border-[#0052cc]" : "bg-white border-zinc-200 text-zinc-600"
+              }`}
             >
               <Filter className="h-4 w-4" />
             </button>
@@ -545,510 +760,922 @@ export default function DeliveryPortal() {
           <button
             onClick={() => { fetchOrders(false); fetchStats(); fetchNotifications(); }}
             disabled={isSyncing}
-            className="h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-zinc-200 text-zinc-600 hover:border-zinc-300 shadow-sm transition-all"
+            className="h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-zinc-200 text-zinc-600 shadow-sm shrink-0"
           >
             <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-[#0052cc]" : ""}`} />
           </button>
         </div>
 
-        {/* Filter Panel */}
+        {/* Filter panel (Open Pool only) */}
         <AnimatePresence>
-          {showFilterPanel && activeTab === "active" && (
+          {showFilterPanel && activeTab === "pool" && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-white border border-zinc-200 rounded-xl p-4 mb-4 shadow-sm space-y-3 overflow-hidden"
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="bg-white border border-zinc-200 rounded-xl p-4 mb-4 shadow-sm overflow-hidden"
             >
-              <div>
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Filter by Status</p>
-                <div className="flex gap-2">
-                  {(["all", "Shipped", "Arrived"] as const).map(s => (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Filter by City</p>
+                  <div className="flex flex-wrap gap-2">
                     <button
-                      key={s}
-                      onClick={() => setStatusFilter(s)}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${
-                        statusFilter === s ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                      }`}
+                      onClick={() => setCityFilter("all")}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide ${cityFilter === "all" ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600"}`}
                     >
-                      {s === "all" ? "All" : s}
+                      All Cities
                     </button>
-                  ))}
+                    {availableCities.map(city => (
+                      <button
+                        key={city}
+                        onClick={() => setCityFilter(city)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide ${cityFilter === city ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600"}`}
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Sort by Date</p>
-                <div className="flex gap-2">
-                  {(["newest", "oldest"] as const).map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setSortOrder(s)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all ${
-                        sortOrder === s ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                      }`}
-                    >
-                      {s === "newest" ? <SortDesc className="h-3 w-3" /> : <SortAsc className="h-3 w-3" />}
-                      {s}
-                    </button>
-                  ))}
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Sort</p>
+                  <div className="flex gap-2">
+                    {(["newest", "oldest"] as const).map(s => (
+                      <button
+                        key={s}
+                        onClick={() => setSortOrder(s)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide ${sortOrder === s ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600"}`}
+                      >
+                        {s === "newest" ? <SortDesc className="h-3 w-3" /> : <SortAsc className="h-3 w-3" />}
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Content */}
+        {/* ── List Content ────────────────────────────────────────────────── */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 space-y-3">
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
             <div className="h-14 w-14 rounded-full bg-[#0052cc]/10 flex items-center justify-center">
               <Loader2 className="h-7 w-7 animate-spin text-[#0052cc]" />
             </div>
-            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Syncing manifests...</p>
+            <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Loading manifests...</p>
           </div>
         ) : (
           <div className="space-y-4">
 
-            {/* ── ACTIVE TAB ────────────────────────────────────────────── */}
-            {activeTab === "active" && (
-              activeDeliveries.length === 0 ? (
-                <div className="bg-white border-2 border-dashed border-zinc-200 rounded-2xl p-12 text-center flex flex-col items-center gap-3">
-                  <div className="h-14 w-14 rounded-full bg-emerald-50 flex items-center justify-center">
-                    <CheckCircle2 className="h-7 w-7 text-emerald-500" />
-                  </div>
-                  <h3 className="font-black text-slate-800 tracking-tight">All Tasks Complete</h3>
-                  <p className="text-xs text-zinc-400 max-w-[200px] leading-relaxed">
-                    {searchQuery || statusFilter !== "all" ? "No orders match your current filters." : "No active dispatch files assigned to you at the moment."}
-                  </p>
-                  {(searchQuery || statusFilter !== "all") && (
-                    <button onClick={() => { setSearchQuery(""); setStatusFilter("all"); }} className="text-xs font-bold text-[#0052cc] underline mt-1">
-                      Clear filters
-                    </button>
-                  )}
-                </div>
+            {/* ── OPEN POOL TAB ─────────────────────────────────────────── */}
+            {activeTab === "pool" && (
+              openPool.length === 0 ? (
+                <EmptyState
+                  icon={Package}
+                  title="No Open Orders"
+                  message={cityFilter !== "all" ? `No orders available in ${cityFilter}. Try another city.` : "All orders have been claimed. Check back shortly."}
+                  action={cityFilter !== "all" ? { label: "Show All Cities", onClick: () => setCityFilter("all") } : undefined}
+                />
               ) : (
-                activeDeliveries.map(order => {
-                  const cfg = statusConfig[order.status] ?? statusConfig.Shipped;
-                  return (
-                    <motion.div
-                      key={order.id}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <Card className="border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
-                        {/* Card Header */}
-                        <CardHeader className="p-4 bg-zinc-50/80 border-b border-zinc-100 flex flex-row items-start justify-between gap-2">
-                          <div className="text-left">
-                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Waybill</span>
-                            <CardTitle className="text-base font-black text-slate-800 tracking-wider leading-tight">{order.tracking_number}</CardTitle>
-                            <p className="text-[10px] text-zinc-400 font-medium mt-0.5">
-                              Assigned {new Date(order.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                            </p>
-                          </div>
-                          <Badge className={`rounded-full px-2.5 py-1 text-[9px] font-black tracking-wider border-none uppercase shrink-0 flex items-center gap-1 ${cfg.bg} ${cfg.text}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot} inline-block`} />
-                            {cfg.label}
-                          </Badge>
-                        </CardHeader>
+                openPool.map(order => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    myId={myId}
+                    tab="pool"
+                    currency={currency}
+                    isClaimLoading={claimingId === order.id}
+                    isReleaseLoading={false}
+                    isMarkLoading={false}
+                    allOrders={orders}
+                    manifestChecked={manifestChecked}
+                    onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
+                    onClaim={() => handleClaim(order)}
+                    onRelease={() => {}}
+                    onMarkArrived={() => {}}
+                    onDeliver={() => openPinDialog(order)}
+                    onLogFailedAttempt={() => {}}
+                  />
+                ))
+              )
+            )}
 
-                        <CardContent className="p-4 space-y-4">
-                          {/* Customer Details */}
-                          <div className="space-y-2.5 text-left">
-                            <div className="flex items-start gap-3">
-                              <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center shrink-0">
-                                <User className="h-4 w-4 text-zinc-400" />
-                              </div>
-                              <div>
-                                <p className="font-black text-slate-800 text-[13px]">{order.customer?.name ?? "Retail Customer"}</p>
-                                {order.customer?.email && (
-                                  <p className="text-[10px] text-zinc-400 font-medium">{order.customer.email}</p>
-                                )}
-                              </div>
-                            </div>
-
-                            {order.customer?.phone && (
-                              <a
-                                href={`tel:${order.customer.phone}`}
-                                className="flex items-center gap-3 p-2.5 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors group"
-                              >
-                                <div className="h-7 w-7 rounded-full bg-[#0052cc] flex items-center justify-center shrink-0">
-                                  <Phone className="h-3.5 w-3.5 text-white" />
-                                </div>
-                                <span className="font-black text-[#0052cc] text-sm group-hover:underline">{order.customer.phone}</span>
-                                <ChevronRight className="h-4 w-4 text-[#0052cc] ml-auto" />
-                              </a>
-                            )}
-
-                            <div className="flex items-start gap-3">
-                              <div className="h-7 w-7 rounded-full bg-rose-50 flex items-center justify-center shrink-0 mt-0.5">
-                                <MapPin className="h-3.5 w-3.5 text-rose-500" />
-                              </div>
-                              <div>
-                                <p className="font-bold text-slate-700 text-xs leading-snug">{order.shipping_address}</p>
-                                <p className="font-black text-slate-800 text-sm">{order.shipping_city}</p>
-                                <span className="inline-block mt-1 text-[9px] font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase">{order.shipping_method}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Manifest */}
-                          <div className="border-t border-zinc-100 pt-3 text-left">
-                            <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Manifest Summary</p>
-                            <div className="space-y-1.5 bg-zinc-50 rounded-xl p-3 border border-zinc-100">
-                              {order.items?.map(item => (
-                                <div key={item.id} className="flex justify-between items-center">
-                                  <span className="font-bold text-slate-700 text-xs flex-1 pr-3 leading-snug">{item.product.name}</span>
-                                  <span className="text-[10px] font-black text-zinc-500 shrink-0 bg-white border border-zinc-200 rounded px-2 py-0.5">QTY: {item.quantity}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Value row */}
-                          <div className="flex items-center justify-between bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Order Value</span>
-                            <span className="font-black text-slate-800 text-sm">{currency} {Number(order.total_amount).toLocaleString()}</span>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="space-y-2 pt-1">
-                            {order.status === "Shipped" && (
-                              <Button
-                                onClick={() => handleMarkArrived(order)}
-                                disabled={markingArrived === order.id}
-                                className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl shadow-sm"
-                              >
-                                {markingArrived === order.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                ) : (
-                                  <Navigation className="h-4 w-4 mr-2" />
-                                )}
-                                Mark as Arrived at Destination
-                              </Button>
-                            )}
-                            <Button
-                              onClick={() => { setSelectedOrder(order); setIsSignatureModalOpen(true); }}
-                              disabled={markingArrived === order.id}
-                              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl shadow-sm"
-                            >
-                              <Shield className="h-4 w-4 mr-2" />
-                              Capture Digital Signature & Deliver
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  );
-                })
+            {/* ── MY TASKS TAB ──────────────────────────────────────────── */}
+            {activeTab === "mine" && (
+              myTasks.length === 0 ? (
+                <EmptyState
+                  icon={Truck}
+                  title="No Active Tasks"
+                  message="You have no claimed orders. Go to Open Pool to secure a delivery."
+                  action={{ label: "View Open Pool", onClick: () => setActiveTab("pool") }}
+                />
+              ) : (
+                myTasks.map(order => (
+                  <OrderCard
+                    key={order.id}
+                    order={order}
+                    myId={myId}
+                    tab="mine"
+                    currency={currency}
+                    isClaimLoading={false}
+                    isReleaseLoading={releasingId === order.id}
+                    isMarkLoading={markingId === order.id}
+                    allOrders={orders}
+                    manifestChecked={manifestChecked}
+                    onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
+                    onClaim={() => {}}
+                    onRelease={() => handleRelease(order)}
+                    onMarkArrived={() => handleMarkArrived(order)}
+                    onDeliver={() => openPinDialog(order)}
+                    onLogFailedAttempt={() => openFailedAttemptModal(order)}
+                  />
+                ))
               )
             )}
 
             {/* ── COMPLETED TAB ─────────────────────────────────────────── */}
             {activeTab === "completed" && (
-              completedDeliveries.length === 0 ? (
-                <div className="bg-white border border-zinc-200 rounded-2xl p-12 text-center flex flex-col items-center gap-3">
-                  <div className="h-14 w-14 rounded-full bg-zinc-50 flex items-center justify-center">
-                    <Package className="h-7 w-7 text-zinc-300" />
+              <>
+                {completedOrders.length > 0 && (
+                  <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl p-5 shadow-md mb-4 text-left">
+                    <div className="flex justify-between items-center mb-3">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">End-of-Shift Summary</p>
+                        <h3 className="text-lg font-black tracking-tight">Daily Performance</h3>
+                      </div>
+                      <span className="bg-emerald-400/30 text-white font-bold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-white/20">
+                        Shift Active
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-[10px] text-emerald-100 font-bold uppercase tracking-wider">Total Handed Over</p>
+                        <p className="text-2xl font-black">{completedOrders.length} order{completedOrders.length !== 1 ? "s" : ""}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-emerald-100 font-bold uppercase tracking-wider">Total Value Handled</p>
+                        <p className="text-2xl font-black">{currency} {completedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0).toLocaleString()}</p>
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="font-black text-slate-500 text-sm">No completed deliveries yet</h3>
-                  <p className="text-xs text-zinc-400">Completed deliveries will appear here once you have finished your first handover.</p>
-                </div>
-              ) : (
-                completedDeliveries.map(order => (
-                  <motion.div key={order.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-                    <Card className="border-zinc-200 bg-white shadow-sm rounded-2xl overflow-hidden text-left">
-                      <CardHeader className="p-4 bg-emerald-50/60 border-b border-emerald-100 flex flex-row items-center justify-between">
-                        <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Waybill</span>
-                          <CardTitle className="text-sm font-black text-slate-700 tracking-wider">{order.tracking_number}</CardTitle>
-                          <p className="text-[10px] text-zinc-400 mt-0.5">
-                            Delivered {new Date(order.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                          </p>
-                        </div>
-                        <Badge className="rounded-full px-2.5 py-1 text-[9px] font-black tracking-wider border-none uppercase bg-emerald-100 text-emerald-700 flex items-center gap-1">
-                          <Check className="h-3 w-3" /> Delivered
-                        </Badge>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-2.5 text-xs">
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400 font-bold">Recipient</span>
-                          <span className="font-black text-slate-800">{order.customer?.name ?? "—"}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400 font-bold">Destination</span>
-                          <span className="font-bold text-slate-700">{order.shipping_city}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400 font-bold">Order Value</span>
-                          <span className="font-black text-slate-800">{currency} {Number(order.total_amount).toLocaleString()}</span>
-                        </div>
-                        {order.delivery_signature_url && (
-                          <div className="flex items-center justify-between pt-2 border-t border-emerald-100">
-                            <span className="text-zinc-400 font-bold">Proof of Delivery</span>
-                            <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1">
-                              <Check className="h-3.5 w-3.5" /> Signature Saved
-                            </span>
-                          </div>
-                        )}
-                        {order.items && order.items.length > 0 && (
-                          <div className="pt-2 border-t border-zinc-100">
-                            <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Items Delivered</p>
-                            <div className="space-y-1">
-                              {order.items.map(item => (
-                                <div key={item.id} className="flex justify-between text-[11px]">
-                                  <span className="text-slate-600 font-medium truncate flex-1 pr-3">{item.product.name}</span>
-                                  <span className="text-zinc-400 font-bold shrink-0">× {item.quantity}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))
-              )
+                )}
+                {completedOrders.length === 0 ? (
+                  <EmptyState
+                    icon={CheckCircle2}
+                    title="No Completed Deliveries"
+                    message="Your completed deliveries will appear here once you finish your first handover."
+                  />
+                ) : (
+                  completedOrders.map(order => (
+                    <CompletedCard key={order.id} order={order} currency={currency} />
+                  ))
+                )}
+              </>
             )}
           </div>
         )}
       </main>
 
-      {/* ── PROFILE DRAWER ──────────────────────────────────────────────── */}
+      {/* ── PROFILE DRAWER ─────────────────────────────────────────────────── */}
+      <Drawer show={showProfile} side="left" onClose={() => setShowProfile(false)}>
+        <div className="bg-[#0052cc] p-6 pb-8">
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Driver Profile</p>
+            <button onClick={() => setShowProfile(false)} className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-white font-black text-2xl border-2 border-white/30">
+              {initials}
+            </div>
+            <div className="text-center">
+              <h2 className="text-xl font-black text-white">{user.name}</h2>
+              <p className="text-blue-200 text-xs font-medium">{user.email}</p>
+            </div>
+            <div className="flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
+              <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-[10px] font-black text-white uppercase tracking-wider">Active Driver</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 p-5 space-y-3 overflow-y-auto">
+          {([
+            { label: "Email", value: user.email, icon: User },
+            { label: "Vehicle Plate", value: (user as { vehicle_plate?: string }).vehicle_plate ?? "Not set", icon: Truck },
+            { label: "License", value: (user as { license_number?: string }).license_number ?? "Not set", icon: Shield },
+            { label: "Role", value: "Delivery Driver", icon: BarChart3 },
+          ] as const).map(item => (
+            <div key={item.label} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+              <div className="h-9 w-9 rounded-lg bg-white border border-zinc-200 flex items-center justify-center shrink-0">
+                <item.icon className="h-4 w-4 text-zinc-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">{item.label}</p>
+                <p className="text-sm font-bold text-slate-800 truncate">{item.value}</p>
+              </div>
+            </div>
+          ))}
+          <div className="grid grid-cols-2 gap-2 pt-2">
+            <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3 text-center">
+              <p className="text-2xl font-black text-emerald-600">{stats.total_delivered}</p>
+              <p className="text-[9px] font-bold text-zinc-400 uppercase">Total Delivered</p>
+            </div>
+            <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3 text-center">
+              <p className="text-2xl font-black text-[#0052cc]">{stats.today_completed}</p>
+              <p className="text-[9px] font-bold text-zinc-400 uppercase">Today</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-5 border-t border-zinc-100">
+          <button
+            onClick={() => { setShowProfile(false); logout(); }}
+            className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black text-sm border border-red-100"
+          >
+            <LogOut className="h-4 w-4" /> Sign Out
+          </button>
+        </div>
+      </Drawer>
+
+      {/* ── NOTIFICATIONS DRAWER ───────────────────────────────────────────── */}
+      <Drawer show={showNotifications} side="right" onClose={() => setShowNotifications(false)}>
+        <div className="bg-[#0052cc] p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Notifications</p>
+              <h2 className="text-lg font-black text-white">Recent Assignments</h2>
+            </div>
+            <button onClick={() => setShowNotifications(false)} className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {notifications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 gap-3">
+              <Bell className="h-10 w-10 text-zinc-200" />
+              <p className="text-sm font-bold text-zinc-400">No recent assignments</p>
+            </div>
+          ) : notifications.map(n => (
+            <div key={n.id} className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-100 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-black text-slate-800">{n.tracking_number}</p>
+                  <p className="text-[10px] text-zinc-400">{n.assigned_ago}</p>
+                </div>
+                <span className="text-[8px] font-black uppercase bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full shrink-0">{n.status}</span>
+              </div>
+              <div className="text-[11px] text-zinc-600 space-y-1">
+                <div className="flex items-center gap-1.5"><User className="h-3 w-3 text-zinc-400" /><span className="font-bold">{n.customer_name}</span></div>
+                <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3 text-zinc-400" /><span>{n.shipping_city}</span></div>
+                <div className="flex items-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span>{n.item_count} item{n.item_count !== 1 ? "s" : ""}</span></div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="p-4 border-t border-zinc-100">
+          <p className="text-[9px] text-center text-zinc-400 font-bold uppercase tracking-widest">Refreshes every 30 seconds</p>
+        </div>
+      </Drawer>
+
+
+
+      {/* ── PIN VERIFICATION DIALOG ─────────────────────────────────────────── */}
       <AnimatePresence>
-        {showProfile && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
-              onClick={() => setShowProfile(false)}
-            />
-            <motion.div
-              initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="fixed left-0 top-0 bottom-0 w-80 bg-white z-50 shadow-2xl flex flex-col text-left"
-            >
-              {/* Profile header */}
-              <div className="bg-[#0052cc] p-6 pb-8">
-                <div className="flex items-center justify-between mb-6">
-                  <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Driver Profile</p>
-                  <button onClick={() => setShowProfile(false)} className="h-7 w-7 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="flex flex-col items-center gap-3">
-                  <div className="h-20 w-20 rounded-2xl bg-white/20 flex items-center justify-center text-white font-black text-2xl border-2 border-white/30">
-                    {initials}
-                  </div>
-                  <div className="text-center">
-                    <h2 className="text-xl font-black text-white">{user.name}</h2>
-                    <p className="text-blue-200 text-xs font-medium">{user.email}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1">
-                    <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-[10px] font-black text-white uppercase tracking-wider">Active Driver</span>
-                  </div>
-                </div>
+        {showPinDialog && pinOrder && (
+          <Modal onClose={() => { setShowPinDialog(false); setPinOrder(null); }}>
+            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <Key className="h-4 w-4 text-amber-500" /> PIN Verification
+                </h2>
+                <p className="text-[10px] font-bold text-[#64748b] mt-0.5">Waybill: {pinOrder.tracking_number}</p>
               </div>
-
-              {/* Profile details */}
-              <div className="flex-1 p-5 space-y-3 overflow-y-auto">
-                {[
-                  { label: "Email Address", value: user.email, icon: User },
-                  { label: "Vehicle Plate", value: (user as any).vehicle_plate || "Not assigned", icon: Truck },
-                  { label: "License Number", value: (user as any).license_number || "Not assigned", icon: Shield },
-                  { label: "Account Role", value: "Delivery Driver", icon: BarChart3 },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
-                    <div className="h-9 w-9 rounded-lg bg-white border border-zinc-200 flex items-center justify-center shrink-0">
-                      <item.icon className="h-4 w-4 text-zinc-500" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">{item.label}</p>
-                      <p className="text-sm font-bold text-slate-800 truncate">{item.value}</p>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Stats in profile */}
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                  {[
-                    { label: "Total Delivered", value: stats.total_delivered, color: "text-emerald-600" },
-                    { label: "Today", value: stats.today_completed, color: "text-[#0052cc]" },
-                  ].map(s => (
-                    <div key={s.label} className="bg-zinc-50 border border-zinc-100 rounded-xl p-3 text-center">
-                      <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-                      <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide mt-0.5">{s.label}</p>
-                    </div>
-                  ))}
-                </div>
+              <button onClick={() => { setShowPinDialog(false); setPinOrder(null); }} className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-600">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-left">
+                <p className="text-[11px] font-bold text-amber-700 flex items-start gap-2">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  Ask the customer for the 4-digit verification PIN displayed on their customer account portal to secure this delivery.
+                </p>
               </div>
-
-              {/* Sign out */}
-              <div className="p-5 border-t border-zinc-100">
-                <button
-                  onClick={() => { setShowProfile(false); logout(); }}
-                  className="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-black text-sm transition-all border border-red-100"
+              <div className="space-y-2 text-left">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Customer's Verification PIN *</label>
+                <Input
+                  type="number"
+                  maxLength={4}
+                  placeholder="Enter 4-digit PIN"
+                  value={pinValue}
+                  onChange={e => { setPinValue(e.target.value.slice(0, 4)); setPinError(""); }}
+                  className="h-12 text-center text-2xl font-black tracking-[0.5em] border-zinc-200 rounded-xl"
+                  disabled={pinVerified}
+                />
+                {pinError && (
+                  <p className="text-xs font-bold text-red-500 flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {pinError}
+                  </p>
+                )}
+                {pinVerified && (
+                  <p className="text-xs font-bold text-emerald-600 flex items-center gap-1.5">
+                    <Check className="h-3.5 w-3.5" /> PIN verified successfully!
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => { setShowPinDialog(false); setPinOrder(null); }}
+                  className="flex-1 font-bold rounded-xl h-11 text-xs"
                 >
-                  <LogOut className="h-4 w-4" /> Sign Out
-                </button>
+                  Cancel
+                </Button>
+                {!pinVerified ? (
+                  <Button
+                    onClick={handleVerifyPin}
+                    disabled={pinLoading || pinValue.length !== 4}
+                    className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                  >
+                    {pinLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                    Verify PIN
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={openSignatureModal}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                  >
+                    <Shield className="h-4 w-4 mr-2" /> Capture Signature
+                  </Button>
+                )}
               </div>
-            </motion.div>
-          </>
+            </div>
+          </Modal>
         )}
       </AnimatePresence>
 
-      {/* ── NOTIFICATIONS DRAWER ────────────────────────────────────────── */}
+      {/* ── SIGNATURE MODAL ─────────────────────────────────────────────────── */}
       <AnimatePresence>
-        {showNotifications && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
-              onClick={() => setShowNotifications(false)}
-            />
-            <motion.div
-              initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 28, stiffness: 280 }}
-              className="fixed right-0 top-0 bottom-0 w-80 bg-white z-50 shadow-2xl flex flex-col text-left"
-            >
-              <div className="bg-[#0052cc] p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Notifications</p>
-                    <h2 className="text-lg font-black text-white">Recent Assignments</h2>
-                  </div>
-                  <button onClick={() => setShowNotifications(false)} className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30">
-                    <X className="h-4 w-4" />
-                  </button>
+        {showSignatureModal && signatureOrder && (
+          <Modal onClose={() => { setShowSignatureModal(false); setSignatureOrder(null); }}>
+            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">Proof of Delivery</h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Waybill: {signatureOrder.tracking_number}</p>
+                <p className="text-[10px] text-zinc-400">Recipient: {signatureOrder.customer?.name}</p>
+              </div>
+              <button
+                onClick={() => { setShowSignatureModal(false); setSignatureOrder(null); }}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-left">
+              {/* Recipient Signature pad */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
+                  Recipient Signature *
+                </label>
+                <div className="border-2 border-dashed border-zinc-300 rounded-xl overflow-hidden bg-white relative h-44">
+                  <p className="absolute inset-0 flex items-center justify-center text-zinc-200 text-xs font-bold pointer-events-none select-none">Sign here</p>
+                  <canvas
+                    ref={canvasRef}
+                    width={400}
+                    height={180}
+                    className="w-full h-full touch-none cursor-crosshair relative z-10 bg-transparent"
+                    onMouseDown={startDraw}
+                    onMouseUp={stopDraw}
+                    onMouseLeave={stopDraw}
+                    onMouseMove={moveDraw}
+                    onTouchStart={startDraw}
+                    onTouchEnd={stopDraw}
+                    onTouchMove={moveDraw}
+                  />
                 </div>
+                <p className="text-[9px] text-zinc-400 font-medium">⚠️ Recipient confirms receipt in good condition.</p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {notifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                    <Bell className="h-10 w-10 text-zinc-200" />
-                    <p className="text-sm font-bold text-zinc-400">No recent assignments</p>
-                    <p className="text-xs text-zinc-300">Orders assigned to you in the last 24 hours will appear here.</p>
+              {/* Doorstep Photo attachment option */}
+              <div className="space-y-2 pt-2 border-t border-zinc-100">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
+                  Doorstep / Package Photo (Optional)
+                </label>
+                
+                {photoBase64 ? (
+                  <div className="relative rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50 h-44 flex items-center justify-center">
+                    <img src={photoBase64} alt="Doorstep delivery proof" className="h-full w-full object-cover" />
+                    <button
+                      onClick={() => setPhotoBase64(null)}
+                      className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1.5 shadow hover:bg-red-700 transition-colors"
+                      title="Remove Photo"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 ) : (
-                  notifications.map(notif => {
-                    const cfg = statusConfig[notif.status] ?? statusConfig.Shipped;
-                    return (
-                      <div key={notif.id} className="p-3.5 bg-zinc-50 rounded-xl border border-zinc-100 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-black text-slate-800">{notif.tracking_number}</p>
-                            <p className="text-[10px] text-zinc-400 font-medium">{notif.assigned_ago}</p>
-                          </div>
-                          <span className={`rounded-full px-2 py-0.5 text-[8px] font-black tracking-wider uppercase shrink-0 ${cfg.bg} ${cfg.text}`}>
-                            {notif.status}
-                          </span>
-                        </div>
-                        <div className="space-y-1 text-[11px]">
-                          <div className="flex items-center gap-1.5 text-zinc-600">
-                            <User className="h-3 w-3 text-zinc-400" />
-                            <span className="font-bold">{notif.customer_name}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-zinc-600">
-                            <MapPin className="h-3 w-3 text-zinc-400" />
-                            <span className="font-medium">{notif.shipping_city}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-zinc-600">
-                            <Package className="h-3 w-3 text-zinc-400" />
-                            <span className="font-medium">{notif.item_count} item{notif.item_count !== 1 ? "s" : ""}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
+                  <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 rounded-xl p-4 bg-zinc-50 cursor-pointer hover:bg-zinc-100/50 transition-colors text-center">
+                    <span className="text-[11px] font-bold text-zinc-500">📸 Take doorstep picture with camera</span>
+                    <span className="text-[9px] text-zinc-400 mt-1">Accepts images from environment camera</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
+                  </label>
                 )}
               </div>
 
-              <div className="p-4 border-t border-zinc-100">
-                <p className="text-[9px] text-center text-zinc-400 font-bold uppercase tracking-widest">
-                  Data refreshes every 30 seconds · Tap an order in Active Tasks to act
-                </p>
+              {/* GPS status display */}
+              <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3 flex items-center justify-between text-xs">
+                <span className="text-zinc-500 font-bold">GPS Coordinate Capture</span>
+                {gpsCoords ? (
+                  <span className="text-emerald-600 font-bold flex items-center gap-1">
+                    <Check className="h-3.5 w-3.5" /> Captured
+                  </span>
+                ) : (
+                  <span className="text-amber-600 font-bold flex items-center gap-1 animate-pulse">
+                    ⚠️ Fetching coordinates...
+                  </span>
+                )}
               </div>
-            </motion.div>
-          </>
+
+              {/* Action buttons */}
+              <div className="flex gap-3 pt-2">
+                <Button onClick={clearCanvas} variant="outline" disabled={submittingSignature} className="flex-1 font-bold rounded-xl h-11 text-xs">
+                  Clear Pad
+                </Button>
+                <Button
+                  onClick={handleDeliver}
+                  disabled={submittingSignature}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  {submittingSignature && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Confirm Handover
+                </Button>
+              </div>
+            </div>
+          </Modal>
         )}
       </AnimatePresence>
 
-      {/* ── SIGNATURE MODAL ─────────────────────────────────────────────── */}
+      {/* ── FAILED ATTEMPT MODAL ────────────────────────────────────────────── */}
       <AnimatePresence>
-        {isSignatureModalOpen && selectedOrder && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden border-none"
-            >
-              <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
-                <div className="text-left">
-                  <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">Proof of Delivery</h2>
-                  <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order: {selectedOrder.tracking_number}</p>
-                  <p className="text-[10px] font-medium text-zinc-400">Recipient: {selectedOrder.customer?.name ?? "Customer"}</p>
-                </div>
-                <button
-                  onClick={() => setIsSignatureModalOpen(false)}
-                  className="h-8 w-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-600 transition-colors flex items-center justify-center"
+        {showFailedModal && failedAttemptOrder && (
+          <Modal onClose={() => { setShowFailedModal(false); setFailedAttemptOrder(null); }}>
+            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-rose-500" /> Log Delivery Failure
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Waybill: {failedAttemptOrder.tracking_number}</p>
+              </div>
+              <button
+                onClick={() => { setShowFailedModal(false); setFailedAttemptOrder(null); }}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-left">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Reason for Failure *</label>
+                <select
+                  value={failedReason}
+                  onChange={e => setFailedReason(e.target.value)}
+                  className="w-full h-11 border border-zinc-200 rounded-xl px-3 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc]"
                 >
-                  <X className="h-4 w-4" />
-                </button>
+                  <option value="">-- Select a Reason --</option>
+                  <option value="Customer Not Available">Customer Not Available</option>
+                  <option value="Wrong Address Provided">Wrong Address Provided</option>
+                  <option value="Customer Refused Delivery">Customer Refused Delivery</option>
+                  <option value="Package Damaged">Package Damaged</option>
+                  <option value="Access Denied">Access Denied</option>
+                  <option value="Other">Other (Specify in notes)</option>
+                </select>
               </div>
-              <div className="p-5 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
-                    Customer Signature (Draw inside box) *
-                  </label>
-                  <div className="border-2 border-dashed border-zinc-300 rounded-xl overflow-hidden bg-white relative h-52">
-                    <p className="absolute inset-0 flex items-center justify-center text-zinc-200 text-xs font-bold pointer-events-none select-none">
-                      Sign here
-                    </p>
-                    <canvas
-                      ref={canvasRef}
-                      width={400}
-                      height={200}
-                      className="w-full h-full touch-none cursor-crosshair relative z-10 bg-transparent"
-                      onMouseDown={startDrawing}
-                      onMouseUp={stopDrawing}
-                      onMouseLeave={stopDrawing}
-                      onMouseMove={draw}
-                      onTouchStart={startDrawing}
-                      onTouchEnd={stopDrawing}
-                      onTouchMove={draw}
-                    />
-                  </div>
-                  <p className="text-[9px] text-zinc-400 font-medium">
-                    ⚠️ By signing, the recipient confirms receipt of all items in good condition.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    onClick={clearCanvas}
-                    variant="outline"
-                    disabled={submittingSignature}
-                    className="flex-1 font-bold rounded-xl h-11 border-zinc-200 text-xs text-zinc-600"
-                  >
-                    Clear Pad
-                  </Button>
-                  <Button
-                    onClick={handleSaveSignature}
-                    disabled={submittingSignature}
-                    className="flex-1 bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 shadow-sm rounded-xl"
-                  >
-                    {submittingSignature && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                    Confirm Handover
-                  </Button>
-                </div>
+              
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Additional Notes / Context</label>
+                <textarea
+                  value={failedNotes}
+                  onChange={e => setFailedNotes(e.target.value)}
+                  placeholder="Provide any helpful instructions or explanation..."
+                  className="w-full h-24 border border-zinc-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] resize-none"
+                />
               </div>
-            </motion.div>
-          </motion.div>
+
+              {/* GPS status display */}
+              <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3 flex items-center justify-between text-xs">
+                <span className="text-zinc-500 font-bold">GPS Coordinate Capture</span>
+                {gpsCoords ? (
+                  <span className="text-emerald-600 font-bold flex items-center gap-1">
+                    <Check className="h-3.5 w-3.5" /> Captured
+                  </span>
+                ) : (
+                  <span className="text-amber-600 font-bold flex items-center gap-1 animate-pulse">
+                    ⚠️ Fetching coordinates...
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => { setShowFailedModal(false); setFailedAttemptOrder(null); }}
+                  className="flex-1 font-bold rounded-xl h-11 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleFailedAttempt}
+                  disabled={failedLoading || !failedReason}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  {failedLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Submit Failure Log
+                </Button>
+              </div>
+            </div>
+          </Modal>
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ── Shared sub-components ─────────────────────────────────────────────────────
+
+function Drawer({ show, side, onClose, children }: {
+  show: boolean;
+  side: "left" | "right";
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ x: side === "left" ? "-100%" : "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: side === "left" ? "-100%" : "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 280 }}
+            className="fixed top-0 bottom-0 w-80 bg-white z-50 shadow-2xl flex flex-col"
+            style={{ [side]: 0 }}
+          >
+            {children}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-4 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ y: 60, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 60, opacity: 0 }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+        className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {children}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function EmptyState({ icon: Icon, title, message, action }: {
+  icon: React.ElementType;
+  title: string;
+  message: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div className="bg-white border-2 border-dashed border-zinc-200 rounded-2xl p-12 text-center flex flex-col items-center gap-3">
+      <div className="h-14 w-14 rounded-full bg-zinc-50 flex items-center justify-center">
+        <Icon className="h-7 w-7 text-zinc-300" />
+      </div>
+      <h3 className="font-black text-slate-700">{title}</h3>
+      <p className="text-xs text-zinc-400 max-w-[240px] leading-relaxed">{message}</p>
+      {action && (
+        <button onClick={action.onClick} className="text-xs font-black text-[#0052cc] underline mt-1">{action.label}</button>
+      )}
+    </div>
+  );
+}
+
+function SlaTimer({ order }: { order: Order }) {
+  const [timeLeft, setTimeLeft] = useState("");
+  const [color, setColor] = useState("text-zinc-500");
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const claimTime = new Date(order.updated_at).getTime();
+      const breachTime = claimTime + 4 * 60 * 60 * 1000;
+      const diff = breachTime - Date.now();
+
+      if (diff <= 0) {
+        setTimeLeft("SLA BREACHED ⚠️");
+        setColor("text-red-500 font-black animate-pulse");
+        return;
+      }
+
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+
+      setTimeLeft(`${hrs}h ${mins}m ${secs}s left`);
+      if (diff < 1800000) {
+        setColor("text-rose-500 font-black animate-pulse");
+      } else {
+        setColor("text-amber-500 font-bold");
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [order.updated_at]);
+
+  return <span className={`text-xs font-bold ${color}`}>{timeLeft}</span>;
+}
+
+function OrderCard({
+  order,
+  myId,
+  tab,
+  currency,
+  isClaimLoading,
+  isReleaseLoading,
+  isMarkLoading,
+  allOrders,
+  manifestChecked,
+  onManifestCheckToggle,
+  onClaim,
+  onRelease,
+  onMarkArrived,
+  onDeliver,
+  onLogFailedAttempt
+}: {
+  order: Order;
+  myId: number;
+  tab: "pool" | "mine";
+  currency: string;
+  isClaimLoading: boolean;
+  isReleaseLoading: boolean;
+  isMarkLoading: boolean;
+  allOrders: Order[];
+  manifestChecked: { [orderId: number]: boolean };
+  onManifestCheckToggle: (orderId: number, checked: boolean) => void;
+  onClaim: () => void;
+  onRelease: () => void;
+  onMarkArrived: () => void;
+  onDeliver: () => void;
+  onLogFailedAttempt: () => void;
+}) {
+  const badge = getStatusBadge(order, myId);
+
+  // Check duplicate destinations locally (non-blocking warning banner)
+  const isDuplicateDestination = useMemo(() => {
+    if (tab !== "pool" || !order.shipping_address || !order.shipping_city) return false;
+    return allOrders.some(o =>
+      o.id !== order.id &&
+      o.shipping_address === order.shipping_address &&
+      o.shipping_city === order.shipping_city &&
+      o.delivered_by_user_id !== null &&
+      (o.status === "Shipped" || o.status === "Arrived")
+    );
+  }, [order, allOrders, tab]);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+      <Card className="border-zinc-200 bg-white shadow-sm rounded-2xl overflow-hidden">
+        {/* Anti-theft warning if duplicate address */}
+        {isDuplicateDestination && (
+          <div className="bg-amber-50 border-b border-amber-100 px-4 py-2.5 text-left">
+            <p className="text-[10px] font-bold text-amber-800 flex items-center gap-1.5 leading-snug">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span>Another driver already has an order for this exact destination. Coordinate with them to avoid wrong delivery.</span>
+            </p>
+          </div>
+        )}
+
+        {/* Header */}
+        <CardHeader className="p-4 bg-zinc-50/80 border-b border-zinc-100 flex flex-row items-start justify-between gap-2">
+          <div className="text-left">
+            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Waybill</span>
+            <CardTitle className="text-base font-black text-slate-800 tracking-wider leading-tight">{order.tracking_number}</CardTitle>
+            <p className="text-[10px] text-zinc-400 mt-0.5">
+              {new Date(order.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
+          </div>
+          <Badge className={`rounded-full px-2.5 py-1 text-[9px] font-black tracking-wider border-none uppercase shrink-0 flex items-center gap-1 ${badge.bg}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${badge.dot} inline-block`} />
+            {badge.label}
+          </Badge>
+        </CardHeader>
+
+        <CardContent className="p-4 space-y-4">
+          {/* SLA countdown timer inside task detail if assigned */}
+          {order.delivered_by_user_id === myId && (
+            <div className="bg-zinc-50 border border-zinc-100 rounded-xl px-3 py-2 flex items-center justify-between">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">SLA Release Timer</span>
+              <SlaTimer order={order} />
+            </div>
+          )}
+
+          {/* Customer info */}
+          <div className="space-y-2.5 text-left">
+            <div className="flex items-start gap-3">
+              <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center shrink-0">
+                <User className="h-4 w-4 text-zinc-400" />
+              </div>
+              <div>
+                <p className="font-black text-slate-800 text-[13px]">{order.customer?.name ?? "Retail Customer"}</p>
+                {order.customer?.email && <p className="text-[10px] text-zinc-400">{order.customer.email}</p>}
+              </div>
+            </div>
+
+            {order.customer?.phone && (
+              <div className="flex gap-2">
+                <a href={`tel:${order.customer.phone}`}
+                  className="flex items-center gap-2.5 p-2.5 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors group flex-1">
+                  <div className="h-7 w-7 rounded-full bg-[#0052cc] flex items-center justify-center shrink-0">
+                    <Phone className="h-3.5 w-3.5 text-white" />
+                  </div>
+                  <span className="font-black text-[#0052cc] text-xs group-hover:underline truncate">{order.customer.phone}</span>
+                </a>
+                <a href={`https://wa.me/${order.customer.phone.replace(/[^0-9]/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors group px-3.5">
+                  <div className="h-7 w-7 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
+                    <span className="text-white font-extrabold text-xs">WA</span>
+                  </div>
+                  <span className="font-black text-emerald-600 text-xs group-hover:underline">Chat</span>
+                </a>
+              </div>
+            )}
+
+            <div className="flex items-start gap-3">
+              <div className="h-7 w-7 rounded-full bg-rose-50 flex items-center justify-center shrink-0 mt-0.5">
+                <MapPin className="h-3.5 w-3.5 text-rose-500" />
+              </div>
+              <div>
+                <p className="font-bold text-slate-700 text-xs leading-snug">{order.shipping_address}</p>
+                <p className="font-black text-slate-800 text-sm">{order.shipping_city}</p>
+                <span className="inline-block mt-1 text-[9px] font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase">{order.shipping_method}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Manifest */}
+          <div className="border-t border-zinc-100 pt-3 text-left">
+            <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Manifest Summary</p>
+            <div className="space-y-1.5 bg-zinc-50 rounded-xl p-3 border border-zinc-100">
+              {order.items?.map(item => (
+                <div key={item.id} className="flex justify-between items-center">
+                  <span className="font-bold text-slate-700 text-xs flex-1 pr-3 leading-snug">{item.product.name}</span>
+                  <span className="text-[10px] font-black text-zinc-500 shrink-0 bg-white border border-zinc-200 rounded px-2 py-0.5">QTY: {item.quantity}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Package Count Verification acknowledgement (Required) */}
+          {tab === "mine" && (
+            <div className="flex items-center gap-2.5 p-2.5 bg-zinc-50 border border-zinc-150 rounded-xl text-left">
+              <input
+                type="checkbox"
+                id={`manifest-check-${order.id}`}
+                checked={!!manifestChecked[order.id]}
+                onChange={e => onManifestCheckToggle(order.id, e.target.checked)}
+                className="h-4.5 w-4.5 rounded border-zinc-300 text-[#0052cc] focus:ring-[#0052cc] cursor-pointer"
+              />
+              <label htmlFor={`manifest-check-${order.id}`} className="text-[11px] font-bold text-slate-700 cursor-pointer select-none leading-tight">
+                I verify that the physical package count matches this manifest *
+              </label>
+            </div>
+          )}
+
+          {/* Order value */}
+          <div className="flex items-center justify-between bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase">Order Value</span>
+            <span className="font-black text-slate-800 text-sm">{currency} {Number(order.total_amount).toLocaleString()}</span>
+          </div>
+
+          {/* Action buttons */}
+          <div className="space-y-2 pt-1">
+            {tab === "pool" && (
+              <Button
+                onClick={onClaim}
+                disabled={isClaimLoading}
+                className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+              >
+                {isClaimLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+                Secure This Order
+              </Button>
+            )}
+
+            {tab === "mine" && (
+              <>
+                {order.status === "Shipped" && (
+                  <Button
+                    onClick={onMarkArrived}
+                    disabled={isMarkLoading}
+                    className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                  >
+                    {isMarkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Navigation className="h-4 w-4 mr-2" />}
+                    Mark as Arrived at Destination
+                  </Button>
+                )}
+                <Button
+                  onClick={onDeliver}
+                  disabled={isMarkLoading || !manifestChecked[order.id]}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  <Key className="h-4 w-4 mr-2" /> Verify PIN & Deliver
+                </Button>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    onClick={onLogFailedAttempt}
+                    disabled={isMarkLoading}
+                    variant="outline"
+                    className="border-zinc-200 text-zinc-600 hover:bg-zinc-50 font-bold text-[10px] h-9 rounded-xl uppercase tracking-wider"
+                  >
+                    Log Failure
+                  </Button>
+                  <Button
+                    onClick={onRelease}
+                    disabled={isReleaseLoading}
+                    variant="outline"
+                    className="border-red-200 text-red-500 hover:bg-red-50 font-bold text-[10px] h-9 rounded-xl uppercase tracking-wider"
+                  >
+                    {isReleaseLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : null}
+                    Release Back
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
+function CompletedCard({ order, currency }: { order: Order; currency: string }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="border-zinc-200 bg-white shadow-sm rounded-2xl overflow-hidden text-left">
+        <CardHeader className="p-4 bg-emerald-50/60 border-b border-emerald-100 flex flex-row items-center justify-between">
+          <div>
+            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Waybill</span>
+            <CardTitle className="text-sm font-black text-slate-700 tracking-wider">{order.tracking_number}</CardTitle>
+            <p className="text-[10px] text-zinc-400 mt-0.5">
+              {new Date(order.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </p>
+          </div>
+          <Badge className="rounded-full px-2.5 py-1 text-[9px] font-black tracking-wider border-none uppercase bg-emerald-100 text-emerald-700 flex items-center gap-1">
+            <Check className="h-3 w-3" /> Delivered
+          </Badge>
+        </CardHeader>
+        <CardContent className="p-4 space-y-2.5 text-xs">
+          <div className="flex justify-between"><span className="text-zinc-400 font-bold">Recipient</span><span className="font-black text-slate-800">{order.customer?.name ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-zinc-400 font-bold">Destination</span><span className="font-bold text-slate-700">{order.shipping_city}</span></div>
+          <div className="flex justify-between"><span className="text-zinc-400 font-bold">Order Value</span><span className="font-black text-slate-800">{currency} {Number(order.total_amount).toLocaleString()}</span></div>
+          {order.delivery_signature_url && (
+            <div className="flex items-center justify-between pt-2 border-t border-emerald-100">
+              <span className="text-zinc-400 font-bold">Proof of Delivery</span>
+              <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Signature Saved</span>
+            </div>
+          )}
+          {order.items && order.items.length > 0 && (
+            <div className="pt-2 border-t border-zinc-100">
+              <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Items</p>
+              {order.items.map(item => (
+                <div key={item.id} className="flex justify-between text-[11px]">
+                  <span className="text-slate-600 font-medium truncate flex-1 pr-3">{item.product.name}</span>
+                  <span className="text-zinc-400 font-bold shrink-0">× {item.quantity}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }

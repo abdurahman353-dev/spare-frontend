@@ -1315,6 +1315,31 @@ function AccountPortalInner() {
                </div>
              )}
 
+             {/* ── DELIVERY VERIFICATION PIN — only shown when order is in transit ── */}
+             {(selectedOrder?.status === "Shipped" || selectedOrder?.status === "Arrived") && selectedOrder?.delivery_pin && (
+               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-center shadow-inner">
+                 <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1 flex items-center justify-center gap-1.5">
+                   <Lock className="h-3.5 w-3.5" /> Delivery Verification PIN
+                 </p>
+                 <p className="text-[11px] text-amber-600 font-medium mb-3">
+                   For order <span className="font-black">{selectedOrder.tracking_number}</span>
+                 </p>
+                 <div className="flex items-center justify-center gap-3 mb-3">
+                   {String(selectedOrder.delivery_pin).split("").map((digit: string, i: number) => (
+                     <div
+                       key={i}
+                       className="h-14 w-12 rounded-xl bg-white border-2 border-amber-400 flex items-center justify-center text-2xl font-black text-amber-800 shadow-sm"
+                     >
+                       {digit}
+                     </div>
+                   ))}
+                 </div>
+                 <p className="text-[10px] text-amber-700 font-bold leading-snug max-w-[280px] mx-auto">
+                   🔐 Share this PIN <strong>only</strong> with the driver when they arrive at your door to confirm delivery. Never share it before arrival.
+                 </p>
+               </div>
+             )}
+
              <div>
                <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Manifest Summary</h4>
                {selectedOrder?.items?.map((item: any, idx: number) => {
@@ -1431,6 +1456,22 @@ function AccountPortalInner() {
                     </div>
                   )}
                 </div>
+             )}
+
+             {/* Verification PIN Section (only shows when order is Shipped/Arrived) */}
+             {selectedOrder && (selectedOrder.status === "Shipped" || selectedOrder.status === "Arrived") && selectedOrder.delivery_pin && (
+               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left my-4 shadow-sm">
+                 <div className="flex items-center gap-2 mb-2 text-amber-800">
+                   <ShieldCheck className="h-4.5 w-4.5 text-amber-600" />
+                   <h5 className="text-[12px] font-bold uppercase tracking-wider">Delivery Verification PIN</h5>
+                 </div>
+                 <p className="text-[11px] text-amber-700 leading-relaxed mb-3">
+                   Please quote this secure PIN to the delivery driver upon collection. The driver will verify it to authorize your handover.
+                 </p>
+                 <div className="inline-flex items-center bg-white border border-amber-300 rounded-lg px-4 py-2 font-mono text-lg font-black tracking-widest text-[#0052cc] shadow-sm select-all">
+                   {selectedOrder.delivery_pin}
+                 </div>
+               </div>
              )}
 
               <div className="pt-6 border-t border-[#f1f5f9] space-y-2">

@@ -311,7 +311,8 @@ export default function DeliveryPortal() {
 
   const openPool = useMemo(() => {
     let list = orders.filter(o =>
-      (o.status === "Shipped" || o.status === "Arrived") &&
+      // Only show orders that have physically arrived at the local hub (not Shipped/in-transit on the road)
+      o.status === "Arrived" &&
       o.delivered_by_user_id === null
     );
     if (cityFilter !== "all") list = list.filter(o => o.shipping_city === cityFilter);
@@ -346,7 +347,7 @@ export default function DeliveryPortal() {
   // Unique cities for filter selector
   const availableCities = useMemo(() => {
     const cities = orders
-      .filter(o => (o.status === "Shipped" || o.status === "Arrived") && o.delivered_by_user_id === null)
+      .filter(o => o.status === "Arrived" && o.delivered_by_user_id === null)
       .map(o => o.shipping_city)
       .filter(Boolean);
     return Array.from(new Set(cities)).sort();
@@ -1754,7 +1755,7 @@ function OrderCard({
 
             {tab === "mine" && (
               <>
-                {order.status === "Shipped" && (
+                {order.status === "Shipped" ? (
                   <Button
                     onClick={onMarkArrived}
                     disabled={isMarkLoading}
@@ -1763,14 +1764,15 @@ function OrderCard({
                     {isMarkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Navigation className="h-4 w-4 mr-2" />}
                     Mark as Arrived at Destination
                   </Button>
+                ) : (
+                  <Button
+                    onClick={onDeliver}
+                    disabled={isMarkLoading || !manifestChecked[order.id]}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <Key className="h-4 w-4 mr-2" /> Verify PIN & Deliver
+                  </Button>
                 )}
-                <Button
-                  onClick={onDeliver}
-                  disabled={isMarkLoading || !manifestChecked[order.id]}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl disabled:opacity-40 disabled:pointer-events-none"
-                >
-                  <Key className="h-4 w-4 mr-2" /> Verify PIN & Deliver
-                </Button>
                 
                 <div className="grid grid-cols-2 gap-2">
                   <Button

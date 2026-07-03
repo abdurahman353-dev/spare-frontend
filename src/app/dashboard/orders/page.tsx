@@ -165,10 +165,19 @@ function AdminOrdersPageInner() {
           osc.start(ctx.currentTime);
           osc.stop(ctx.currentTime + 0.45);
         } catch (e) { /* ignore audio blocked */ }
+        setPreviousIncidentIds(currentIds);
+      } else {
+        // If there are no new incidents, but the list changed (e.g. an incident was resolved)
+        const isDifferent = previousIncidentIds.length !== currentIds.length || 
+                            previousIncidentIds.some(id => !currentIds.includes(id));
+        if (isDifferent) {
+          setPreviousIncidentIds(currentIds);
+        }
       }
-      setPreviousIncidentIds(currentIds);
     } else {
-      setPreviousIncidentIds([]);
+      if (previousIncidentIds.length > 0) {
+        setPreviousIncidentIds([]);
+      }
     }
   }, [activeIncidents, previousIncidentIds]);
 
@@ -1553,9 +1562,18 @@ function AdminOrdersPageInner() {
                           {order.shipping_method === "Pickup" ? (
                             <span className="text-xs text-zinc-400 font-medium italic">In-Store — No Delivery</span>
                           ) : (
-                            <div className="space-y-1">
+                            <div className="space-y-1 text-left">
                               <p className="text-xs font-bold text-zinc-900">{order.shipping_city || "—"}</p>
                               <p className="text-xs font-bold text-zinc-700 max-w-[160px] truncate">{order.shipping_address || "—"}</p>
+                              {order.shipment ? (
+                                <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                                  🚛 Container: {order.shipment.waybill}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                                  📦 Local Hub Direct
+                                </span>
+                              )}
                             </div>
                           )}
                         </TableCell>

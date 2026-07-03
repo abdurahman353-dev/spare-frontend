@@ -605,13 +605,51 @@ export default function AdminLogisticsPage() {
 
     const selectedOrderObjects = unassignedOrders.filter(o => selectedOrders.includes(o.id));
 
+    // ── Local Delivery Guard ──────────────────────────────────────────────────
+    // If a warehouse city matches the order's destination city it's a LOCAL delivery.
+    // Local orders cannot be containerized — they must be dispatched directly from the hub.
+    const localOrders = selectedOrderObjects.filter(o => {
+      const warehouseLocation = o.items?.[0]?.warehouse?.location || "";
+      const warehouseName = o.items?.[0]?.warehouse?.name || "";
+      const destCity = (o.shipping_city || "").trim().toLowerCase();
+      if (!destCity) return false;
+
+      const locLower = warehouseLocation.toLowerCase();
+      const nameLower = warehouseName.toLowerCase();
+      return locLower.includes(destCity) || nameLower.includes(destCity);
+    });
+
+    if (localOrders.length > 0) {
+      const localRefs = localOrders.map((o: any) => o.tracking_number).join(", ");
+      return toast.error(
+        `Cannot containerize local orders: ${localRefs}. These orders ship within the same city as their warehouse hub — they must be dispatched directly to a local driver.`,
+        {
+          duration: 7000,
+          icon: "🚫",
+          style: {
+            background: "#e11d48",
+            color: "#fff",
+            fontWeight: "bold",
+            fontSize: "12px",
+            borderRadius: "10px",
+            border: "1px solid #9f1239",
+            maxWidth: "420px"
+          }
+        }
+      );
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const firstOrigin = selectedOrderObjects[0]?.items?.[0]?.warehouse?.name || selectedOrderObjects[0]?.origin;
     const firstDest = `${selectedOrderObjects[0]?.shipping_city}, ${selectedOrderObjects[0]?.shipping_country}`;
 
+    const firstOriginClean = (firstOrigin || "").trim().toLowerCase();
+    const firstDestClean = (firstDest || "").trim().toLowerCase();
+
     const allMatch = selectedOrderObjects.every(o => {
-      const currentOrigin = o.items?.[0]?.warehouse?.name || o.origin;
-      const currentDest = `${o.shipping_city}, ${o.shipping_country}`;
-      return currentOrigin === firstOrigin && currentDest === firstDest;
+      const currentOrigin = (o.items?.[0]?.warehouse?.name || o.origin || "").trim().toLowerCase();
+      const currentDest = `${o.shipping_city || ""}, ${o.shipping_country || ""}`.trim().toLowerCase();
+      return currentOrigin === firstOriginClean && currentDest === firstDestClean;
     });
 
     if (!allMatch) {

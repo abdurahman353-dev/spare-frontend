@@ -26,6 +26,7 @@ interface OrderItem {
   product: { name: string };
   quantity: number;
   price: number;
+  warehouse?: { name?: string; location?: string };
 }
 
 interface Order {
@@ -310,11 +311,32 @@ export default function DeliveryPortal() {
   }, [orders, myId, searchQuery, sortOrder]);
 
   const openPool = useMemo(() => {
-    let list = orders.filter(o =>
-      // Only show orders that have physically arrived at the local hub (not Shipped/in-transit on the road)
-      o.status === "Arrived" &&
-      o.delivered_by_user_id === null
-    );
+    let list = orders.filter(o => {
+      if (o.delivered_by_user_id !== null) return false;
+
+      // Extract city names to check if local or containerized
+      const isLocal = (() => {
+        if (o.shipping_method === "Pickup") return true;
+        const location = o.items?.[0]?.warehouse?.location || "";
+        const warehouseName = o.items?.[0]?.product?.name || ""; // fallback / check if product/items has name
+        // Eager load items has items?.[0]?.warehouse?.name
+        const whName = o.items?.[0]?.warehouse?.name || "";
+        const destCity = (o.shipping_city || "").trim().toLowerCase();
+        if (!destCity) return true;
+        
+        const locLower = location.toLowerCase();
+        const nameLower = whName.toLowerCase();
+        return locLower.includes(destCity) || nameLower.includes(destCity);
+      })();
+
+      if (isLocal) {
+        // Direct local delivery: show in pool when Shipped (out of warehouse) or Arrived
+        return o.status === "Shipped" || o.status === "Arrived";
+      } else {
+        // Containerized delivery: only show once it has physically Arrived at the destination hub
+        return o.status === "Arrived";
+      }
+    });
     if (cityFilter !== "all") list = list.filter(o => o.shipping_city === cityFilter);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -347,7 +369,27 @@ export default function DeliveryPortal() {
   // Unique cities for filter selector
   const availableCities = useMemo(() => {
     const cities = orders
-      .filter(o => o.status === "Arrived" && o.delivered_by_user_id === null)
+      .filter(o => {
+        if (o.delivered_by_user_id !== null) return false;
+
+        const isLocal = (() => {
+          if (o.shipping_method === "Pickup") return true;
+          const location = o.items?.[0]?.warehouse?.location || "";
+          const whName = o.items?.[0]?.warehouse?.name || "";
+          const destCity = (o.shipping_city || "").trim().toLowerCase();
+          if (!destCity) return true;
+          
+          const locLower = location.toLowerCase();
+          const nameLower = whName.toLowerCase();
+          return locLower.includes(destCity) || nameLower.includes(destCity);
+        })();
+
+        if (isLocal) {
+          return o.status === "Shipped" || o.status === "Arrived";
+        } else {
+          return o.status === "Arrived";
+        }
+      })
       .map(o => o.shipping_city)
       .filter(Boolean);
     return Array.from(new Set(cities)).sort();

@@ -12,12 +12,13 @@ import {
   User, Check, X, Bell, Search, RefreshCw,
   Truck, TrendingUp, Shield, Navigation,
   ChevronRight, Filter, BarChart3,
-  WifiOff, Key, Lock, AlertTriangle, SortDesc, SortAsc,
+  WifiOff, Key, Lock, AlertTriangle, SortDesc, SortAsc, ArrowRightLeft,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { toast } from "react-hot-toast";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface OrderItem {
@@ -156,6 +157,12 @@ export default function DeliveryPortal() {
   const [failedNotes, setFailedNotes]             = useState("");
   const [failedLoading, setFailedLoading]         = useState(false);
   const [showFailedModal, setShowFailedModal]     = useState(false);
+
+  // Unified Release modal
+  const [releaseModalOrder, setReleaseModalOrder] = useState<Order | null>(null);
+  const [releaseType, setReleaseType]             = useState<"failure" | "operational">("operational");
+  const [releaseReason, setReleaseReason]         = useState("");
+  const [releaseNotes, setReleaseNotes]           = useState("");
 
   // Manifest acknowledgement per order
   const [manifestChecked, setManifestChecked]     = useState<{[orderId: number]: boolean}>({});
@@ -365,11 +372,30 @@ export default function DeliveryPortal() {
     }
   };
 
-  const handleRelease = async (order: Order) => {
-    setReleasingId(order.id);
+  const openReleaseModal = (order: Order) => {
+    setReleaseModalOrder(order);
+    setReleaseType("operational");
+    setReleaseReason("");
+    setReleaseNotes("");
+  };
+
+  const handleReleaseSubmit = async () => {
+    if (!releaseModalOrder) return;
+    if (releaseType === "failure" && !releaseReason) {
+      toast.error("Please select a failure reason");
+      return;
+    }
+
+    setReleasingId(releaseModalOrder.id);
     try {
-      await api.post(`/delivery/orders/${order.id}/release`);
-      toast.success(`Order ${order.tracking_number} released back to the pool.`);
+      const res = await api.post(`/delivery/orders/${releaseModalOrder.id}/release`, {
+        release_type: releaseType,
+        reason: releaseType === "failure" ? releaseReason : null,
+        notes: releaseNotes || null,
+      });
+
+      toast.success(res.data.message || `Order ${releaseModalOrder.tracking_number} released back to the pool.`);
+      setReleaseModalOrder(null);
       await fetchOrders(true);
       await fetchStats();
     } catch (err: unknown) {
@@ -401,10 +427,46 @@ export default function DeliveryPortal() {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotoBase64(reader.result as string);
-      toast.success("Doorstep photo captured successfully!");
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Limit dimensions to max 800px width/height to keep size small (~100KB)
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          // Convert to jpeg with 70% quality compression
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+          setPhotoBase64(compressedBase64);
+          toast.success("Doorstep photo captured and optimized successfully!");
+        } else {
+          // Fallback if canvas context is not supported
+          setPhotoBase64(event.target?.result as string);
+          toast.success("Doorstep photo captured!");
+        }
+      };
+      img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
@@ -867,7 +929,7 @@ export default function DeliveryPortal() {
                     manifestChecked={manifestChecked}
                     onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
                     onClaim={() => {}}
-                    onRelease={() => handleRelease(order)}
+                    onRelease={() => openReleaseModal(order)}
                     onMarkArrived={() => handleMarkArrived(order)}
                     onDeliver={() => openPinDialog(order)}
                     onLogFailedAttempt={() => openFailedAttemptModal(order)}
@@ -1254,6 +1316,109 @@ export default function DeliveryPortal() {
                 >
                   {failedLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                   Submit Failure Log
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ── UNIFIED RELEASE MODAL ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {releaseModalOrder && (
+          <Modal onClose={() => setReleaseModalOrder(null)}>
+            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <ArrowRightLeft className="h-4 w-4 text-zinc-600" /> Release Claimed Order
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Waybill: {releaseModalOrder.tracking_number}</p>
+              </div>
+              <button
+                onClick={() => setReleaseModalOrder(null)}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-left">
+              {/* Type Select buttons */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Reason Category *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => { setReleaseType("operational"); setReleaseReason(""); }}
+                    className={cn(
+                      "py-2.5 px-3 rounded-xl border text-xs font-bold transition-all duration-200",
+                      releaseType === "operational"
+                        ? "bg-zinc-100 border-zinc-300 text-zinc-900 shadow-sm"
+                        : "bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50"
+                    )}
+                  >
+                    🛠️ Operational Reason
+                  </button>
+                  <button
+                    onClick={() => setReleaseType("failure")}
+                    className={cn(
+                      "py-2.5 px-3 rounded-xl border text-xs font-bold transition-all duration-200",
+                      releaseType === "failure"
+                        ? "bg-amber-50 border-amber-300 text-amber-900 shadow-sm"
+                        : "bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50"
+                    )}
+                  >
+                    ⚠️ Delivery Failed First
+                  </button>
+                </div>
+              </div>
+
+              {/* Dropdown if releaseType is failure */}
+              {releaseType === "failure" && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Failure Reason *</label>
+                  <select
+                    value={releaseReason}
+                    onChange={e => setReleaseReason(e.target.value)}
+                    className="w-full h-11 border border-zinc-200 rounded-xl px-3 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc]"
+                  >
+                    <option value="">-- Select a Failure Reason --</option>
+                    <option value="Customer Not Available">Customer Not Available</option>
+                    <option value="Wrong Address Provided">Wrong Address Provided</option>
+                    <option value="Customer Refused Delivery">Customer Refused Delivery</option>
+                    <option value="Package Damaged">Package Damaged</option>
+                    <option value="Access Denied">Access Denied</option>
+                    <option value="Other">Other (Specify in notes)</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Notes */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
+                  {releaseType === "failure" ? "Failure Notes & Release Explanation *" : "Operational Notes / Reason"}
+                </label>
+                <textarea
+                  value={releaseNotes}
+                  onChange={e => setReleaseNotes(e.target.value)}
+                  placeholder={releaseType === "failure" ? "Please detail why the delivery failed before releasing..." : "Flat tire, ran out of time, end of shift..."}
+                  className="w-full h-24 border border-zinc-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] resize-none"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setReleaseModalOrder(null)}
+                  className="flex-1 font-bold rounded-xl h-11 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleReleaseSubmit}
+                  disabled={releasingId !== null || (releaseType === "failure" && (!releaseReason || !releaseNotes))}
+                  className="flex-1 bg-zinc-950 hover:bg-zinc-800 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  {releasingId !== null && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Confirm Release
                 </Button>
               </div>
             </div>

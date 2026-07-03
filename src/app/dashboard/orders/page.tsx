@@ -2112,15 +2112,33 @@ function AdminOrdersPageInner() {
                       </div>
                     </div>
                   )}
-                  {currentSelectedOrder?.delivery_signature_url && (
+                  {(currentSelectedOrder?.delivery_signature_url || currentSelectedOrder?.delivery_photo_url) && (
                     <div className="pt-2 border-t border-zinc-100">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Recipient Signature (POD)</p>
-                      <div className="border border-zinc-200 rounded-lg p-2 bg-zinc-50/50 inline-block">
-                        <img
-                          src={currentSelectedOrder.delivery_signature_url}
-                          alt="Customer Signature"
-                          className="h-20 max-w-full object-contain"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {currentSelectedOrder?.delivery_signature_url && (
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Recipient Signature (POD)</p>
+                            <div className="border border-zinc-200 rounded-lg p-2 bg-zinc-50/50 inline-block">
+                              <img
+                                src={currentSelectedOrder.delivery_signature_url}
+                                alt="Customer Signature"
+                                className="h-20 max-w-full object-contain"
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {currentSelectedOrder?.delivery_photo_url && (
+                          <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Doorstep Photo Proof</p>
+                            <div className="border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/50 max-w-[200px]">
+                              <img
+                                src={currentSelectedOrder.delivery_photo_url}
+                                alt="Doorstep Photo Proof"
+                                className="h-20 w-full object-cover"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}

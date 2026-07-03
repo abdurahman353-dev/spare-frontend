@@ -36,6 +36,7 @@ interface Order {
   updated_at: string;
   status: string;
   shipping_city: string;
+  shipping_country: string;
   shipping_address: string;
   shipping_method: string;
   total_amount: number;
@@ -44,7 +45,8 @@ interface Order {
   customer?: { name: string; phone?: string; email?: string };
   items?: OrderItem[];
   delivery_signature_url?: string;
-  driver?: { name: string; phone?: string };
+  delivery_photo_url?: string;
+  driver?: { name: string; phone?: string; vehicle_plate?: string };
 }
 
 interface DeliveryNotification {
@@ -123,9 +125,10 @@ export default function DeliveryPortal() {
   const [notifUnread, setNotifUnread]           = useState(0);
 
   // Search & filter
-  const [searchQuery, setSearchQuery]     = useState("");
-  const [cityFilter, setCityFilter]       = useState("all");
-  const [sortOrder, setSortOrder]         = useState<"newest" | "oldest">("newest");
+  const [searchQuery, setSearchQuery]       = useState("");
+  const [countryFilter, setCountryFilter]   = useState("all");
+  const [cityFilter, setCityFilter]         = useState("all");
+  const [sortOrder, setSortOrder]           = useState<"newest" | "oldest">("newest");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
   // Order actions
@@ -274,6 +277,55 @@ export default function DeliveryPortal() {
     }
   }, [user, fetchOrders, fetchStats, fetchNotifications]);
 
+  // ── Filtered lists ─────────────────────────────────────────────────────────
+  const myId = user?.id ?? 0;
+
+  // Unique countries & cities for filter selectors.
+  // IMPORTANT: These must be declared BEFORE the polling useEffect (line ~300)
+  // and before any useEffect that uses them in its dependency array.
+  const availableCountries = useMemo(() => {
+    const countries = orders
+      .filter(o => o.delivered_by_user_id === null && (o.status === "Shipped" || o.status === "Arrived"))
+      .map(o => o.shipping_country)
+      .filter(Boolean);
+    return Array.from(new Set(countries)).sort() as string[];
+  }, [orders]);
+
+  const availableCities = useMemo(() => {
+    const cities = orders
+      .filter(o => {
+        if (o.delivered_by_user_id !== null) return false;
+        if (countryFilter !== "all" && o.shipping_country?.toLowerCase() !== countryFilter.toLowerCase()) return false;
+        const isLocal = (() => {
+          if (o.shipping_method === "Pickup") return true;
+          const location = o.items?.[0]?.warehouse?.location || "";
+          const whName   = o.items?.[0]?.warehouse?.name || "";
+          const destCity = (o.shipping_city || "").trim().toLowerCase();
+          if (!destCity) return true;
+          return location.toLowerCase().includes(destCity) || whName.toLowerCase().includes(destCity);
+        })();
+        return isLocal ? (o.status === "Shipped" || o.status === "Arrived") : o.status === "Arrived";
+      })
+      .map(o => o.shipping_city)
+      .filter(Boolean);
+    return Array.from(new Set(cities)).sort() as string[];
+  }, [orders, countryFilter]);
+
+  // Auto-filter open pool to driver's registered country + city on first load.
+  // Runs whenever orders load or driver profile is set.
+  useEffect(() => {
+    if (!user) return;
+    if (user.country && availableCountries.length > 0 && countryFilter === "all") {
+      const match = availableCountries.find(c => c.toLowerCase() === (user.country ?? "").toLowerCase());
+      if (match) setCountryFilter(match);
+    }
+    if (user.city && availableCities.length > 0 && cityFilter === "all") {
+      const match = availableCities.find(c => c.toLowerCase() === (user.city ?? "").toLowerCase());
+      if (match) setCityFilter(match);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, availableCountries, availableCities]);
+
   // 30-second polling
   useEffect(() => {
     if (!user) return;
@@ -286,9 +338,6 @@ export default function DeliveryPortal() {
       if (secondsRef.current)  clearInterval(secondsRef.current);
     };
   }, [user, isOnline, fetchOrders, fetchStats, fetchNotifications]);
-
-  // ── Filtered lists ─────────────────────────────────────────────────────────
-  const myId = user?.id ?? 0;
 
   const myTasks = useMemo(() => {
     let list = orders.filter(o =>
@@ -318,13 +367,11 @@ export default function DeliveryPortal() {
       const isLocal = (() => {
         if (o.shipping_method === "Pickup") return true;
         const location = o.items?.[0]?.warehouse?.location || "";
-        const warehouseName = o.items?.[0]?.product?.name || ""; // fallback / check if product/items has name
-        // Eager load items has items?.[0]?.warehouse?.name
-        const whName = o.items?.[0]?.warehouse?.name || "";
+        const whName   = o.items?.[0]?.warehouse?.name || "";
         const destCity = (o.shipping_city || "").trim().toLowerCase();
         if (!destCity) return true;
-        
-        const locLower = location.toLowerCase();
+
+        const locLower  = location.toLowerCase();
         const nameLower = whName.toLowerCase();
         return locLower.includes(destCity) || nameLower.includes(destCity);
       })();
@@ -337,6 +384,7 @@ export default function DeliveryPortal() {
         return o.status === "Arrived";
       }
     });
+    if (countryFilter !== "all") list = list.filter(o => o.shipping_country?.toLowerCase() === countryFilter.toLowerCase());
     if (cityFilter !== "all") list = list.filter(o => o.shipping_city === cityFilter);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -351,7 +399,7 @@ export default function DeliveryPortal() {
         ? new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
     );
-  }, [orders, cityFilter, searchQuery, sortOrder]);
+  }, [orders, countryFilter, cityFilter, searchQuery, sortOrder]);
 
   const completedOrders = useMemo(() => {
     let list = orders.filter(o => o.status === "Delivered" && o.delivered_by_user_id === myId);
@@ -366,37 +414,22 @@ export default function DeliveryPortal() {
     return list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   }, [orders, myId, searchQuery]);
 
-  // Unique cities for filter selector
-  const availableCities = useMemo(() => {
-    const cities = orders
-      .filter(o => {
-        if (o.delivered_by_user_id !== null) return false;
-
-        const isLocal = (() => {
-          if (o.shipping_method === "Pickup") return true;
-          const location = o.items?.[0]?.warehouse?.location || "";
-          const whName = o.items?.[0]?.warehouse?.name || "";
-          const destCity = (o.shipping_city || "").trim().toLowerCase();
-          if (!destCity) return true;
-          
-          const locLower = location.toLowerCase();
-          const nameLower = whName.toLowerCase();
-          return locLower.includes(destCity) || nameLower.includes(destCity);
-        })();
-
-        if (isLocal) {
-          return o.status === "Shipped" || o.status === "Arrived";
-        } else {
-          return o.status === "Arrived";
-        }
-      })
-      .map(o => o.shipping_city)
-      .filter(Boolean);
-    return Array.from(new Set(cities)).sort();
-  }, [orders]);
-
   // ── Actions ────────────────────────────────────────────────────────────────
   const handleClaim = async (order: Order) => {
+    // ── Location Mismatch Guard ──────────────────────────────────────────────
+    if (order.shipping_city && user?.city &&
+      order.shipping_city.toLowerCase() !== (user.city ?? "").toLowerCase()) {
+      toast.error(
+        `Location Mismatch: This order is destined for ${order.shipping_city}, but your profile is registered to ${user.city}. You cannot claim orders outside your registered hub.`,
+        {
+          duration: 5000,
+          icon: "🚫",
+          style: { background: "#ef4444", color: "#fff", fontWeight: "bold", fontSize: "12px", borderRadius: "10px", maxWidth: "400px" }
+        }
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
     setClaimingId(order.id);
     try {
       await api.post(`/delivery/orders/${order.id}/claim`);
@@ -863,13 +896,38 @@ export default function DeliveryPortal() {
               initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
               className="bg-white border border-zinc-200 rounded-xl p-4 mb-4 shadow-sm overflow-hidden"
             >
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Country row */}
+                {availableCountries.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">🌍 Filter by Country</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => { setCountryFilter("all"); setCityFilter("all"); }}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${countryFilter === "all" ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
+                      >
+                        All Countries
+                      </button>
+                      {availableCountries.map(country => (
+                        <button
+                          key={country}
+                          onClick={() => { setCountryFilter(country); setCityFilter("all"); }}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${countryFilter === country ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
+                        >
+                          {country}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* City row */}
                 <div>
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Filter by City</p>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">📍 Filter by City</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => setCityFilter("all")}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide ${cityFilter === "all" ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600"}`}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${cityFilter === "all" ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
                     >
                       All Cities
                     </button>
@@ -877,13 +935,15 @@ export default function DeliveryPortal() {
                       <button
                         key={city}
                         onClick={() => setCityFilter(city)}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide ${cityFilter === city ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600"}`}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${cityFilter === city ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
                       >
                         {city}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Sort row */}
                 <div>
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Sort</p>
                   <div className="flex gap-2">
@@ -891,7 +951,7 @@ export default function DeliveryPortal() {
                       <button
                         key={s}
                         onClick={() => setSortOrder(s)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide ${sortOrder === s ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600"}`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${sortOrder === s ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
                       >
                         {s === "newest" ? <SortDesc className="h-3 w-3" /> : <SortAsc className="h-3 w-3" />}
                         {s}
@@ -899,6 +959,16 @@ export default function DeliveryPortal() {
                     ))}
                   </div>
                 </div>
+
+                {/* Reset all */}
+                {(countryFilter !== "all" || cityFilter !== "all") && (
+                  <button
+                    onClick={() => { setCountryFilter("all"); setCityFilter("all"); }}
+                    className="w-full text-[10px] font-black uppercase tracking-widest text-red-500 border border-red-200 rounded-lg py-1.5 hover:bg-red-50 transition-colors"
+                  >
+                    ✕ Reset All Filters
+                  </button>
+                )}
               </div>
             </motion.div>
           )}
@@ -1548,6 +1618,13 @@ function SlaTimer({ order }: { order: Order }) {
   const [color, setColor] = useState("text-zinc-500");
 
   useEffect(() => {
+    // If the driver has arrived at the customer's doorstep, stop the timer
+    if (order.status === "Arrived") {
+      setTimeLeft("Arrived at Doorstep 📍");
+      setColor("text-emerald-600 font-black");
+      return;
+    }
+
     const updateTimer = () => {
       const claimTime = new Date(order.updated_at).getTime();
       const breachTime = claimTime + 4 * 60 * 60 * 1000;
@@ -1803,8 +1880,8 @@ function OrderCard({
                     disabled={isMarkLoading}
                     className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
                   >
-                    {isMarkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Navigation className="h-4 w-4 mr-2" />}
-                    Mark as Arrived at Destination
+                    {isMarkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapPin className="h-4 w-4 mr-2" />}
+                    📍 Mark Arrived at Customer Doorstep
                   </Button>
                 ) : (
                   <Button

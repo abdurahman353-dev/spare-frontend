@@ -355,7 +355,20 @@ export default function AdminLogisticsPage() {
       const matchesDateFrom = !dateFrom || orderDate >= new Date(dateFrom).setHours(0, 0, 0, 0);
       const matchesDateTo = !dateTo || orderDate <= new Date(dateTo).setHours(0, 0, 0, 0);
 
-      return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesDateFrom && matchesDateTo;
+      // Local deliveries (warehouse name or location contains destination city) are not containerized.
+      const isLocal = (() => {
+        if (order.shipping_method === "Pickup") return true;
+        const warehouseLocation = order.items?.[0]?.warehouse?.location || "";
+        const warehouseName = order.items?.[0]?.warehouse?.name || "";
+        const destCity = (order.shipping_city || "").trim().toLowerCase();
+        if (!destCity) return false;
+
+        const locLower = warehouseLocation.toLowerCase();
+        const nameLower = warehouseName.toLowerCase();
+        return locLower.includes(destCity) || nameLower.includes(destCity);
+      })();
+
+      return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesDateFrom && matchesDateTo && !isLocal;
     });
   }, [unassignedOrders, searchQuery, warehouseFilter, unassignedCountryFilter, unassignedCityFilter, dateFrom, dateTo]);
 

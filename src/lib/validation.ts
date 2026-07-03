@@ -61,13 +61,32 @@ export function getPasswordStrength(password: string): PasswordStrength {
 
     const score = Object.values(checks).filter(Boolean).length;
 
-    const labels = ['Too Short', 'Weak', 'Fair', 'Good', 'Strong'] as const;
-    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#16a34a'];
+    // If the length check fails, always show Too Short regardless of other criteria
+    let label: PasswordStrength['label'] = 'Too Short';
+    let color = '#ef4444';
+
+    if (!checks.length) {
+        label = 'Too Short';
+        color = '#ef4444';
+    } else if (score <= 2) {
+        label = 'Weak';
+        color = '#f97316';
+    } else if (score === 3) {
+        label = 'Fair';
+        color = '#eab308';
+    } else if (score === 4) {
+        label = 'Good';
+        color = '#22c55e';
+    } else {
+        // score === 5 — all checks passed
+        label = 'Strong';
+        color = '#16a34a';
+    }
 
     return {
         score,
-        label: score === 0 && !checks.length ? 'Too Short' : labels[score] ?? 'Too Short',
-        color: colors[score] ?? colors[0],
+        label,
+        color,
         checks,
     };
 }

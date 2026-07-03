@@ -138,7 +138,13 @@ function AccountPortalInner() {
       target: "#tour-table",
       placement: "top" as const,
       title: "📦 Recent History & Live Waybills",
-      content: `View status details of your recent orders placed with ${bizName}. Click the 'Inspect' button on any row to open Logistics Intelligence details, see live Container Waybills, check carrier names, and track ETAs.`,
+      content: `View status details of your recent orders placed with ${bizName}. Click the 'Inspect' button on any row to open Logistics Intelligence details, see live Container Waybills, check carrier names, track ETAs, and view your delivery driver's name, phone, vehicle plate, and proof-of-delivery once your package arrives.`,
+    },
+    {
+      target: "#tour-table",
+      placement: "top" as const,
+      title: "🔐 Delivery Security PIN — Important",
+      content: `When your order is dispatched (status changes to Shipped or Arrived), a unique 4-digit Security PIN will appear inside the 'Inspect' modal for that order. You MUST NOT share this PIN with anyone — not even the driver — until they physically arrive at your doorstep with your package. The driver will ask for this PIN at your door to confirm delivery. Sharing it early may result in your package being handed to the wrong person.`,
     },
     {
       target: "#tour-statement-section",
@@ -1315,7 +1321,50 @@ function AccountPortalInner() {
                </div>
              )}
 
-             {/* ── DELIVERY VERIFICATION PIN — only shown when order is in transit ── */}
+             {/* ── DRIVER & DELIVERY PROOFS — shown when order is Shipped/Arrived/Delivered ── */}
+             {selectedOrder?.shipping_method !== "Pickup" && (selectedOrder?.driver || selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
+               <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] space-y-3">
+                 <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest">Delivery &amp; Driver Details</h4>
+                 {selectedOrder?.driver && (
+                   <div className="flex items-center gap-3">
+                     <div className="h-9 w-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-700 font-black text-xs border border-indigo-200">
+                       {selectedOrder.driver.name.substring(0, 2).toUpperCase()}
+                     </div>
+                     <div className="min-w-0 flex-1">
+                       <p className="text-sm font-bold text-zinc-800 truncate">{selectedOrder.driver.name}</p>
+                       {selectedOrder.driver.phone && <p className="text-xs text-zinc-500 truncate">{selectedOrder.driver.phone}</p>}
+                       {selectedOrder.driver.vehicle_plate && (
+                         <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                           Plate: {selectedOrder.driver.vehicle_plate}
+                         </p>
+                       )}
+                     </div>
+                   </div>
+                 )}
+                 {(selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
+                   <div className="pt-3 border-t border-[#e2e8f0] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     {selectedOrder?.delivery_signature_url && (
+                       <div>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Recipient Signature (POD)</p>
+                         <div className="border border-zinc-200 rounded-lg p-2 bg-white inline-block">
+                           <img src={selectedOrder.delivery_signature_url} alt="Recipient Signature" className="h-16 max-w-full object-contain" />
+                         </div>
+                       </div>
+                     )}
+                     {selectedOrder?.delivery_photo_url && (
+                       <div>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Doorstep Photo Proof</p>
+                         <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white max-w-[160px]">
+                           <img src={selectedOrder.delivery_photo_url} alt="Doorstep Photo" className="w-full h-auto object-cover max-h-[100px]" />
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                 )}
+               </div>
+             )}
+
+
              {(selectedOrder?.status === "Shipped" || selectedOrder?.status === "Arrived") && selectedOrder?.delivery_pin && (
                <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-center shadow-inner">
                  <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1 flex items-center justify-center gap-1.5">

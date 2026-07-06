@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Search, Filter, ShoppingCart, ImageIcon, ChevronLeft, ChevronRight, LogOut, Plus, Minus, Tag, Zap, Compass, ChevronDown } from "lucide-react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { useCart } from "@/context/CartContext";
 import Image from "next/image";
 import { cn, getCategoryColor } from "@/lib/utils";
@@ -20,6 +21,11 @@ import { Joyride, Step } from "react-joyride";
 const JoyrideComponent = Joyride as any;
 
 interface Category {
+  id: number;
+  name: string;
+}
+
+interface Brand {
   id: number;
   name: string;
 }
@@ -39,7 +45,7 @@ interface Product {
   name: string;
   price: number;
   category: { name: string; id: number };
-  brand: { name: string };
+  brand: { name: string; id: number };
   images?: string[];
   status?: string;
   weight: number;
@@ -503,7 +509,10 @@ export default function PublicProductsPage() {
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
+  const [brandSearch, setBrandSearch] = useState("");
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [selectedBrandIds, setSelectedBrandIds] = useState<number[]>([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [totalItems, setTotalItems] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -512,12 +521,13 @@ export default function PublicProductsPage() {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/products", {
+      const res = await api.get(API_ENDPOINTS.products.base, {
         params: {
           page: currentPage,
           per_page: pageSize,
           search: searchQuery,
           category_id: selectedCategoryIds.length === 1 ? selectedCategoryIds[0] : undefined,
+          brand_id: selectedBrandIds.length === 1 ? selectedBrandIds[0] : undefined,
           // If multiple categories are selected, we still fetch by search/pagination
           // but we'll apply the multi-category filter client-side on the current page
         }
@@ -538,20 +548,34 @@ export default function PublicProductsPage() {
   };
 
   useEffect(() => {
-    api.get("/categories")
+    api.get(API_ENDPOINTS.categories.base)
       .then((res) => setCategories(res.data))
       .catch(console.error);
   }, []);
 
   useEffect(() => {
+    api.get(API_ENDPOINTS.brands.base)
+      .then((res) => setBrands(res.data))
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
     fetchProducts();
-  }, [currentPage, pageSize, searchQuery, selectedCategoryIds]);
+  }, [currentPage, pageSize, searchQuery, selectedCategoryIds, selectedBrandIds]);
 
   const toggleCategory = (categoryId: number) => {
     setSelectedCategoryIds((prev) =>
       prev.includes(categoryId)
         ? prev.filter((id) => id !== categoryId)
         : [...prev, categoryId]
+    );
+  };
+
+  const toggleBrand = (brandId: number) => {
+    setSelectedBrandIds((prev) =>
+      prev.includes(brandId)
+        ? prev.filter((id) => id !== brandId)
+        : [...prev, brandId]
     );
   };
 
@@ -563,13 +587,17 @@ export default function PublicProductsPage() {
         selectedCategoryIds.length <= 1 || // Already filtered by server if 1 or 0
         (product.category && selectedCategoryIds.includes(product.category.id));
 
-      return matchesCategory;
+      const matchesBrand =
+        selectedBrandIds.length <= 1 || // Already filtered by server if 1 or 0
+        (product.brand && selectedBrandIds.includes(product.brand.id));
+
+      return matchesCategory && matchesBrand;
     });
-  }, [products, selectedCategoryIds]);
+  }, [products, selectedCategoryIds, selectedBrandIds]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, selectedCategoryIds]);
+  }, [searchQuery, selectedCategoryIds, selectedBrandIds]);
 
   const paginatedProducts = filteredProducts; // Already limited by server pageSize
 
@@ -631,7 +659,7 @@ export default function PublicProductsPage() {
             {/* Filters Sidebar */}
             <aside id="tour-categories-sidebar" className="w-full md:w-64">
               <div className="bg-white p-5 rounded-xl border border-zinc-200/80 shadow-sm space-y-6">
-                <div 
+                <div
                   className="flex justify-between items-center pb-3 border-b border-zinc-100 cursor-pointer md:cursor-default select-none"
                   onClick={() => setShowMobileFilters(!showMobileFilters)}
                 >
@@ -654,41 +682,95 @@ export default function PublicProductsPage() {
                     />
                   </div>
 
-                {/* Category Checkbox List */}
-                <div
-                  className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
-                  style={{ WebkitOverflowScrolling: "touch" }}
-                >
-                  {categories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 ? (
-                    <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No categories found</p>
-                  ) : (
-                    categories
-                      .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
-                      .map((cat) => {
-                        const isSelected = selectedCategoryIds.includes(cat.id);
-                        return (
-                          <label
-                            key={cat.id}
-                            className={cn(
-                              "flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all select-none border font-semibold text-xs",
-                              isSelected 
-                                ? "bg-blue-50/50 border-blue-200 text-[#0052cc]" 
-                                : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleCategory(cat.id)}
-                              className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
-                            />
-                            <span>
-                              {cat.name}
-                            </span>
-                          </label>
-                        );
-                      })
-                  )}
+                  {/* Category Checkbox List */}
+                  <div
+                    className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
+                    style={{ WebkitOverflowScrolling: "touch" }}
+                  >
+                    {categories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 ? (
+                      <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No categories found</p>
+                    ) : (
+                      categories
+                        .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
+                        .map((cat) => {
+                          const isSelected = selectedCategoryIds.includes(cat.id);
+                          return (
+                            <label
+                              key={cat.id}
+                              className={cn(
+                                "flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all select-none border font-semibold text-xs",
+                                isSelected
+                                  ? "bg-blue-50/50 border-blue-200 text-[#0052cc]"
+                                  : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
+                              )}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleCategory(cat.id)}
+                                className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
+                              />
+                              <span>
+                                {cat.name}
+                              </span>
+                            </label>
+                          );
+                        })
+                    )}
+                  </div>
+
+                  {/* ── Brand Filter ── */}
+                  <div className="pt-4 mt-1 border-t border-zinc-100 space-y-3">
+                    <h3 className="font-bold text-sm text-zinc-900 flex items-center gap-2 uppercase tracking-wider text-[11px]">
+                      <Tag className="h-4 w-4 text-[#0052cc]" />
+                      Filter by Brand
+                    </h3>
+
+                    {/* Brand Search */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                      <Input
+                        className="pl-9 h-9 text-xs border-[#cbd5e1] placeholder:text-zinc-500 rounded-lg font-semibold"
+                        placeholder="Search brands..."
+                        value={brandSearch}
+                        onChange={(e) => setBrandSearch(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Brand Checkbox List */}
+                    <div
+                      className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
+                      style={{ WebkitOverflowScrolling: "touch" }}
+                    >
+                      {brands.filter(b => b.name.toLowerCase().includes(brandSearch.toLowerCase())).length === 0 ? (
+                        <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No brands found</p>
+                      ) : (
+                        brands
+                          .filter(b => b.name.toLowerCase().includes(brandSearch.toLowerCase()))
+                          .map((brand) => {
+                            const isSelected = selectedBrandIds.includes(brand.id);
+                            return (
+                              <label
+                                key={brand.id}
+                                className={cn(
+                                  "flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all select-none border font-semibold text-xs",
+                                  isSelected
+                                    ? "bg-blue-50/50 border-blue-200 text-[#0052cc]"
+                                    : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
+                                )}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleBrand(brand.id)}
+                                  className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
+                                />
+                                <span>{brand.name}</span>
+                              </label>
+                            );
+                          })
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -735,6 +817,7 @@ export default function PublicProductsPage() {
                     onClick={() => {
                       setSearchQuery("");
                       setSelectedCategoryIds([]);
+                      setSelectedBrandIds([]);
                     }}
                   >
                     Clear all filters

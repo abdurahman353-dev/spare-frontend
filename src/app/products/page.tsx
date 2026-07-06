@@ -657,122 +657,166 @@ export default function PublicProductsPage() {
         <div className="container mx-auto px-4 py-12">
           <div className="flex flex-col md:flex-row gap-8">
             {/* Filters Sidebar */}
-            <aside id="tour-categories-sidebar" className="w-full md:w-64">
-              <div className="bg-white p-5 rounded-xl border border-zinc-200/80 shadow-sm space-y-6">
+            <aside id="tour-categories-sidebar" className="w-full md:w-64 shrink-0">
+              <div className="bg-white rounded-xl border border-zinc-200/80 shadow-sm overflow-hidden">
+
+                {/* ── Sticky Sidebar Header (toggle on mobile) ── */}
                 <div
-                  className="flex justify-between items-center pb-3 border-b border-zinc-100 cursor-pointer md:cursor-default select-none"
+                  className="flex justify-between items-center px-5 py-4 border-b border-zinc-100 cursor-pointer md:cursor-default select-none sticky top-0 bg-white z-10"
                   onClick={() => setShowMobileFilters(!showMobileFilters)}
                 >
-                  <h3 className="font-bold text-sm text-zinc-900 flex items-center gap-2 uppercase tracking-wider text-[11px]">
-                    <Filter className="h-4 w-4 text-[#0052cc]" />
-                    Filter by Categories
+                  <h3 className="font-black text-[11px] text-zinc-800 flex items-center gap-2 uppercase tracking-widest">
+                    <Filter className="h-3.5 w-3.5 text-[#0052cc]" />
+                    Filters
                   </h3>
-                  <ChevronDown className={cn("h-4 w-4 text-zinc-500 transition-transform md:hidden", showMobileFilters ? "rotate-180" : "")} />
+                  <ChevronDown className={cn("h-4 w-4 text-zinc-400 transition-transform duration-200", showMobileFilters ? "rotate-180" : "")} />
                 </div>
 
-                <div className={cn("space-y-6 md:block", showMobileFilters ? "block" : "hidden")}>
-                  {/* Category Search */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                    <Input
-                      className="pl-9 h-9 text-xs border-[#cbd5e1] placeholder:text-zinc-500 rounded-lg font-semibold"
-                      placeholder="Search categories..."
-                      value={categorySearch}
-                      onChange={(e) => setCategorySearch(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Category Checkbox List */}
+                {/* ── Collapsible body — scrollable on mobile ── */}
+                <div
+                  className={cn(
+                    "transition-all duration-300 md:block",
+                    showMobileFilters ? "block" : "hidden"
+                  )}
+                >
+                  {/* Inner scroll container — max 70vh on mobile so it never swamps the screen */}
                   <div
-                    className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
+                    className="overflow-y-auto max-h-[70vh] md:max-h-none px-5 pb-5 pt-4 space-y-5"
                     style={{ WebkitOverflowScrolling: "touch" }}
                   >
-                    {categories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 ? (
-                      <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No categories found</p>
-                    ) : (
-                      categories
-                        .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
-                        .map((cat) => {
-                          const isSelected = selectedCategoryIds.includes(cat.id);
-                          return (
-                            <label
-                              key={cat.id}
-                              className={cn(
-                                "flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all select-none border font-semibold text-xs",
-                                isSelected
-                                  ? "bg-blue-50/50 border-blue-200 text-[#0052cc]"
-                                  : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
-                              )}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleCategory(cat.id)}
-                                className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
-                              />
-                              <span>
-                                {cat.name}
-                              </span>
-                            </label>
-                          );
-                        })
-                    )}
-                  </div>
 
-                  {/* ── Brand Filter ── */}
-                  <div className="pt-4 mt-1 border-t border-zinc-100 space-y-3">
-                    <h3 className="font-bold text-sm text-zinc-900 flex items-center gap-2 uppercase tracking-wider text-[11px]">
-                      <Tag className="h-4 w-4 text-[#0052cc]" />
-                      Filter by Brand
-                    </h3>
+                    {/* ── CATEGORIES ── */}
+                    <div className="space-y-3">
+                      <p className="font-black text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <Filter className="h-3 w-3 text-[#0052cc]" /> Categories
+                      </p>
 
-                    {/* Brand Search */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                      <Input
-                        className="pl-9 h-9 text-xs border-[#cbd5e1] placeholder:text-zinc-500 rounded-lg font-semibold"
-                        placeholder="Search brands..."
-                        value={brandSearch}
-                        onChange={(e) => setBrandSearch(e.target.value)}
-                      />
+                      {/* Category Search */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                        <Input
+                          className="pl-9 h-9 text-xs border-[#cbd5e1] placeholder:text-zinc-400 rounded-lg font-semibold"
+                          placeholder="Search categories..."
+                          value={categorySearch}
+                          onChange={(e) => setCategorySearch(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Category List — scrollable, shows ~4 items then scrolls */}
+                      <div className="relative">
+                        <div
+                          className="space-y-1 max-h-[168px] overflow-y-auto pr-1 touch-pan-y"
+                          style={{
+                            WebkitOverflowScrolling: "touch",
+                            scrollbarWidth: "thin",
+                            scrollbarColor: "#e2e8f0 transparent",
+                          }}
+                        >
+                          {categories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length === 0 ? (
+                            <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No categories found</p>
+                          ) : (
+                            categories
+                              .filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase()))
+                              .map((cat) => {
+                                const isSelected = selectedCategoryIds.includes(cat.id);
+                                return (
+                                  <label
+                                    key={cat.id}
+                                    className={cn(
+                                      "flex items-center gap-3 cursor-pointer px-2.5 py-2 rounded-lg transition-all select-none border font-semibold text-xs",
+                                      isSelected
+                                        ? "bg-blue-50/60 border-blue-200 text-[#0052cc]"
+                                        : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
+                                    )}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleCategory(cat.id)}
+                                      className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer shrink-0"
+                                    />
+                                    <span className="truncate">{cat.name}</span>
+                                  </label>
+                                );
+                              })
+                          )}
+                        </div>
+                        {/* Fade hint — shows more items below */}
+                        {categories.filter(cat => cat.name.toLowerCase().includes(categorySearch.toLowerCase())).length > 4 && (
+                          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent rounded-b-lg" />
+                        )}
+                      </div>
                     </div>
 
-                    {/* Brand Checkbox List */}
-                    <div
-                      className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 touch-pan-y scrollbar-thin scrollbar-thumb-zinc-200 scrollbar-track-transparent"
-                      style={{ WebkitOverflowScrolling: "touch" }}
-                    >
-                      {brands.filter(b => b.name.toLowerCase().includes(brandSearch.toLowerCase())).length === 0 ? (
-                        <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No brands found</p>
-                      ) : (
-                        brands
-                          .filter(b => b.name.toLowerCase().includes(brandSearch.toLowerCase()))
-                          .map((brand) => {
-                            const isSelected = selectedBrandIds.includes(brand.id);
-                            return (
-                              <label
-                                key={brand.id}
-                                className={cn(
-                                  "flex items-center gap-3 cursor-pointer p-2.5 rounded-lg transition-all select-none border font-semibold text-xs",
-                                  isSelected
-                                    ? "bg-blue-50/50 border-blue-200 text-[#0052cc]"
-                                    : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => toggleBrand(brand.id)}
-                                  className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer"
-                                />
-                                <span>{brand.name}</span>
-                              </label>
-                            );
-                          })
-                      )}
+                    {/* Divider */}
+                    <div className="border-t border-zinc-100" />
+
+                    {/* ── BRANDS ── */}
+                    <div className="space-y-3">
+                      <p className="font-black text-[10px] text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
+                        <Tag className="h-3 w-3 text-[#0052cc]" /> Brands
+                      </p>
+
+                      {/* Brand Search */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                        <Input
+                          className="pl-9 h-9 text-xs border-[#cbd5e1] placeholder:text-zinc-400 rounded-lg font-semibold"
+                          placeholder="Search brands..."
+                          value={brandSearch}
+                          onChange={(e) => setBrandSearch(e.target.value)}
+                        />
+                      </div>
+
+                      {/* Brand List — scrollable, shows ~4 items then scrolls */}
+                      <div className="relative">
+                        <div
+                          className="space-y-1 max-h-[168px] overflow-y-auto pr-1 touch-pan-y"
+                          style={{
+                            WebkitOverflowScrolling: "touch",
+                            scrollbarWidth: "thin",
+                            scrollbarColor: "#e2e8f0 transparent",
+                          }}
+                        >
+                          {brands.filter(b => b.name.toLowerCase().includes(brandSearch.toLowerCase())).length === 0 ? (
+                            <p className="text-xs text-zinc-400 font-medium py-2 italic text-center">No brands found</p>
+                          ) : (
+                            brands
+                              .filter(b => b.name.toLowerCase().includes(brandSearch.toLowerCase()))
+                              .map((brand) => {
+                                const isSelected = selectedBrandIds.includes(brand.id);
+                                return (
+                                  <label
+                                    key={brand.id}
+                                    className={cn(
+                                      "flex items-center gap-3 cursor-pointer px-2.5 py-2 rounded-lg transition-all select-none border font-semibold text-xs",
+                                      isSelected
+                                        ? "bg-blue-50/60 border-blue-200 text-[#0052cc]"
+                                        : "bg-white border-transparent text-[#475569] hover:bg-zinc-50 hover:text-zinc-900"
+                                    )}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => toggleBrand(brand.id)}
+                                      className="rounded border-[#cbd5e1] text-[#0052cc] focus:ring-[#0052cc] w-4 h-4 cursor-pointer shrink-0"
+                                    />
+                                    <span className="truncate">{brand.name}</span>
+                                  </label>
+                                );
+                              })
+                          )}
+                        </div>
+                        {/* Fade hint */}
+                        {brands.filter(b => b.name.toLowerCase().includes(brandSearch.toLowerCase())).length > 4 && (
+                          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent rounded-b-lg" />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </div>
+
+                  </div>{/* end inner scroll */}
+                </div>{/* end collapsible body */}
+
               </div>
             </aside>
 

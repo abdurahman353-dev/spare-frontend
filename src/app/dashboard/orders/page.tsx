@@ -1940,7 +1940,7 @@ function AdminOrdersPageInner() {
                                   (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
                                     order.status === "Arrived" ? "bg-indigo-600 text-white" :
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" :
-                                        order.status === "Returned" ? "bg-purple-600 text-white" :
+                                        order.status === "Returned" ? "bg-red-600 text-white" :
                                           (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
                             )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
                           </div>
@@ -2082,7 +2082,7 @@ function AdminOrdersPageInner() {
                   currentSelectedOrder?.status === "Shipped" || currentSelectedOrder?.status === "In Transit" ? "bg-blue-600 text-white" :
                     currentSelectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" :
                       currentSelectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
-                        currentSelectedOrder?.status === "Returned" ? "bg-purple-600 text-white" :
+                        currentSelectedOrder?.status === "Returned" ? "bg-red-600 text-white" :
                           "bg-zinc-200 text-zinc-700"
             )}>
               {currentSelectedOrder?.status === "In Transit" ? "SHIPPED" : currentSelectedOrder?.status}
@@ -3051,9 +3051,9 @@ function AdminOrdersPageInner() {
             </p>
           </div>
           <DialogFooter className="p-4 bg-zinc-50 border-t m-0 shrink-0">
-            <Button variant="outline" className="font-bold" onClick={() => setIsApproveCancelModalOpen(false)}>Cancel</Button>
+            <Button variant="outline" className="font-bold" onClick={() => setIsApproveCancelModalOpen(false)}>No, Cancel</Button>
             <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleApproveCancel} disabled={isProcessingAction}>
-              {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Approve Cancellation
+              {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Yes, Approve
             </Button>
           </DialogFooter>
         </DialogContent>

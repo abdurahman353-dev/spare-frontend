@@ -1614,77 +1614,7 @@ function AccountPortalInner() {
         </DialogContent>
       </Dialog>
 
-      {/* Cancel Order Modal */}
-      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
-        <DialogContent className="rounded-lg border-[#e2e8f0] shadow-xl sm:max-w-[450px]">
-          <DialogHeader>
-            <DialogTitle className="font-bold text-[#1e293b]">Request Order Cancellation</DialogTitle>
-            <DialogDescription className="text-xs text-[#64748b]">
-              Select the products you wish to cancel and provide a cancellation reason.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {selectedOrder?.items && (
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider block">Tick Products to Cancel *</label>
-                <div className="space-y-2 max-h-[180px] overflow-y-auto border border-[#e2e8f0] rounded-md p-3 bg-slate-50/50">
-                  {selectedOrder.items.map((item: any) => {
-                    const isItemCancelled = item.cancellation_status === "Cancelled" || item.cancellation_status === "Pending";
-                    return (
-                      <label key={item.id} className={cn("flex items-start gap-3 p-2 rounded-lg border border-transparent hover:bg-white transition-colors cursor-pointer", isItemCancelled && "opacity-60 cursor-not-allowed")}>
-                        <input
-                          type="checkbox"
-                          disabled={isItemCancelled}
-                          checked={isItemCancelled || selectedItemIdsToCancel.includes(item.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedItemIdsToCancel([...selectedItemIdsToCancel, item.id]);
-                            } else {
-                              setSelectedItemIdsToCancel(selectedItemIdsToCancel.filter(id => id !== item.id));
-                            }
-                          }}
-                          className="w-4 h-4 accent-[#0052cc] rounded mt-0.5 cursor-pointer"
-                        />
-                        <div className="text-xs">
-                          <p className="font-bold text-slate-800 leading-tight">{item.product?.name || "Genuine Part"}</p>
-                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                            Qty: {item.quantity} · Price: Ksh {Number(item.price).toLocaleString()}
-                          </p>
-                          {item.cancellation_status && item.cancellation_status !== "None" && (
-                            <span className={cn(
-                              "text-[9px] font-black uppercase border px-1.5 py-0.2 rounded mt-1 inline-block",
-                              item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-red-50 text-red-700 border-red-100"
-                            )}>
-                              {item.cancellation_status === "Pending" ? "Pending Approval" : "Cancelled / Refunded"}
-                            </span>
-                          )}
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            
-            <div className="space-y-1">
-              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Cancellation Reason *</label>
-              <textarea 
-                rows={3}
-                placeholder="e.g., I ordered the wrong item, or I changed my mind..."
-                className="w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc]"
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" className="font-bold" onClick={() => setIsCancelModalOpen(false)}>Back</Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleRequestCancel} disabled={isCancelling}>
-              {isCancelling ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Submit Request
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
 
       {/* Return Request Modal */}
       <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>

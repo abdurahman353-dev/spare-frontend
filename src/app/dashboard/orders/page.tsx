@@ -1952,15 +1952,7 @@ function AdminOrdersPageInner() {
                                 </DropdownMenuItem>
                               )}
 
-                              {order.status === "Cancellation Requested" && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuLabel className="text-[10px] font-black text-red-400 uppercase px-2 py-1.5">Cancellation</DropdownMenuLabel>
-                                  <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsApproveCancelModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-red-600">
-                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Approve Cancellation
-                                  </DropdownMenuItem>
-                                </>
-                              )}
+
 
                               {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
                                 <>
@@ -2951,67 +2943,7 @@ function AdminOrdersPageInner() {
         </DialogContent>
       </Dialog>
 
-      {/* Approve Cancellation Modal */}
-      <Dialog open={isApproveCancelModalOpen} onOpenChange={setIsApproveCancelModalOpen}>
-        <DialogContent className="rounded-lg shadow-xl sm:max-w-[450px] bg-white border-none p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-4 border-b">
-            <DialogTitle className="font-bold text-zinc-900">Approve Cancellation</DialogTitle>
-            <DialogDescription className="text-xs text-zinc-500">
-              Approving this will approve the cancellation request, restore inventory to the warehouse, and mark the refund as pending.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="p-6 space-y-4">
-            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-              <p className="text-xs font-semibold text-red-700 mb-1">Customer Reason:</p>
-              <p className="text-sm text-red-900 italic">"{currentSelectedOrder?.cancellation_reason || 'No reason provided'}"</p>
-            </div>
 
-            {currentSelectedOrder?.items && (
-              <div className="space-y-2">
-                <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Items Requested for Cancellation:</p>
-                <div className="space-y-1.5 max-h-[150px] overflow-y-auto border border-zinc-200 rounded-lg p-2.5 bg-zinc-50">
-                  {currentSelectedOrder.items
-                    .filter((item: any) => item.cancellation_status === "Pending")
-                    .map((item: any) => (
-                      <div key={item.id} className="flex justify-between items-center text-xs">
-                        <span className="font-semibold text-zinc-800 truncate max-w-[250px]">{item.product?.name || "Genuine Part"}</span>
-                        <span className="text-zinc-500 font-bold shrink-0">{item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  {currentSelectedOrder.items.filter((item: any) => item.cancellation_status === "Pending").length === 0 && (
-                    <p className="text-xs font-medium text-zinc-400 italic">All order items</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <p className="text-sm font-black text-zinc-900 pt-3 border-t border-zinc-100">
-              Total Refund Value: Ksh {
-                (() => {
-                  const pendingItems = currentSelectedOrder?.items?.filter((i: any) => i.cancellation_status === "Pending") || [];
-                  const totalUnits = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                  const shippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
-
-                  const amt = pendingItems.length > 0
-                    ? pendingItems.reduce((acc: number, i: any) => {
-                      const itemProductCost = Number(i.price) * i.quantity;
-                      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
-                      return acc + itemProductCost + itemShippingShare;
-                    }, 0)
-                    : parseFloat(currentSelectedOrder?.total_amount || 0);
-                  return Math.round(amt).toLocaleString();
-                })()
-              }
-            </p>
-          </div>
-          <DialogFooter className="p-4 bg-zinc-50 border-t m-0 shrink-0">
-            <Button variant="outline" className="font-bold" onClick={() => setIsApproveCancelModalOpen(false)}>No, Cancel</Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleApproveCancel} disabled={isProcessingAction}>
-              {isProcessingAction ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Yes, Approve
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Complete Refund Modal */}
       <Dialog open={isCompleteRefundModalOpen} onOpenChange={setIsCompleteRefundModalOpen}>

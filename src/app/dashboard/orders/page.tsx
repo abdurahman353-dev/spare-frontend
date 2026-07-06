@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { toast } from "react-hot-toast";
 import { exportOrdersPDF } from "@/lib/pdf-export";
@@ -82,6 +83,23 @@ function getWalkInDestinationLabel(order: {
 
 function isOrderVoided(order: { status?: string; payment_status?: string }): boolean {
   return order.status === "Cancelled" || order.payment_status === "Refunded";
+}
+
+/** Compares warehouse origin city vs shipping destination city to tell a
+ *  same-city "Local Shipment" route (e.g. Nairobi → Nairobi) apart from a
+ *  cross-city "Shipment" route (e.g. Nairobi → Mombasa). */
+function getShipmentRouteCities(order: any): { origin: string; destination: string } {
+  const origin = (order.items?.[0]?.warehouse?.city || order.items?.[0]?.warehouse?.name || "")
+    .trim()
+    .toLowerCase();
+  const destination = (order.shipping_city || "").trim().toLowerCase();
+  return { origin, destination };
+}
+
+function isLocalShipmentRoute(order: any): boolean {
+  const { origin, destination } = getShipmentRouteCities(order);
+  if (!origin || !destination) return false;
+  return origin === destination;
 }
 
 /**
@@ -133,10 +151,10 @@ function AdminOrdersPageInner() {
   const [isIncidentActionLoading, setIsIncidentActionLoading] = useState<Record<number, boolean>>({});
 
   const activeIncidents = useMemo(() => {
-    return orders.filter(o => 
+    return orders.filter(o =>
       (o.pin_locked || (o.failed_attempts_count && o.failed_attempts_count > 0)) &&
-      o.status !== "Delivered" && 
-      o.status !== "Cancelled" && 
+      o.status !== "Delivered" &&
+      o.status !== "Cancelled" &&
       o.status !== "Returned"
     );
   }, [orders]);
@@ -153,23 +171,23 @@ function AdminOrdersPageInner() {
           const gain = ctx.createGain();
           osc.connect(gain);
           gain.connect(ctx.destination);
-          
+
           osc.type = "sawtooth";
           osc.frequency.setValueAtTime(440, ctx.currentTime);
           osc.frequency.setValueAtTime(554, ctx.currentTime + 0.15);
           osc.frequency.setValueAtTime(440, ctx.currentTime + 0.3);
-          
+
           gain.gain.setValueAtTime(0.15, ctx.currentTime);
           gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-          
+
           osc.start(ctx.currentTime);
           osc.stop(ctx.currentTime + 0.45);
         } catch (e) { /* ignore audio blocked */ }
         setPreviousIncidentIds(currentIds);
       } else {
         // If there are no new incidents, but the list changed (e.g. an incident was resolved)
-        const isDifferent = previousIncidentIds.length !== currentIds.length || 
-                            previousIncidentIds.some(id => !currentIds.includes(id));
+        const isDifferent = previousIncidentIds.length !== currentIds.length ||
+          previousIncidentIds.some(id => !currentIds.includes(id));
         if (isDifferent) {
           setPreviousIncidentIds(currentIds);
         }
@@ -274,7 +292,7 @@ function AdminOrdersPageInner() {
   const [registerAccount, setRegisterAccount] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
-  const [activeOrdersTab, setActiveOrdersTab] = useState<"Shipment" | "WalkIn">("Shipment");
+  const [activeOrdersTab, setActiveOrdersTab] = useState<"Shipment" | "WalkIn" | "LocalShipment">("Shipment");
 
   const [paymentStatus, setPaymentStatus] = useState<string>("Paid");
   const [shippingMethod, setShippingMethod] = useState<string>("Pickup");
@@ -327,7 +345,7 @@ function AdminOrdersPageInner() {
     if (!assignDriverTarget) return;
     setIsAssigningDriver(true);
     try {
-      const res = await api.post(`/delivery/orders/${assignDriverTarget.id}/assign-driver`, {
+      const res = await api.post(API_ENDPOINTS.delivery.assignDriver(assignDriverTarget.id), {
         driver_user_id: selectedDriverId ? parseInt(selectedDriverId) : null,
       });
       toast.success(res.data.message || "Driver assigned successfully!");
@@ -346,7 +364,7 @@ function AdminOrdersPageInner() {
     if (!currentSelectedOrder) return;
     setIsProcessingAction(true);
     try {
-      const res = await api.post(`/orders/${currentSelectedOrder.id}/approve-cancel`);
+      const res = await api.post(API_ENDPOINTS.orders.approveCancel(currentSelectedOrder.id));
       toast.success(res.data.message || "Cancellation approved. Refund marked as pending.");
       setIsApproveCancelModalOpen(false);
       fetchOrders(true);
@@ -364,7 +382,7 @@ function AdminOrdersPageInner() {
     }
     setIsProcessingAction(true);
     try {
-      const res = await api.post(`/orders/${currentSelectedOrder.id}/complete-refund`, {
+      const res = await api.post(API_ENDPOINTS.orders.completeRefund(currentSelectedOrder.id), {
         refund_transaction_id: refundTransactionId
       });
       toast.success(res.data.message || "Refund marked as completed.");
@@ -395,7 +413,7 @@ function AdminOrdersPageInner() {
     if (!editWalkInTarget) return;
     setIsSavingEditWalkIn(true);
     try {
-      await api.put(`/orders/${editWalkInTarget.id}`, editWalkInForm);
+      await api.put(API_ENDPOINTS.orders.byId(editWalkInTarget.id), editWalkInForm);
       toast.success("Walk-In order updated successfully!");
       setIsEditWalkInModalOpen(false);
       setEditWalkInTarget(null);
@@ -495,7 +513,7 @@ function AdminOrdersPageInner() {
 
   const handleMarkWalkInPaid = async (order: any) => {
     try {
-      await api.put(`/orders/${order.id}`, { payment_status: "Paid", status: "Delivered" });
+      await api.put(API_ENDPOINTS.orders.byId(order.id), { payment_status: "Paid", status: "Delivered" });
       toast.success("Payment confirmed — marked as Paid");
       fetchOrders();
     } catch (err: any) {
@@ -505,7 +523,7 @@ function AdminOrdersPageInner() {
 
   const handleMarkWalkInPending = async (order: any) => {
     try {
-      await api.put(`/orders/${order.id}`, { payment_status: "Pending", status: "Pending" });
+      await api.put(API_ENDPOINTS.orders.byId(order.id), { payment_status: "Pending", status: "Pending" });
       toast.success("Marked as Pending");
       fetchOrders();
     } catch (err: any) {
@@ -540,7 +558,7 @@ function AdminOrdersPageInner() {
     }
     setIsVoiding(true);
     try {
-      const res = await api.post(`/orders/${voidOrderTarget.id}/void-refund`, {
+      const res = await api.post(API_ENDPOINTS.orders.voidRefund(voidOrderTarget.id), {
         reason: voidReason,
         refund_transaction_id: voidTransactionId,
         cancel_item_ids: selectedVoidItemIds,
@@ -643,7 +661,7 @@ function AdminOrdersPageInner() {
             address: "Walk-In Counter",
             type: "Retail"
           };
-          const res = await api.post("/customers", payload);
+          const res = await api.post(API_ENDPOINTS.customers.base, payload);
           targetCustomerId = res.data.id;
         }
       } else if (selectedCustomerId === "new") {
@@ -659,7 +677,7 @@ function AdminOrdersPageInner() {
           customerPayload.password = newCustomerData.password;
           customerPayload.password_confirmation = newCustomerData.confirmPassword;
         }
-        const res = await api.post("/customers", customerPayload);
+        const res = await api.post(API_ENDPOINTS.customers.base, customerPayload);
         targetCustomerId = res.data.id;
       } else {
         targetCustomerId = parseInt(selectedCustomerId);
@@ -695,7 +713,7 @@ function AdminOrdersPageInner() {
         }))
       };
 
-      await api.post("/orders", orderPayload);
+      await api.post(API_ENDPOINTS.orders.base, orderPayload);
       toast.success(`Walk-in order ${walkInRef} created successfully!`);
       setIsWalkInModalOpen(false);
       setOrderItems([]);
@@ -719,7 +737,7 @@ function AdminOrdersPageInner() {
     try {
       // Always fetch ALL orders with no filters — filtering is done 100% client-side
       // so that shipment filters never affect the Walk-In data pool and vice versa.
-      const res = await api.get("/orders", { params: { per_page: -1 } });
+      const res = await api.get(API_ENDPOINTS.orders.base, { params: { per_page: -1 } });
       setOrders(res.data);
     } catch (err) {
       console.error("Failed to fetch orders:", err);
@@ -734,11 +752,11 @@ function AdminOrdersPageInner() {
   const fetchMetadata = async () => {
     try {
       const [wRes, cRes, pRes, locRes, dRes] = await Promise.all([
-        api.get("/warehouses"),
-        api.get("/customers", { params: { per_page: -1 } }),
-        api.get("/products", { params: { per_page: -1 } }),
-        api.get("/locations/countries"),
-        api.get("/admins"),
+        api.get(API_ENDPOINTS.warehouses.base),
+        api.get(API_ENDPOINTS.customers.base, { params: { per_page: -1 } }),
+        api.get(API_ENDPOINTS.products.base, { params: { per_page: -1 } }),
+        api.get(API_ENDPOINTS.locations.countries),
+        api.get(API_ENDPOINTS.admins.base),
       ]);
       setWarehouses(wRes.data);
       setCustomers(cRes.data);
@@ -842,7 +860,7 @@ function AdminOrdersPageInner() {
     }
     setUpdatingOrderIds(prev => ({ ...prev, [id]: true }));
     try {
-      const res = await api.put(`/orders/${id}`, { status });
+      const res = await api.put(API_ENDPOINTS.orders.byId(id), { status });
       toast.success(`Order marked as ${status}`);
 
       // Check SMS logs
@@ -890,7 +908,7 @@ function AdminOrdersPageInner() {
 
     setIsBulkProcessing(true);
     try {
-      const res = await api.post("/orders/bulk-status", {
+      const res = await api.post(API_ENDPOINTS.orders.bulkStatus, {
         order_ids: eligibleIds,
         status: status
       });
@@ -946,7 +964,7 @@ function AdminOrdersPageInner() {
 
   const handleExportPDF = () => {
     if (orders.length === 0) {
-      toast.error("No orders available to export");
+      toast.error("No order available to export");
       return;
     }
     const isWalkIn = activeOrdersTab === "WalkIn";
@@ -998,7 +1016,24 @@ function AdminOrdersPageInner() {
   const [pageSize, setPageSize] = useState(15);
 
   // Split orders into Shipment and Walk-In by tracking number prefix
-  const shipmentOrders = useMemo(() => orders.filter(o => !((o.tracking_number || "").startsWith("WK-"))), [orders]);
+  // const shipmentOrders = useMemo(() => orders.filter(o => !((o.tracking_number || "").startsWith("WK-"))), [orders]);
+  // const localShipmentOrders = useMemo(() => orders.filter(o => (o.tracking_number || "").startsWith("WK-")), [orders]);
+  // const walkInOrders = useMemo(() => orders.filter(o => (o.tracking_number || "").startsWith("WK-")), [orders]);
+  // Split orders into Shipment / Local Shipment / Walk-In
+  const nonWalkInOrders = useMemo(
+    () => orders.filter(o => !((o.tracking_number || "").startsWith("WK-"))),
+    [orders]
+  );
+  // Cross-city routes (e.g. Nairobi → Mombasa)
+  const shipmentOrders = useMemo(
+    () => nonWalkInOrders.filter(o => !isLocalShipmentRoute(o)),
+    [nonWalkInOrders]
+  );
+  // Same-city routes (e.g. Nairobi → Nairobi)
+  const localShipmentOrders = useMemo(
+    () => nonWalkInOrders.filter(o => isLocalShipmentRoute(o)),
+    [nonWalkInOrders]
+  );
   const walkInOrders = useMemo(() => orders.filter(o => (o.tracking_number || "").startsWith("WK-")), [orders]);
 
   const filteredOrders = useMemo(() => {
@@ -1043,8 +1078,10 @@ function AdminOrdersPageInner() {
     }
 
     // ── Shipment filters — completely isolated ─────────────────────────────
+    // ── Shipment / Local Shipment filters — same filter set, different route pool ──
+    const baseOrders = activeOrdersTab === "LocalShipment" ? localShipmentOrders : shipmentOrders;
     const sq = shipmentSearchQuery.toLowerCase();
-    return shipmentOrders.filter(order => {
+    return baseOrders.filter(order => {
       const matchesProducts = order.items?.some((item: any) => {
         const prod = item.product;
         if (!prod) return false;
@@ -1080,7 +1117,7 @@ function AdminOrdersPageInner() {
     });
   }, [
     activeOrdersTab,
-    shipmentOrders, shipmentSearchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
+    shipmentOrders, shipmentSearchQuery, localShipmentOrders, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
     walkInOrders, walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInDateFrom, walkInDateTo,
   ]);
 
@@ -1263,6 +1300,15 @@ function AdminOrdersPageInner() {
         >
           <Truck className="h-4 w-4" /> Shipment Orders
           <span className="ml-1 bg-zinc-100 text-zinc-600 rounded-full px-2 py-0.5 text-[10px] font-black">{shipmentOrders.length}</span>
+        </button>
+        <button
+          onClick={() => setActiveOrdersTab("LocalShipment")}
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2",
+            activeOrdersTab === "LocalShipment" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700"
+          )}
+        >
+          <Truck className="h-4 w-4" /> Local Shipment Orders
+          <span className="ml-1 bg-zinc-100 text-zinc-600 rounded-full px-2 py-0.5 text-[10px] font-black">{localShipmentOrders.length}</span>
         </button>
         <button
           onClick={() => setActiveOrdersTab("WalkIn")}
@@ -1889,13 +1935,13 @@ function AdminOrdersPageInner() {
                           <div className="flex items-center justify-center gap-1.5">
                             {updatingOrderIds[order.id] && <Loader2 className="h-3 w-3 animate-spin text-[#0052cc] shrink-0" />}
                             <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                              order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
-                              order.status === "Processing" ? "bg-orange-500 text-white" :
-                              (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
-                              order.status === "Arrived" ? "bg-indigo-600 text-white" :
-                              order.status === "Delivered" ? "bg-emerald-500 text-white" :
-                              order.status === "Returned" ? "bg-red-600 text-white" :
-                              (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
+                              order.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
+                                order.status === "Processing" ? "bg-orange-500 text-white" :
+                                  (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
+                                    order.status === "Arrived" ? "bg-indigo-600 text-white" :
+                                      order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                                        order.status === "Returned" ? "bg-red-600 text-white" :
+                                          (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
                             )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
                           </div>
                           <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",

@@ -430,9 +430,6 @@ export default function DeliveryPortal() {
       return;
     }
     // ─────────────────────────────────────────────────────────────────────────
-    if (!window.confirm(`Are you sure you want to secure/claim order ${order.tracking_number}?`)) {
-      return;
-    }
     setClaimingId(order.id);
     try {
       await api.post(`/delivery/orders/${order.id}/claim`);
@@ -1654,7 +1651,7 @@ function SlaTimer({ order }: { order: Order }) {
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [order.status, order.updated_at]);
+  }, [order.updated_at]);
 
   return <span className={`text-xs font-bold ${color}`}>{timeLeft}</span>;
 }

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Menu, X, CarFront, RotateCcw } from "lucide-react";
+import { Menu, X, CarFront } from "lucide-react";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -189,9 +189,6 @@ export function Navbar() {
                         <DropdownMenuItem onClick={() => router.push("/account?tab=orders")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
                           <Package className="h-4 w-4" /> My Orders
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => router.push("/account?tab=returns")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
-                          <RotateCcw className="h-4 w-4" /> Returns &amp; Refunds
-                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push("/account?tab=address")} className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-bold text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50 transition-all cursor-pointer">
                           <MapPin className="h-4 w-4" /> Delivery Addresses
                         </DropdownMenuItem>
@@ -312,9 +309,6 @@ export function Navbar() {
                     </Link>
                     <Link href="/account?tab=orders" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
                       <Package className="h-4 w-4" /> My Orders
-                    </Link>
-                    <Link href="/account?tab=returns" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
-                      <RotateCcw className="h-4 w-4" /> Returns &amp; Refunds
                     </Link>
                     <Link href="/account?tab=address" onClick={() => setIsOpen(false)} className="text-sm font-semibold py-2.5 px-3 rounded-lg text-zinc-700 hover:text-primary hover:bg-zinc-50 flex items-center gap-2">
                       <MapPin className="h-4 w-4" /> Delivery Addresses

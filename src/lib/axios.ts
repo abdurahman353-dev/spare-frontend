@@ -1,4 +1,5 @@
 import axios from "axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api",
@@ -30,13 +31,13 @@ api.interceptors.response.use(
 
 export default api;
 
-let activeDestinationsPromise: Promise<any> | null = null;
-let countriesPromise: Promise<any> | null = null;
+let activeDestinationsPromise: Promise<unknown[]> | null = null;
+let countriesPromise: Promise<unknown[]> | null = null;
 
 export const getActiveDestinationsCached = () => {
   if (!activeDestinationsPromise) {
-    activeDestinationsPromise = api.get("/shipping-destinations/active")
-      .then((res) => res.data)
+    activeDestinationsPromise = api.get(API_ENDPOINTS.shippingDestinations.active)
+      .then((res) => res.data as unknown[])
       .catch((err) => {
         activeDestinationsPromise = null;
         throw err;
@@ -45,10 +46,11 @@ export const getActiveDestinationsCached = () => {
   return activeDestinationsPromise;
 };
 
+// get countries cached
 export const getCountriesCached = () => {
   if (!countriesPromise) {
-    countriesPromise = api.get("/locations/countries")
-      .then((res) => res.data)
+    countriesPromise = api.get(API_ENDPOINTS.locations.countries)
+      .then((res) => res.data as unknown[])
       .catch((err) => {
         countriesPromise = null;
         throw err;

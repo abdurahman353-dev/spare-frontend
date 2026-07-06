@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -65,110 +65,6 @@ interface AuditLog {
   user: User | null;
 }
 
-interface SearchableDropdownProps {
-  label: string;
-  value: string;
-  onChange: (val: string) => void;
-  options: string[];
-  placeholder: string;
-  disabled?: boolean;
-}
-
-function SearchableDropdown({
-  label,
-  value,
-  onChange,
-  options,
-  placeholder,
-  disabled = false
-}: SearchableDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setSearch(value);
-  }, [value]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-        setSearch(value);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [value]);
-
-  const filteredOptions = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    // If user hasn't typed anything new (search == current value or empty), show everything
-    if (!q || q === value.toLowerCase().trim()) return options;
-    return options.filter(opt => opt.toLowerCase().includes(q));
-  }, [options, search, value]);
-
-  return (
-    <div className="space-y-1.5 relative w-full text-left" ref={dropdownRef}>
-      <label className="text-xs font-semibold text-zinc-500">{label}</label>
-      <div className="relative">
-        <Input
-          placeholder={placeholder}
-          className="h-10 border-zinc-200 rounded-lg pr-8 disabled:opacity-50 text-sm"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setIsOpen(true);
-            if (!e.target.value) {
-              onChange("");
-            }
-          }}
-          onFocus={() => {
-            if (!disabled) setIsOpen(true);
-          }}
-          disabled={disabled}
-        />
-        <button
-          type="button"
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
-          disabled={disabled}
-        >
-          <svg className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      </div>
-
-      {isOpen && !disabled && (
-        <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-[9999] py-1 custom-scrollbar">
-          {filteredOptions.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-zinc-400 italic">No matches found</div>
-          ) : (
-            filteredOptions.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => {
-                  onChange(opt);
-                  setSearch(opt);
-                  setIsOpen(false);
-                }}
-                className={cn(
-                  "w-full text-left px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors",
-                  value === opt && "bg-blue-50/50 text-[#0052cc] font-bold"
-                )}
-              >
-                {opt}
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function AdminsAndAuditsPage() {
   const [activeTab, setActiveTab] = useState<"admins" | "delivery" | "audits">("admins");
   
@@ -224,31 +120,6 @@ export default function AdminsAndAuditsPage() {
     license_number: ""
   });
 
-  const [destinations, setDestinations] = useState<{ id: number; country: string; city: string; is_active: boolean }[]>([]);
-
-  const activeCountriesList = useMemo(() => {
-    const list = destinations.map(d => d.country).filter(Boolean);
-    return Array.from(new Set(list)).sort();
-  }, [destinations]);
-
-  const activeCitiesForCreate = useMemo(() => {
-    if (!formData.country) return [];
-    const list = destinations
-      .filter(d => d.country.toLowerCase() === formData.country.toLowerCase())
-      .map(d => d.city)
-      .filter(Boolean);
-    return Array.from(new Set(list)).sort();
-  }, [destinations, formData.country]);
-
-  const activeCitiesForEdit = useMemo(() => {
-    if (!editFormData.country) return [];
-    const list = destinations
-      .filter(d => d.country.toLowerCase() === editFormData.country.toLowerCase())
-      .map(d => d.city)
-      .filter(Boolean);
-    return Array.from(new Set(list)).sort();
-  }, [destinations, editFormData.country]);
-
   const handleOpenEditModal = (admin: User) => {
     setSelectedAdminId(admin.id);
     setEditFormData({
@@ -276,11 +147,6 @@ export default function AdminsAndAuditsPage() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(editFormData.email)) {
       toast.error("Please enter a valid email address.");
-      return;
-    }
-
-    if (editFormData.role === "delivery" && (!editFormData.country || !editFormData.city)) {
-      toast.error("Please select a valid Country and City from your shipping zones for the delivery driver.");
       return;
     }
 
@@ -335,30 +201,15 @@ export default function AdminsAndAuditsPage() {
     }
   };
 
-  const fetchDestinations = async () => {
-    try {
-      const res = await api.get("/shipping-destinations/active");
-      setDestinations(res.data || []);
-    } catch (err) {
-      console.error("Failed to load active destinations:", err);
-    }
-  };
-
   useEffect(() => {
     fetchAdmins();
     fetchAuditLogs();
-    fetchDestinations();
   }, []);
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.password || !formData.password_confirmation) {
       toast.error("Please fill in all required fields.");
-      return;
-    }
-
-    if (formData.role === "delivery" && (!formData.country || !formData.city)) {
-      toast.error("Please select a valid Country and City from your shipping zones for the delivery driver.");
       return;
     }
 
@@ -1258,13 +1109,9 @@ export default function AdminsAndAuditsPage() {
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
-            <DialogTitle className="text-xl font-bold text-zinc-900">
-              {formData.role === 'delivery' ? 'Create New Delivery Driver' : 'Create New Administrator'}
-            </DialogTitle>
+            <DialogTitle className="text-xl font-bold text-zinc-900">Create New Administrator</DialogTitle>
             <DialogDescription className="text-zinc-400 text-xs mt-1">
-              {formData.role === 'delivery'
-                ? 'Register a new delivery driver. They will only see orders assigned to their registered city and country.'
-                : 'Add credential profiles for admins and superadmins. They will be directed to change their password instantly upon first login.'}
+              Add credential profiles for admins and superadmins. They will be directed to change their password instantly upon first login.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAdmin}>
@@ -1370,48 +1217,27 @@ export default function AdminsAndAuditsPage() {
                       onChange={(e) => setFormData({...formData, phone: e.target.value})}
                     />
                   </div>
-                  {formData.role === "delivery" ? (
-                    <SearchableDropdown
-                      label="Country *"
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Country</label>
+                    <Input 
+                      placeholder="e.g. Kenya" 
+                      className="h-10 border-zinc-200 rounded-lg" 
                       value={formData.country}
-                      onChange={(val) => setFormData({ ...formData, country: val, city: "" })}
-                      options={activeCountriesList}
-                      placeholder="Select Country"
+                      onChange={(e) => setFormData({...formData, country: e.target.value})}
                     />
-                  ) : (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Country</label>
-                      <Input 
-                        placeholder="e.g. Kenya" 
-                        className="h-10 border-zinc-200 rounded-lg" 
-                        value={formData.country}
-                        onChange={(e) => setFormData({...formData, country: e.target.value})}
-                      />
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {formData.role === "delivery" ? (
-                    <SearchableDropdown
-                      label="City *"
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">City</label>
+                    <Input 
+                      placeholder="e.g. Nairobi" 
+                      className="h-10 border-zinc-200 rounded-lg" 
                       value={formData.city}
-                      onChange={(val) => setFormData({ ...formData, city: val })}
-                      options={activeCitiesForCreate}
-                      placeholder={formData.country ? "Select City" : "Please select country first"}
-                      disabled={!formData.country}
+                      onChange={(e) => setFormData({...formData, city: e.target.value})}
                     />
-                  ) : (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">City</label>
-                      <Input 
-                        placeholder="e.g. Nairobi" 
-                        className="h-10 border-zinc-200 rounded-lg" 
-                        value={formData.city}
-                        onChange={(e) => setFormData({...formData, city: e.target.value})}
-                      />
-                    </div>
-                  )}
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>
                     <Input 
@@ -1479,13 +1305,9 @@ export default function AdminsAndAuditsPage() {
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
-            <DialogTitle className="text-xl font-bold text-zinc-900">
-              {editFormData.role === 'delivery' ? 'Edit Delivery Driver Details' : 'Edit Administrator Details'}
-            </DialogTitle>
+            <DialogTitle className="text-xl font-bold text-zinc-900">Edit Administrator Details</DialogTitle>
             <DialogDescription className="text-zinc-400 text-xs mt-1">
-              {editFormData.role === 'delivery'
-                ? 'Update delivery driver information, vehicle details, and location assignment.'
-                : 'Update spelling errors, edit roles, contact details, or logistics hub information.'}
+              Update spelling errors, edit roles, contact details, or logistics hub information.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateAdmin}>
@@ -1546,48 +1368,27 @@ export default function AdminsAndAuditsPage() {
                       onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
                     />
                   </div>
-                  {editFormData.role === "delivery" ? (
-                    <SearchableDropdown
-                      label="Country *"
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Country</label>
+                    <Input 
+                      placeholder="e.g. Kenya" 
+                      className="h-10 border-zinc-200 rounded-lg" 
                       value={editFormData.country}
-                      onChange={(val) => setEditFormData({ ...editFormData, country: val, city: "" })}
-                      options={activeCountriesList}
-                      placeholder="Select Country"
+                      onChange={(e) => setEditFormData({...editFormData, country: e.target.value})}
                     />
-                  ) : (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Country</label>
-                      <Input 
-                        placeholder="e.g. Kenya" 
-                        className="h-10 border-zinc-200 rounded-lg" 
-                        value={editFormData.country}
-                        onChange={(e) => setEditFormData({...editFormData, country: e.target.value})}
-                      />
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {editFormData.role === "delivery" ? (
-                    <SearchableDropdown
-                      label="City *"
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">City</label>
+                    <Input 
+                      placeholder="e.g. Nairobi" 
+                      className="h-10 border-zinc-200 rounded-lg" 
                       value={editFormData.city}
-                      onChange={(val) => setEditFormData({ ...editFormData, city: val })}
-                      options={activeCitiesForEdit}
-                      placeholder={editFormData.country ? "Select City" : "Please select country first"}
-                      disabled={!editFormData.country}
+                      onChange={(e) => setEditFormData({...editFormData, city: e.target.value})}
                     />
-                  ) : (
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">City</label>
-                      <Input 
-                        placeholder="e.g. Nairobi" 
-                        className="h-10 border-zinc-200 rounded-lg" 
-                        value={editFormData.city}
-                        onChange={(e) => setEditFormData({...editFormData, city: e.target.value})}
-                      />
-                    </div>
-                  )}
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>
                     <Input 

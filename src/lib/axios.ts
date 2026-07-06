@@ -46,6 +46,7 @@ export const getActiveDestinationsCached = () => {
   return activeDestinationsPromise;
 };
 
+// get countries cached
 export const getCountriesCached = () => {
   if (!countriesPromise) {
     countriesPromise = api.get(API_ENDPOINTS.locations.countries)

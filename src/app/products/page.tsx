@@ -541,7 +541,7 @@ export default function PublicProductsPage() {
         setTotalItems(res.data.length);
       }
     } catch (err) {
-      console.error("Failed to fetch the products:", err);
+      console.error("Failed to fetch the product:", err);
     } finally {
       setLoading(false);
     }

@@ -964,7 +964,7 @@ function AdminOrdersPageInner() {
 
   const handleExportPDF = () => {
     if (orders.length === 0) {
-      toast.error("No orders available to export");
+      toast.error("No order available to export");
       return;
     }
     const isWalkIn = activeOrdersTab === "WalkIn";

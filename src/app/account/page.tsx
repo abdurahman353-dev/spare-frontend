@@ -1391,51 +1391,63 @@ function AccountPortalInner() {
 
              <div>
                <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Manifest Summary</h4>
-               {selectedOrder?.items?.map((item: any, idx: number) => {
-                 const isItemCancelled = item.cancellation_status === "Cancelled";
-                 const totalUnits = Math.max(1, (selectedOrder.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                 const shippingFee = Number(selectedOrder.shipping_fee || 0);
-                 const itemProductCost = Number(item.price) * item.quantity;
-                 const itemShippingShare = (shippingFee / totalUnits) * item.quantity;
-                 const itemRefundTotal = itemProductCost + itemShippingShare;
-                 return (
-                   <div key={idx} className={cn("flex justify-between items-start pb-4 border-b border-[#f1f5f9] last:border-0 last:pb-0", isItemCancelled && "bg-red-50/60 px-3 py-3 rounded-lg border border-red-100 mb-2")}>
-                     <div className="space-y-1 flex-1 min-w-0">
-                       <p className={cn("font-semibold text-[#1e293b] text-[14px]", isItemCancelled && "line-through text-zinc-400")}>{item.product?.name || `Product ID: ${item.product_id}`}</p>
-                       <div className="flex flex-wrap items-center gap-2">
-                         <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
-                         <span className={cn("text-[11px] font-semibold text-slate-700", isItemCancelled && "line-through text-zinc-400")}>Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
-                         {item.product?.part_number && (
-                           <span className={cn("text-xs font-bold text-[#0052cc]", isItemCancelled && "line-through text-zinc-400")}>Part No: {item.product.part_number}</span>
-                         )}
-                         {item.product?.engine_model && (
-                           <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Engine: {item.product.engine_model}</span>
-                         )}
-                         {item.product?.suitable_vehicle && (
-                           <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</span>
-                         )}
-                         {item.cancellation_status && item.cancellation_status !== "None" && (
-                           <span className={cn(
-                             "text-[9px] font-black uppercase px-2 py-0.5 rounded border tracking-wider",
-                             item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-50 text-red-700 border-red-200"
-                           )}>
-                             {item.cancellation_status === "Pending" ? "Cancellation Pending" : "Cancelled / Refunded"}
-                           </span>
+               {(() => {
+                 // Derive per-item shipping from backend-persisted refunded_amount (ground truth)
+                 // so the display is always accurate even after partial returns change shipping_fee
+                 const cancelledItems = (selectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                 const cancelledProductTotal = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
+                 const refundedAmount = Number(selectedOrder?.refunded_amount || 0);
+                 // Total shipping that was actually refunded = refunded_amount - product costs of cancelled items
+                 const refundedShippingTotal = Math.max(0, refundedAmount - cancelledProductTotal);
+                 const cancelledQtyTotal = Math.max(1, cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0));
+                 // Per-unit shipping refunded (spread evenly across returned units)
+                 const perUnitShippingRefunded = cancelledQtyTotal > 0 ? refundedShippingTotal / cancelledQtyTotal : 0;
+
+                 return (selectedOrder?.items || []).map((item: any, idx: number) => {
+                   const isItemCancelled = item.cancellation_status === "Cancelled";
+                   const itemProductCost = Number(item.price) * Number(item.quantity);
+                   // Use the backend-derived per-unit shipping for accuracy
+                   const itemShippingShare = isItemCancelled ? perUnitShippingRefunded * Number(item.quantity) : 0;
+                   const itemRefundTotal = itemProductCost + itemShippingShare;
+                   return (
+                     <div key={idx} className={cn("flex justify-between items-start pb-4 border-b border-[#f1f5f9] last:border-0 last:pb-0", isItemCancelled && "bg-red-50/60 px-3 py-3 rounded-lg border border-red-100 mb-2")}>
+                       <div className="space-y-1 flex-1 min-w-0">
+                         <p className={cn("font-semibold text-[#1e293b] text-[14px]", isItemCancelled && "line-through text-zinc-400")}>{item.product?.name || `Product ID: ${item.product_id}`}</p>
+                         <div className="flex flex-wrap items-center gap-2">
+                           <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
+                           <span className={cn("text-[11px] font-semibold text-slate-700", isItemCancelled && "line-through text-zinc-400")}>Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                           {item.product?.part_number && (
+                             <span className={cn("text-xs font-bold text-[#0052cc]", isItemCancelled && "line-through text-zinc-400")}>Part No: {item.product.part_number}</span>
+                           )}
+                           {item.product?.engine_model && (
+                             <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Engine: {item.product.engine_model}</span>
+                           )}
+                           {item.product?.suitable_vehicle && (
+                             <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</span>
+                           )}
+                           {item.cancellation_status && item.cancellation_status !== "None" && (
+                             <span className={cn(
+                               "text-[9px] font-black uppercase px-2 py-0.5 rounded border tracking-wider",
+                               item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-600 text-white border-red-600"
+                             )}>
+                               {item.cancellation_status === "Pending" ? "Return Pending" : "Returned"}
+                             </span>
+                           )}
+                         </div>
+                         {/* Per-item refund breakdown — uses backend refunded_amount for accuracy */}
+                         {isItemCancelled && (
+                           <p className="text-[11px] font-semibold text-red-600 mt-1">
+                             Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
+                             {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
+                             {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
+                           </p>
                          )}
                        </div>
-                       {/* Per-item refund breakdown for cancelled items */}
-                       {isItemCancelled && (
-                         <p className="text-[11px] font-semibold text-red-600 mt-1">
-                           Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
-                           {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
-                           {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
-                         </p>
-                       )}
+                       <p className={cn("font-bold text-[#1e293b] text-[14px] shrink-0 ml-2", isItemCancelled && "line-through text-red-400")}>Ksh {(Number(item.price) * Number(item.quantity)).toLocaleString()}</p>
                      </div>
-                     <p className={cn("font-bold text-[#1e293b] text-[14px] shrink-0 ml-2", isItemCancelled && "line-through text-red-400")}>Ksh {(Number(item.price) * item.quantity).toLocaleString()}</p>
-                   </div>
-                 );
-               })}
+                   );
+                 });
+               })()}
              </div>
              
              {/* Cancellation / Refund block — shows for partial OR full cancellations */}
@@ -1553,18 +1565,6 @@ function AccountPortalInner() {
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2 flex-wrap">
-              {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing") && (
-                <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700 text-white hover:text-white border-none shadow-none" onClick={() => { 
-                  setIsOrderModalOpen(false); 
-                  setIsCancelModalOpen(true); 
-                  const eligibleIds = selectedOrder?.items
-                    ?.filter((i: any) => i.cancellation_status !== "Cancelled" && i.cancellation_status !== "Pending")
-                    ?.map((i: any) => i.id) || [];
-                  setSelectedItemIdsToCancel(eligibleIds);
-                }}>
-                  Request Cancellation
-                </Button>
-              )}
               {selectedOrder?.status === "Delivered" && !myReturns.some((r: any) => r.order_id === selectedOrder?.id && (r.status === "Pending" || r.status === "Approved")) && (
                 <Button
                   variant="outline"

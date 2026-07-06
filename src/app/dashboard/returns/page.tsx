@@ -39,6 +39,7 @@ interface ReturnRequest {
   admin_notes?: string;
   created_at: string;
   updated_at: string;
+  return_items?: { order_item_id: number; quantity: number }[];
   order?: {
     tracking_number: string;
     total_amount: number;
@@ -359,8 +360,13 @@ export default function ReturnsManagementPage() {
                   <p className="font-bold text-zinc-800">{selectedReturn.order?.tracking_number}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Status</p>
-                  <Badge className="rounded-full px-2 py-0.5 text-[9px] font-black border-none bg-emerald-100 text-emerald-800 uppercase">
+                  <Badge className={cn(
+                    "rounded-full px-2 py-0.5 text-[9px] font-black border-none uppercase",
+                    selectedReturn.order?.status === "Returned" ? "bg-red-600 text-white" :
+                    selectedReturn.order?.status === "Cancelled" ? "bg-red-600 text-white" :
+                    selectedReturn.order?.status === "Delivered" ? "bg-emerald-500 text-white" :
+                    "bg-zinc-200 text-zinc-700"
+                  )}>
                     {selectedReturn.order?.status}
                   </Badge>
                 </div>
@@ -388,9 +394,24 @@ export default function ReturnsManagementPage() {
                 )}
               </div>
 
-              {selectedReturn.order?.items && selectedReturn.order.items.length > 0 && (
+              {selectedReturn.return_items && selectedReturn.return_items.length > 0 ? (
                 <div>
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Items in Order</p>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 text-purple-600">Items Requested for Return</p>
+                  <div className="border border-purple-100 rounded-lg overflow-hidden">
+                    {selectedReturn.return_items.map((ri: any, i: number) => {
+                      const item = selectedReturn.order?.items?.find((it: any) => it.id === ri.order_item_id);
+                      return (
+                        <div key={i} className="flex justify-between text-xs px-3 py-2.5 border-b border-purple-50 last:border-0 bg-purple-50/30 hover:bg-purple-50/50">
+                          <span className="font-bold text-zinc-800">{item?.product?.name || `Order Item #${ri.order_item_id}`}</span>
+                          <span className="text-purple-700 font-bold">QTY {ri.quantity} × {currency} {Number(item?.price || 0).toLocaleString()}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : selectedReturn.order?.items && selectedReturn.order.items.length > 0 ? (
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Items in Order (Full Return)</p>
                   <div className="border border-zinc-100 rounded-lg overflow-hidden">
                     {selectedReturn.order.items.map((item: any, i: number) => (
                       <div key={i} className="flex justify-between text-xs px-3 py-2.5 border-b border-zinc-100 last:border-0 bg-white hover:bg-zinc-50">
@@ -400,7 +421,7 @@ export default function ReturnsManagementPage() {
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {selectedReturn.admin_notes && (
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
@@ -493,7 +514,7 @@ export default function ReturnsManagementPage() {
               onClick={() => setIsActionModalOpen(false)}
               disabled={processingId !== null}
             >
-              Cancel
+              No, Cancel
             </Button>
             <Button
               className={cn(
@@ -506,7 +527,7 @@ export default function ReturnsManagementPage() {
               onClick={actionType === "approve" ? handleApprove : handleReject}
             >
               {processingId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {actionType === "approve" ? "Confirm Approval" : "Confirm Rejection"}
+              {actionType === "approve" ? "Yes, Approve" : "Yes, Reject"}
             </Button>
           </DialogFooter>
         </DialogContent>

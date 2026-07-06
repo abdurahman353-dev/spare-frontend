@@ -264,6 +264,15 @@ function AccountPortalInner() {
   const [returnExplanation, setReturnExplanation] = useState("");
   const [submittingReturn, setSubmittingReturn] = useState(false);
   const [myReturns, setMyReturns] = useState<any[]>([]);
+  const [selectedReturnItems, setSelectedReturnItems] = useState<Record<number, number>>({});
+
+  const openReturnModal = (order: any) => {
+    setSelectedOrder(order);
+    setSelectedReturnItems({});
+    setReturnReason("");
+    setReturnExplanation("");
+    setIsReturnModalOpen(true);
+  };
 
   const fetchReturns = () => {
     api.get("/returns/my-returns")
@@ -294,6 +303,16 @@ function AccountPortalInner() {
 
     // Load returns
     fetchReturns();
+
+    // 15-second silent polling in background
+    const interval = setInterval(() => {
+      api.get("/my-orders")
+        .then(res => setOrders(res.data))
+        .catch(err => console.error("Silent orders update failed:", err));
+      fetchReturns();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Refresh live user profile on mount so loyalty badge is real-time
@@ -336,13 +355,21 @@ function AccountPortalInner() {
       toast.error("Please provide a detailed explanation of your reason");
       return;
     }
+    if (Object.keys(selectedReturnItems).length === 0) {
+      toast.error("Please select at least one item to return");
+      return;
+    }
 
     setSubmittingReturn(true);
     try {
       await api.post("/returns/submit", {
         order_id: selectedOrder.id,
         reason: returnReason,
-        explanation: returnExplanation
+        explanation: returnExplanation,
+        return_items: Object.entries(selectedReturnItems).map(([id, qty]) => ({
+          order_item_id: parseInt(id),
+          quantity: qty
+        }))
       });
       toast.success("Return request submitted successfully! Administration will review your request.", {
         duration: 5000,
@@ -351,6 +378,7 @@ function AccountPortalInner() {
       setIsReturnModalOpen(false);
       setReturnReason("");
       setReturnExplanation("");
+      setSelectedReturnItems({});
       
       // Refresh list
       api.get("/my-orders").then(res => setOrders(res.data));
@@ -406,11 +434,11 @@ function AccountPortalInner() {
   };
 
   const totalSpent = orders
-    .filter((o: any) => o.status !== "Cancelled")
+    .filter((o: any) => o.status !== "Cancelled" && o.status !== "Returned")
     .reduce((sum: number, order: any) => sum + Number(order.total_amount), 0);
-  const activeOrders = orders.filter((o: any) => o.status !== "Delivered" && o.status !== "Cancelled").length;
+  const activeOrders = orders.filter((o: any) => o.status !== "Delivered" && o.status !== "Cancelled" && o.status !== "Returned").length;
   const partsPurchased = orders
-    .filter((o: any) => o.status !== "Cancelled")
+    .filter((o: any) => o.status !== "Cancelled" && o.status !== "Returned")
     .reduce((sum: number, order: any) => {
       const itemsCount = order.items?.reduce((itemSum: number, item: any) => {
         if (item.cancellation_status === "Cancelled") {
@@ -836,7 +864,7 @@ function AccountPortalInner() {
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
                                       order.status === "Arrived" ? "bg-indigo-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
+                                      order.status === "Returned" ? "bg-red-600 text-white" : 
                                       (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
@@ -1068,7 +1096,7 @@ function AccountPortalInner() {
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
                                       order.status === "Arrived" ? "bg-indigo-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
+                                      order.status === "Returned" ? "bg-red-600 text-white" : 
                                       (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
@@ -1257,7 +1285,7 @@ function AccountPortalInner() {
                (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" : 
                selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" : 
                selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" : 
-               selectedOrder?.status === "Returned" ? "bg-purple-600 text-white" : 
+               selectedOrder?.status === "Returned" ? "bg-red-600 text-white" : 
                (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                "bg-zinc-200 text-zinc-700"
              )}>
@@ -1552,34 +1580,25 @@ function AccountPortalInner() {
               </div>
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
-            <div className="flex gap-2 flex-wrap">
-              {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing") && (
-                <Button variant="destructive" className="text-[12px] font-bold h-9 bg-red-600 hover:bg-red-700 text-white hover:text-white border-none shadow-none" onClick={() => { 
-                  setIsOrderModalOpen(false); 
-                  setIsCancelModalOpen(true); 
-                  const eligibleIds = selectedOrder?.items
-                    ?.filter((i: any) => i.cancellation_status !== "Cancelled" && i.cancellation_status !== "Pending")
-                    ?.map((i: any) => i.id) || [];
-                  setSelectedItemIdsToCancel(eligibleIds);
-                }}>
-                  Request Cancellation
-                </Button>
-              )}
-              {selectedOrder?.status === "Delivered" && !myReturns.some((r: any) => r.order_id === selectedOrder?.id && (r.status === "Pending" || r.status === "Approved")) && (
+             <div className="flex gap-2 flex-wrap">
+              {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing" || selectedOrder?.status === "Arrived" || selectedOrder?.status === "Delivered") && !myReturns.some((r: any) => r.order_id === selectedOrder?.id && (r.status === "Pending" || r.status === "Approved")) && (
                 <Button
                   variant="outline"
                   className="text-[12px] font-bold h-9 border-purple-200 text-purple-700 hover:bg-purple-50"
-                  onClick={() => { setIsOrderModalOpen(false); setIsReturnModalOpen(true); }}
+                  onClick={() => { 
+                    setIsOrderModalOpen(false); 
+                    openReturnModal(selectedOrder); 
+                  }}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Request Return
                 </Button>
               )}
-              {selectedOrder?.status === "Delivered" && myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Pending") && (
+              {myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Pending") && (
                 <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
                   <RotateCcw className="h-3 w-3" /> Return Requested — Pending Review
                 </span>
               )}
-              {selectedOrder?.status === "Delivered" && myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Approved") && (
+              {myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Approved") && (
                 <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
                   <CheckCircle2 className="h-3 w-3" /> Return Approved
                 </span>
@@ -1669,17 +1688,83 @@ function AccountPortalInner() {
 
       {/* Return Request Modal */}
       <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
-        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[480px] p-0 overflow-hidden">
+        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[500px] p-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-purple-50 border-b border-purple-100">
             <DialogTitle className="font-bold text-[#1e293b] flex items-center gap-2">
               <RotateCcw className="h-4 w-4 text-purple-600" /> Request Return — {selectedOrder?.tracking_number}
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748b] font-medium mt-1">
-              Please provide the reason for your return. Our team will review your request and get in touch within 2–3 business days.
+              Select the items you wish to return and specify quantities. Our team will review your request within 2–3 business days.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRequestReturn}>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* Item Selection with Quantity Pickers */}
+              {selectedOrder?.items && selectedOrder.items.filter((i: any) => i.cancellation_status !== "Cancelled").length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">Select Items to Return *</label>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto border border-purple-100 rounded-lg p-3 bg-purple-50/30">
+                    {selectedOrder.items
+                      .filter((item: any) => item.cancellation_status !== "Cancelled")
+                      .map((item: any) => {
+                        const selected = selectedReturnItems[item.id] !== undefined;
+                        const qty = selectedReturnItems[item.id] ?? 0;
+                        return (
+                          <div key={item.id} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${selected ? "bg-white border-purple-300 shadow-sm" : "bg-white/60 border-transparent hover:border-purple-200"}`}>
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 accent-purple-600 rounded cursor-pointer shrink-0"
+                              checked={selected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedReturnItems({ ...selectedReturnItems, [item.id]: 1 });
+                                } else {
+                                  const updated = { ...selectedReturnItems };
+                                  delete updated[item.id];
+                                  setSelectedReturnItems(updated);
+                                }
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-zinc-800 text-xs leading-tight truncate">{item.product?.name || "Genuine Part"}</p>
+                              <p className="text-[10px] text-zinc-400 font-medium">Ksh {Number(item.price).toLocaleString()} · Available: {item.quantity}</p>
+                            </div>
+                            {selected && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  className="w-6 h-6 rounded bg-purple-100 text-purple-700 font-black text-sm flex items-center justify-center hover:bg-purple-200 transition"
+                                  onClick={() => {
+                                    if (qty > 1) setSelectedReturnItems({ ...selectedReturnItems, [item.id]: qty - 1 });
+                                    else {
+                                      const updated = { ...selectedReturnItems };
+                                      delete updated[item.id];
+                                      setSelectedReturnItems(updated);
+                                    }
+                                  }}
+                                >−</button>
+                                <span className="w-6 text-center font-black text-zinc-800 text-sm">{qty}</span>
+                                <button
+                                  type="button"
+                                  className="w-6 h-6 rounded bg-purple-100 text-purple-700 font-black text-sm flex items-center justify-center hover:bg-purple-200 transition"
+                                  onClick={() => {
+                                    if (qty < item.quantity) setSelectedReturnItems({ ...selectedReturnItems, [item.id]: qty + 1 });
+                                  }}
+                                >+</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                  {Object.keys(selectedReturnItems).length > 0 && (
+                    <p className="text-[10px] font-bold text-purple-600">
+                      {Object.keys(selectedReturnItems).length} item(s) selected for return
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">Return Reason *</label>
                 <select
@@ -1704,7 +1789,7 @@ function AccountPortalInner() {
                   Additional Details {returnReason === "Other (Specify in text box)" ? "*" : "(Optional)"}
                 </label>
                 <textarea
-                  className="w-full h-24 px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-purple-200 text-[#1e293b] resize-none"
+                  className="w-full h-20 px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-purple-200 text-[#1e293b] resize-none"
                   placeholder="Provide more detail to help us process your return faster..."
                   value={returnExplanation}
                   onChange={(e) => setReturnExplanation(e.target.value)}

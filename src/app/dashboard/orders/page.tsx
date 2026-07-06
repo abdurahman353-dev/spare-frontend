@@ -2228,62 +2228,68 @@ function AdminOrdersPageInner() {
 
             <div className="space-y-4">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
-              {currentSelectedOrder?.items?.map((item: any, idx: number) => {
-                const isItemCancelled = item.cancellation_status === "Cancelled";
-                // Per-item refund total = product cost + proportional shipping share
-                const totalUnits = Math.max(1, (currentSelectedOrder.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                const shippingFee = Number(currentSelectedOrder.shipping_fee || 0);
-                const itemProductCost = Number(item.price) * item.quantity;
-                const itemShippingShare = (shippingFee / totalUnits) * item.quantity;
-                const itemRefundTotal = itemProductCost + itemShippingShare;
-                return (
-                  <div key={idx} className={cn("flex justify-between items-start py-3 border-b last:border-0", isItemCancelled && "bg-red-50/50 px-3 py-2 rounded-xl border border-red-100")}>
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <p className="font-bold text-zinc-900 text-sm flex items-center gap-2 flex-wrap">
-                        <span className={cn(isItemCancelled && "line-through text-zinc-400 font-medium")}>
-                          {item.product?.name || `Part ID: ${item.product_id}`}
-                        </span>
-                        {isItemCancelled && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-red-100 text-red-700 border border-red-200">
-                            Cancelled / Refunded
+              {(() => {
+                const cancelledItems = (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                const cancelledProductTotal = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
+                const refundedAmount = Number(currentSelectedOrder?.refunded_amount || 0);
+                const refundedShippingTotal = Math.max(0, refundedAmount - cancelledProductTotal);
+                const cancelledQtyTotal = Math.max(1, cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0));
+                const perUnitShippingRefunded = cancelledQtyTotal > 0 ? refundedShippingTotal / cancelledQtyTotal : 0;
+
+                return (currentSelectedOrder?.items || []).map((item: any, idx: number) => {
+                  const isItemCancelled = item.cancellation_status === "Cancelled";
+                  const itemProductCost = Number(item.price) * Number(item.quantity);
+                  const itemShippingShare = isItemCancelled ? perUnitShippingRefunded * Number(item.quantity) : 0;
+                  const itemRefundTotal = itemProductCost + itemShippingShare;
+                  return (
+                    <div key={idx} className={cn("flex justify-between items-start py-3 border-b last:border-0", isItemCancelled && "bg-red-50/50 px-3 py-2 rounded-xl border border-red-100")}>
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <p className="font-bold text-zinc-900 text-sm flex items-center gap-2 flex-wrap">
+                          <span className={cn(isItemCancelled && "line-through text-zinc-400 font-medium")}>
+                            {item.product?.name || `Part ID: ${item.product_id}`}
                           </span>
+                          {isItemCancelled && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-red-100 text-red-700 border border-red-200">
+                              Cancelled / Refunded
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-zinc-500 font-medium">
+                          <span className={cn(isItemCancelled && "line-through text-zinc-400")}>
+                            Qty: {item.quantity} × Ksh {Number(item.price).toLocaleString()}
+                          </span>
+                          {item.product?.part_number && (
+                            <>
+                              <span>|</span>
+                              <span className={cn("font-semibold text-[#0052cc]", isItemCancelled && "text-zinc-455 line-through")}>Part No: {item.product.part_number}</span>
+                            </>
+                          )}
+                          {item.product?.engine_model && (
+                            <>
+                              <span>|</span>
+                              <span className={cn(isItemCancelled && "text-zinc-455 line-through")}>Engine: {item.product.engine_model}</span>
+                            </>
+                          )}
+                        </div>
+                        {item.product?.suitable_vehicle && (
+                          <p className={cn("text-[11px] text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</p>
                         )}
-                      </p>
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-zinc-500 font-medium">
-                        <span className={cn(isItemCancelled && "line-through text-zinc-400")}>
-                          Qty: {item.quantity} × Ksh {Number(item.price).toLocaleString()}
-                        </span>
-                        {item.product?.part_number && (
-                          <>
-                            <span>|</span>
-                            <span className={cn("font-semibold text-[#0052cc]", isItemCancelled && "text-zinc-450 line-through")}>Part No: {item.product.part_number}</span>
-                          </>
-                        )}
-                        {item.product?.engine_model && (
-                          <>
-                            <span>|</span>
-                            <span className={cn(isItemCancelled && "text-zinc-450 line-through")}>Engine: {item.product.engine_model}</span>
-                          </>
+                        {/* Refund breakdown shown per cancelled item */}
+                        {isItemCancelled && (
+                          <p className="text-[10px] font-semibold text-red-600 mt-1">
+                            Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
+                            {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
+                            {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
+                          </p>
                         )}
                       </div>
-                      {item.product?.suitable_vehicle && (
-                        <p className={cn("text-[11px] text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</p>
-                      )}
-                      {/* Refund breakdown shown per cancelled item */}
-                      {isItemCancelled && (
-                        <p className="text-[10px] font-semibold text-red-600 mt-1">
-                          Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
-                          {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
-                          {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
-                        </p>
-                      )}
+                      <p className={cn("font-bold text-zinc-900 shrink-0 ml-2", isItemCancelled && "line-through text-red-500")}>
+                        Ksh {(Number(item.price) * item.quantity).toLocaleString()}
+                      </p>
                     </div>
-                    <p className={cn("font-bold text-zinc-900 shrink-0 ml-2", isItemCancelled && "line-through text-red-500")}>
-                      Ksh {(Number(item.price) * item.quantity).toLocaleString()}
-                    </p>
-                  </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
 
             {/* Cancellation / Refund Details — shows for ANY partial or full cancellation */}

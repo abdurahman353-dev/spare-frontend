@@ -44,6 +44,7 @@ interface ReturnRequest {
     tracking_number: string;
     total_amount: number;
     shipping_fee?: number;
+    refunded_amount?: number;
     status: string;
     customer?: {
       name: string;
@@ -281,8 +282,8 @@ export default function ReturnsManagementPage() {
                   <TableCell className="text-center">
                     <Badge className={cn(
                       "rounded-full px-3 text-[10px] border-none font-bold uppercase tracking-wider",
-                      ret.status === "Approved" ? "bg-red-600 text-white hover:bg-red-700" :
-                      ret.status === "Rejected" ? "bg-zinc-600 text-white hover:bg-zinc-700" :
+                      ret.status === "Approved" ? "bg-emerald-500 text-white hover:bg-emerald-600" :
+                      ret.status === "Rejected" ? "bg-zinc-650 text-white hover:bg-zinc-750" :
                       "bg-amber-100 text-amber-700 border border-amber-200"
                     )}>
                       {ret.status}
@@ -361,23 +362,22 @@ export default function ReturnsManagementPage() {
                   <p className="font-bold text-zinc-800">{selectedReturn.order?.tracking_number}</p>
                 </div>
                 <div className="space-y-0.5">
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Status</p>
-                  <Badge className={cn(
-                    "rounded-full px-2 py-0.5 text-[9px] font-black border-none uppercase",
-                    (selectedReturn.order?.status === "Pending" || selectedReturn.order?.status === "Processing")
-                      ? "bg-amber-100 text-amber-800"
-                      : (selectedReturn.order?.status === "Returned" || selectedReturn.order?.status === "Cancelled")
-                      ? "bg-red-100 text-red-800"
-                      : "bg-emerald-100 text-emerald-800"
-                  )}>
-                    {selectedReturn.order?.status}
-                  </Badge>
-                </div>
-                <div className="space-y-0.5">
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</p>
-                  <p className="font-semibold text-zinc-800">{selectedReturn.order?.customer?.name}</p>
-                  <p className="text-xs text-zinc-400">{selectedReturn.order?.customer?.phone || selectedReturn.order?.customer?.email}</p>
-                </div>
+                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Status</p>
+                   {selectedReturn.status === "Approved" ? (
+                     <Badge className="rounded-full px-2 py-0.5 text-[9px] font-black border-none bg-red-100 text-red-800 uppercase">
+                       Returned
+                     </Badge>
+                   ) : (
+                     <Badge className="rounded-full px-2 py-0.5 text-[9px] font-black border-none bg-amber-100 text-amber-800 uppercase">
+                       Pending
+                     </Badge>
+                   )}
+                 </div>
+                 <div className="space-y-0.5">
+                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</p>
+                   <p className="font-semibold text-zinc-800">{selectedReturn.order?.customer?.name}</p>
+                   <p className="text-xs text-zinc-400">{selectedReturn.order?.customer?.phone || selectedReturn.order?.customer?.email}</p>
+                 </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Value</p>
                   <p className="font-bold text-zinc-800">{currency} {Number(selectedReturn.order?.total_amount || 0).toLocaleString()}</p>
@@ -398,9 +398,6 @@ export default function ReturnsManagementPage() {
               </div>
 
               {selectedReturn.order?.items && selectedReturn.order.items.length > 0 && (() => {
-                // Calculate refund preview for admin
-                const totalUnits = Math.max(1, selectedReturn.order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                const shippingFee = Number(selectedReturn.order?.shipping_fee || 0);
                 const returnItems: any[] = (selectedReturn as any).return_items || [];
                 const itemsToRefund = returnItems.length > 0
                   ? returnItems.map((ri: any) => {
@@ -410,20 +407,43 @@ export default function ReturnsManagementPage() {
                   : selectedReturn.order.items.map((i: any) => ({ ...i, returnQty: i.quantity }));
 
                 const productRefund = itemsToRefund.reduce((s: number, i: any) => s + Number(i.price) * i.returnQty, 0);
-                const shippingRefund = itemsToRefund.reduce((s: number, i: any) => s + (shippingFee / totalUnits) * i.returnQty, 0);
-                const totalRefund = productRefund + shippingRefund;
+
+                let totalRefund = 0;
+                let shippingRefund = 0;
+
+                if (selectedReturn.status === "Approved") {
+                  totalRefund = Number(selectedReturn.order?.refunded_amount || 0);
+                  shippingRefund = Math.max(0, totalRefund - productRefund);
+                } else {
+                  const totalUnits = Math.max(1, selectedReturn.order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                  const shippingFee = Number(selectedReturn.order?.shipping_fee || 0);
+                  shippingRefund = itemsToRefund.reduce((s: number, i: any) => s + (shippingFee / totalUnits) * i.returnQty, 0);
+                  totalRefund = productRefund + shippingRefund;
+                }
 
                 return (
                   <div>
                     {/* Items in order list */}
                     <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Items in Order</p>
                     <div className="border border-zinc-100 rounded-lg overflow-hidden mb-3">
-                      {selectedReturn.order.items.map((item: any, i: number) => (
-                        <div key={i} className="flex justify-between text-xs px-3 py-2.5 border-b border-zinc-100 last:border-0 bg-white hover:bg-zinc-50">
-                          <span className="font-semibold text-zinc-700">{item.product?.name || "Part"}</span>
-                          <span className="text-zinc-500 font-medium">QTY {item.quantity} × {currency} {Number(item.price).toLocaleString()}</span>
-                        </div>
-                      ))}
+                      {selectedReturn.order.items.map((item: any, i: number) => {
+                        const isReturned = item.cancellation_status === "Cancelled";
+                        return (
+                          <div key={i} className={cn("flex justify-between text-xs px-3 py-2.5 border-b border-zinc-100 last:border-0 bg-white hover:bg-zinc-50", isReturned && "bg-red-50/45")}>
+                            <span className={cn("font-semibold text-zinc-700", isReturned && "line-through text-zinc-450")}>
+                              {item.product?.name || "Part"}
+                              {isReturned && (
+                                <span className="ml-2 text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
+                                  RETURNED
+                                </span>
+                              )}
+                            </span>
+                            <span className={cn("text-zinc-500 font-medium", isReturned && "line-through text-zinc-400")}>
+                              QTY {item.quantity} × {currency} {Number(item.price).toLocaleString()}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Refund Preview — only show when pending */}
@@ -434,6 +454,9 @@ export default function ReturnsManagementPage() {
                         </p>
                         {itemsToRefund.map((item: any, i: number) => {
                           const pCost = Number(item.price) * item.returnQty;
+                          // If it is pending, original shipping shares are still accurate
+                          const totalUnits = Math.max(1, selectedReturn.order!.items!.reduce((s: number, it: any) => s + (it.quantity || 1), 0));
+                          const shippingFee = Number(selectedReturn.order?.shipping_fee || 0);
                           const sShare = (shippingFee / totalUnits) * item.returnQty;
                           return (
                             <div key={i} className="text-[11px] text-amber-800 font-semibold">
@@ -455,7 +478,7 @@ export default function ReturnsManagementPage() {
                         <p className="text-[10px] font-black text-red-700 uppercase tracking-widest">Refund Issued</p>
                         {itemsToRefund.map((item: any, i: number) => {
                           const pCost = Number(item.price) * item.returnQty;
-                          const sShare = (shippingFee / totalUnits) * item.returnQty;
+                          const sShare = itemsToRefund.length > 0 ? (shippingRefund / itemsToRefund.reduce((s: number, it: any) => s + it.returnQty, 0)) * item.returnQty : 0;
                           return (
                             <div key={i} className="text-[11px] text-red-800 font-semibold">
                               {item.product?.name || "Item"} (QTY {item.returnQty}): {currency} {Math.round(pCost).toLocaleString()} + {currency} {Math.round(sShare).toLocaleString()} shipping = {currency} {Math.round(pCost + sShare).toLocaleString()}
@@ -482,7 +505,7 @@ export default function ReturnsManagementPage() {
               <div className="flex items-center gap-2 pt-1">
                 <Badge className={cn(
                   "rounded-full px-3 py-1 text-[10px] font-black uppercase border-none",
-                  selectedReturn.status === "Approved" ? "bg-red-600 text-white" :
+                  selectedReturn.status === "Approved" ? "bg-emerald-500 text-white" :
                   selectedReturn.status === "Rejected" ? "bg-zinc-600 text-white" :
                   "bg-amber-100 text-amber-700 border border-amber-200"
                 )}>

@@ -1565,7 +1565,7 @@ function AccountPortalInner() {
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2 flex-wrap">
-              {selectedOrder?.status === "Delivered" && !myReturns.some((r: any) => r.order_id === selectedOrder?.id && (r.status === "Pending" || r.status === "Approved")) && (
+              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && !myReturns.some((r: any) => r.order_id === selectedOrder.id && (r.status === "Pending" || r.status === "Approved")) && (
                 <Button
                   variant="outline"
                   className="text-[12px] font-bold h-9 border-purple-200 text-purple-700 hover:bg-purple-50"
@@ -1574,12 +1574,12 @@ function AccountPortalInner() {
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Request Return
                 </Button>
               )}
-              {selectedOrder?.status === "Delivered" && myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Pending") && (
+              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Pending") && (
                 <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
                   <RotateCcw className="h-3 w-3" /> Return Requested — Pending Review
                 </span>
               )}
-              {selectedOrder?.status === "Delivered" && myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Approved") && (
+              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Approved") && (
                 <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
                   <CheckCircle2 className="h-3 w-3" /> Return Approved
                 </span>

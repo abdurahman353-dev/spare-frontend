@@ -184,6 +184,8 @@ function AdminOrdersPageInner() {
           osc.stop(ctx.currentTime + 0.45);
         } catch (e) { /* ignore audio blocked */ }
         setPreviousIncidentIds(currentIds);
+        // Auto-switch to Security tab so admin immediately sees the new incident
+        setActiveOrdersTab("Security");
       } else {
         // If there are no new incidents, but the list changed (e.g. an incident was resolved)
         const isDifferent = previousIncidentIds.length !== currentIds.length ||
@@ -195,6 +197,8 @@ function AdminOrdersPageInner() {
     } else {
       if (previousIncidentIds.length > 0) {
         setPreviousIncidentIds([]);
+        // All incidents resolved — switch back to Shipment tab if still on Security
+        setActiveOrdersTab(prev => prev === "Security" ? "Shipment" : prev);
       }
     }
   }, [activeIncidents, previousIncidentIds]);
@@ -292,7 +296,7 @@ function AdminOrdersPageInner() {
   const [registerAccount, setRegisterAccount] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
-  const [activeOrdersTab, setActiveOrdersTab] = useState<"Shipment" | "WalkIn" | "LocalShipment">("Shipment");
+  const [activeOrdersTab, setActiveOrdersTab] = useState<"Shipment" | "WalkIn" | "LocalShipment" | "Security">("Shipment");
 
   const [paymentStatus, setPaymentStatus] = useState<string>("Paid");
   const [shippingMethod, setShippingMethod] = useState<string>("Pickup");
@@ -1187,114 +1191,12 @@ function AdminOrdersPageInner() {
         </div>
       </div>
 
-      {/* ── REAL-TIME CRITICAL INCIDENT REPORT CENTER ── */}
-      {activeIncidents.length > 0 && (
-        <div className="bg-white border border-zinc-200 rounded-xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="h-2.5 w-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
-            <h2 className="text-base font-bold tracking-tight text-zinc-900 flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-red-600" />
-              Live Delivery Security Incidents ({activeIncidents.length})
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeIncidents.map((inc: any) => {
-              return (
-                <div
-                  key={inc.id}
-                  className={cn(
-                    "bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between gap-4 text-left",
-                    inc.pin_locked
-                      ? "border-red-200 bg-gradient-to-br from-white to-red-50/10"
-                      : "border-amber-200 bg-gradient-to-br from-white to-amber-50/10"
-                  )}
-                >
-                  <div className="space-y-1.5 min-w-0">
-                    {/* Header: Tracking + Status Badge */}
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                        {inc.tracking_number}
-                      </span>
-                      <Badge
-                        className={cn(
-                          "rounded-full text-[9px] font-bold tracking-wider uppercase border-none px-2.5 py-0.5 shrink-0",
-                          inc.pin_locked ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                        )}
-                      >
-                        {inc.pin_locked ? "🔒 Locked" : "⚠️ Failed Attempt"}
-                      </Badge>
-                    </div>
 
-                    {/* Customer + Incident Alert */}
-                    <p className="font-extrabold text-slate-800 text-xs truncate">
-                      Cust: {inc.customer?.name || "Retail Customer"}
-                    </p>
-                    <p className="text-[11px] text-zinc-500 font-semibold leading-snug">
-                      {inc.pin_locked ? (
-                        <span className="text-red-600">Locked after 3 wrong PIN attempts. Delivery blocked.</span>
-                      ) : (
-                        <span className="text-amber-600">
-                          {inc.failed_attempts_count} failed attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
-                        </span>
-                      )}
-                    </p>
-
-                    {/* ── Driver Info ── */}
-                    {inc.driver ? (
-                      <div className="flex items-center gap-1.5">
-                        <Truck className="h-3 w-3 text-zinc-400 shrink-0" />
-                        <span className="text-[10px] text-zinc-500 font-bold truncate">{inc.driver.name}</span>
-                        {inc.driver.phone && (
-                          <span className="text-[10px] text-zinc-400 font-semibold ml-auto shrink-0">{inc.driver.phone}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide">No driver assigned</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => { setSelectedOrder(inc); setIsOrderModalOpen(true); }}
-                      className="text-xs font-bold h-9 flex-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg transition-colors"
-                    >
-                      Inspect Logs
-                    </Button>
-                    {inc.pin_locked && (
-                      <div className="flex gap-1.5 flex-1">
-                        <Button
-                          size="sm"
-                          disabled={isIncidentActionLoading[inc.id]}
-                          onClick={() => handleUnlockPin(inc.id)}
-                          className="text-xs font-bold h-9 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm border-none transition-colors"
-                        >
-                          Unlock
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={isIncidentActionLoading[inc.id]}
-                          onClick={() => handleRegeneratePin(inc.id)}
-                          className="text-xs font-bold h-9 flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm border-none transition-colors"
-                        >
-                          New PIN
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Tab Selector: Shipment vs Walk-In */}
-      <div className="flex border-b border-zinc-200">
+      {/* Tab Selector: Shipment / Local / Walk-In / Security Alerts */}
+      <div className="flex border-b border-zinc-200 overflow-x-auto">
         <button
           onClick={() => setActiveOrdersTab("Shipment")}
-          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2",
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2 shrink-0",
             activeOrdersTab === "Shipment" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700"
           )}
         >
@@ -1303,7 +1205,7 @@ function AdminOrdersPageInner() {
         </button>
         <button
           onClick={() => setActiveOrdersTab("LocalShipment")}
-          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2",
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2 shrink-0",
             activeOrdersTab === "LocalShipment" ? "border-[#0052cc] text-[#0052cc]" : "border-transparent text-zinc-500 hover:text-zinc-700"
           )}
         >
@@ -1312,13 +1214,31 @@ function AdminOrdersPageInner() {
         </button>
         <button
           onClick={() => setActiveOrdersTab("WalkIn")}
-          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2",
+          className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2 shrink-0",
             activeOrdersTab === "WalkIn" ? "border-emerald-600 text-emerald-600" : "border-transparent text-zinc-500 hover:text-zinc-700"
           )}
         >
           <ShoppingBag className="h-4 w-4" /> Walk-In Orders
           <span className="ml-1 bg-emerald-50 text-emerald-700 rounded-full px-2 py-0.5 text-[10px] font-black">{walkInOrders.length}</span>
         </button>
+        {/* Security Alerts tab — only appears when there are active incidents */}
+        {activeIncidents.length > 0 && (
+          <button
+            onClick={() => setActiveOrdersTab("Security")}
+            className={cn(
+              "px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2 shrink-0",
+              activeOrdersTab === "Security"
+                ? "border-red-600 text-red-600"
+                : "border-transparent text-red-500 hover:text-red-700"
+            )}
+          >
+            <ShieldAlert className="h-4 w-4 animate-pulse" />
+            Security Alerts
+            <span className="ml-1 bg-red-100 text-red-700 rounded-full px-2 py-0.5 text-[10px] font-black animate-pulse">
+              {activeIncidents.length}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Filter Bar — Shipment Orders */}
@@ -1510,6 +1430,104 @@ function AdminOrdersPageInner() {
         )}
       </AnimatePresence>
 
+      {/* ── SECURITY ALERTS TAB CONTENT ── */}
+      {activeOrdersTab === "Security" ? (
+        <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="h-3 w-3 rounded-full bg-red-600 animate-ping shrink-0" />
+            <h2 className="text-base font-bold tracking-tight text-zinc-900 flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-red-600" />
+              Live Delivery Security Incidents
+              <span className="ml-1 bg-red-100 text-red-700 rounded-full px-2.5 py-0.5 text-[11px] font-black">{activeIncidents.length}</span>
+            </h2>
+          </div>
+          <p className="text-xs text-zinc-400 font-semibold -mt-2">
+            Incidents are automatically resolved and removed from this list once an order is Delivered, Cancelled, or Returned. PIN-locked orders can be unlocked below.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeIncidents.map((inc: any) => (
+              <div
+                key={inc.id}
+                className={cn(
+                  "bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between gap-4 text-left",
+                  inc.pin_locked
+                    ? "border-red-200 bg-gradient-to-br from-white to-red-50/10"
+                    : "border-amber-200 bg-gradient-to-br from-white to-amber-50/10"
+                )}
+              >
+                <div className="space-y-1.5 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                      {inc.tracking_number}
+                    </span>
+                    <Badge
+                      className={cn(
+                        "rounded-full text-[9px] font-bold tracking-wider uppercase border-none px-2.5 py-0.5 shrink-0",
+                        inc.pin_locked ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                      )}
+                    >
+                      {inc.pin_locked ? "🔒 Locked" : "⚠️ Failed Attempt"}
+                    </Badge>
+                  </div>
+                  <p className="font-extrabold text-slate-800 text-xs truncate">
+                    Cust: {inc.customer?.name || "Retail Customer"}
+                  </p>
+                  <p className="text-[11px] text-zinc-500 font-semibold leading-snug">
+                    {inc.pin_locked ? (
+                      <span className="text-red-600">Locked after 3 wrong PIN attempts. Delivery blocked.</span>
+                    ) : (
+                      <span className="text-amber-600">
+                        {inc.failed_attempts_count} failed attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
+                      </span>
+                    )}
+                  </p>
+                  {inc.driver ? (
+                    <div className="flex items-center gap-1.5">
+                      <Truck className="h-3 w-3 text-zinc-400 shrink-0" />
+                      <span className="text-[10px] text-zinc-500 font-bold truncate">{inc.driver.name}</span>
+                      {inc.driver.phone && (
+                        <span className="text-[10px] text-zinc-400 font-semibold ml-auto shrink-0">{inc.driver.phone}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide">No driver assigned</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setSelectedOrder(inc); setIsOrderModalOpen(true); }}
+                    className="text-xs font-bold h-9 flex-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg transition-colors"
+                  >
+                    Inspect Logs
+                  </Button>
+                  {inc.pin_locked && (
+                    <div className="flex gap-1.5 flex-1">
+                      <Button
+                        size="sm"
+                        disabled={isIncidentActionLoading[inc.id]}
+                        onClick={() => handleUnlockPin(inc.id)}
+                        className="text-xs font-bold h-9 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm border-none transition-colors"
+                      >
+                        Unlock
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={isIncidentActionLoading[inc.id]}
+                        onClick={() => handleRegeneratePin(inc.id)}
+                        className="text-xs font-bold h-9 flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm border-none transition-colors"
+                      >
+                        New PIN
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
       <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
         <div className="overflow-x-auto">
           {activeOrdersTab === "WalkIn" ? (
@@ -2056,6 +2074,7 @@ function AdminOrdersPageInner() {
           pageSizeOptions={[15, 30, 50, 100]}
         />
       </div>
+      )} {/* end Security ternary */}
 
       {/* Order Details Modal */}
       <Dialog open={isOrderModalOpen} onOpenChange={setIsOrderModalOpen}>

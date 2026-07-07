@@ -201,9 +201,21 @@ export default function AdminsAndAuditsPage() {
     }
   };
 
+  const [countriesList, setCountriesList] = useState<any[]>([]);
+
+  const fetchLocations = async () => {
+    try {
+      const res = await api.get("/locations/countries");
+      setCountriesList(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Failed to fetch shipping zone countries and cities:", err);
+    }
+  };
+
   useEffect(() => {
     fetchAdmins();
     fetchAuditLogs();
+    fetchLocations();
   }, []);
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
@@ -1109,9 +1121,13 @@ export default function AdminsAndAuditsPage() {
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
         <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
-            <DialogTitle className="text-xl font-bold text-zinc-900">Create New Administrator</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-zinc-900">
+              {formData.role === "delivery" ? "Create New delivery" : "Create New Administrator"}
+            </DialogTitle>
             <DialogDescription className="text-zinc-400 text-xs mt-1">
-              Add credential profiles for admins and superadmins. They will be directed to change their password instantly upon first login.
+              {formData.role === "delivery"
+                ? "Add credential profiles for delivery guys. They will be directed to change their password instantly upon first login."
+                : "Add credential profiles for admins and superadmins. They will be directed to change their password instantly upon first login."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAdmin}>
@@ -1219,24 +1235,44 @@ export default function AdminsAndAuditsPage() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Country</label>
-                    <Input 
-                      placeholder="e.g. Kenya" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                    <select
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
                       value={formData.country}
-                      onChange={(e) => setFormData({...formData, country: e.target.value})}
-                    />
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData({
+                          ...formData,
+                          country: val,
+                          city: ""
+                        });
+                      }}
+                    >
+                      <option value="">Select country...</option>
+                      {countriesList.map((c: any) => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">City</label>
-                    <Input 
-                      placeholder="e.g. Nairobi" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                    <select
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
                       value={formData.city}
                       onChange={(e) => setFormData({...formData, city: e.target.value})}
-                    />
+                      disabled={!formData.country}
+                    >
+                      <option value="">Select city...</option>
+                      {(() => {
+                        const countryObj = countriesList.find((c: any) => c.name === formData.country);
+                        const cities = countryObj ? countryObj.cities || [] : [];
+                        return cities.map((city: any) => (
+                          <option key={city.id} value={city.name}>{city.name}</option>
+                        ));
+                      })()}
+                    </select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>
@@ -1370,24 +1406,44 @@ export default function AdminsAndAuditsPage() {
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Country</label>
-                    <Input 
-                      placeholder="e.g. Kenya" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                    <select
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
                       value={editFormData.country}
-                      onChange={(e) => setEditFormData({...editFormData, country: e.target.value})}
-                    />
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditFormData({
+                          ...editFormData,
+                          country: val,
+                          city: ""
+                        });
+                      }}
+                    >
+                      <option value="">Select country...</option>
+                      {countriesList.map((c: any) => (
+                        <option key={c.id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">City</label>
-                    <Input 
-                      placeholder="e.g. Nairobi" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                    <select
+                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
                       value={editFormData.city}
                       onChange={(e) => setEditFormData({...editFormData, city: e.target.value})}
-                    />
+                      disabled={!editFormData.country}
+                    >
+                      <option value="">Select city...</option>
+                      {(() => {
+                        const countryObj = countriesList.find((c: any) => c.name === editFormData.country);
+                        const cities = countryObj ? countryObj.cities || [] : [];
+                        return cities.map((city: any) => (
+                          <option key={city.id} value={city.name}>{city.name}</option>
+                        ));
+                      })()}
+                    </select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>

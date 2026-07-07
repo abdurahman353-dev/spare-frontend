@@ -66,22 +66,47 @@ interface Stats {
   total_delivered: number;
 }
 
-// ── Status badge config (by pool type) ────────────────────────────────────────
+// ── Route type helper ────────────────────────────────────────────────────────
+/** Returns true if the order is a same-city (local) delivery.
+ *  Local = warehouse city matches destination city, or it's a Pickup order.
+ *  Cross-city = Nairobi → Mombasa etc. (regular Shipment orders). */
+function isLocalDelivery(order: Order): boolean {
+  if (order.shipping_method === "Pickup") return true;
+  const whCity = (
+    order.items?.[0]?.warehouse?.location ||
+    order.items?.[0]?.warehouse?.name ||
+    ""
+  ).trim().toLowerCase();
+  const destCity = (order.shipping_city || "").trim().toLowerCase();
+  if (!whCity || !destCity) return true; // assume local if unknown
+  return whCity.includes(destCity) || destCity.includes(whCity);
+}
+
 function getStatusBadge(order: Order, myId: number) {
-  const isMe = order.delivered_by_user_id === myId;
+  const isMe    = order.delivered_by_user_id === myId;
+  const isLocal = isLocalDelivery(order);
+
   if (order.status === "Shipped") {
-    if (isMe) return { label: "IN TRANSIT", bg: "bg-blue-600 text-white", dot: "bg-blue-300" };
-    return { label: "PENDING DISPATCH", bg: "bg-amber-500 text-white", dot: "bg-amber-200" };
+    // Local orders appear in pool at Shipped stage
+    if (isMe) return { label: "IN TRANSIT",     bg: "bg-blue-600 text-white",   dot: "bg-blue-300"   };
+    return       { label: "READY TO SHIP",       bg: "bg-amber-500 text-white",  dot: "bg-amber-200"  };
   }
   if (order.status === "Arrived") {
-    if (isMe) return { label: "OUT FOR DELIVERY", bg: "bg-emerald-500 text-white", dot: "bg-emerald-200" };
-    return { label: "AT HUB — READY", bg: "bg-purple-600 text-white", dot: "bg-purple-300" };
+    if (isLocal) {
+      // Local: driver has marked arrived at customer doorstep
+      return { label: "AT DOORSTEP",        bg: "bg-emerald-500 text-white", dot: "bg-emerald-200" };
+    } else {
+      // Cross-city: admin marked arrived at destination hub — ready for last-mile delivery
+      if (isMe) return { label: "OUT FOR DELIVERY",  bg: "bg-emerald-500 text-white", dot: "bg-emerald-200" };
+      return         { label: "ARRIVED AT DEST.",    bg: "bg-purple-600 text-white",  dot: "bg-purple-300"  };
+    }
   }
   if (order.status === "Delivered") {
     return { label: "DELIVERED", bg: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-400" };
   }
   return { label: order.status.toUpperCase(), bg: "bg-zinc-200 text-zinc-700", dot: "bg-zinc-400" };
 }
+
 
 // ── Audio alert ───────────────────────────────────────────────────────────────
 function playNotificationSound() {
@@ -1618,9 +1643,10 @@ function SlaTimer({ order }: { order: Order }) {
   const [color, setColor] = useState("text-zinc-500");
 
   useEffect(() => {
-    // If the driver has arrived at the customer's doorstep, stop the timer
+    // If the driver has arrived at the customer's doorstep (local) or is out for delivery (shipment), stop the timer
     if (order.status === "Arrived") {
-      setTimeLeft("Arrived at Doorstep 📍");
+      const local = isLocalDelivery(order);
+      setTimeLeft(local ? "At Customer Doorstep 📍" : "At Destination Hub 📦");
       setColor("text-emerald-600 font-black");
       return;
     }
@@ -1874,25 +1900,34 @@ function OrderCard({
 
             {tab === "mine" && (
               <>
-                {order.status === "Shipped" ? (
-                  <Button
-                    onClick={onMarkArrived}
-                    disabled={isMarkLoading}
-                    className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
-                  >
-                    {isMarkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapPin className="h-4 w-4 mr-2" />}
-                    📍 Mark Arrived at Customer Doorstep
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={onDeliver}
-                    disabled={isMarkLoading || !manifestChecked[order.id]}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl disabled:opacity-40 disabled:pointer-events-none"
-                  >
-                    <Key className="h-4 w-4 mr-2" /> Verify PIN & Deliver
-                  </Button>
-                )}
-                
+                {(() => {
+                  const isLocal = isLocalDelivery(order);
+                  // Local shipment: Shipped → Mark Arrived → Verify PIN & Deliver
+                  // Cross-city shipment: already Arrived (admin did it) → Verify PIN & Deliver directly
+                  if (isLocal && order.status === "Shipped") {
+                    return (
+                      <Button
+                        onClick={onMarkArrived}
+                        disabled={isMarkLoading}
+                        className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                      >
+                        {isMarkLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapPin className="h-4 w-4 mr-2" />}
+                        📍 Mark Arrived at Customer Doorstep
+                      </Button>
+                    );
+                  }
+                  // Local order that's Arrived OR cross-city order that's Arrived → Deliver
+                  return (
+                    <Button
+                      onClick={onDeliver}
+                      disabled={isMarkLoading || !manifestChecked[order.id]}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl disabled:opacity-40 disabled:pointer-events-none"
+                    >
+                      <Key className="h-4 w-4 mr-2" /> Verify PIN & Deliver
+                    </Button>
+                  );
+                })()}
+
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     onClick={onLogFailedAttempt}

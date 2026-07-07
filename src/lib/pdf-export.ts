@@ -540,10 +540,12 @@ export const exportOrdersPDF = async (
 
   // ── 3. SUMMARY STATS CARD ──────────────────────────────────────────────────
   const statsY = infoY + 26;
+  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status !== "Cancelled");
+
   const totalGross = orders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
   const totalFees  = orders.reduce((s, o) => s + Number(o.shipping_fee  || 0), 0);
-  const totalItems = orders.reduce((s, o) => s + (o.items?.length || 0), 0);
-  const totalUnits = orders.reduce((s, o) => s + (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0), 0);
+  const totalItems = orders.reduce((s, o) => s + getActiveItems(o).length, 0);
+  const totalUnits = orders.reduce((s, o) => s + getActiveItems(o).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0), 0);
 
   doc.setFillColor(239, 246, 255);
   doc.roundedRect(marginL, statsY, infoW, 14, 2, 2, "F");
@@ -575,7 +577,8 @@ export const exportOrdersPDF = async (
   ];
 
   const tableRows = orders.map((o) => {
-    const productNames = (o.items || [])
+    const activeItems = getActiveItems(o);
+    const productNames = activeItems
       .map((item: any) => {
         const qty = item.quantity || 1;
         const partNo = item.product?.part_number ? ` [${item.product.part_number}]` : "";
@@ -584,23 +587,23 @@ export const exportOrdersPDF = async (
       .filter(Boolean)
       .join(", ") || "—";
 
-    const partNumbers = (o.items || [])
+    const partNumbers = activeItems
       .map((item: any) => item.product?.part_number || "—")
       .filter(Boolean)
       .join(", ") || "—";
 
-    const engines = (o.items || [])
+    const engines = activeItems
       .map((item: any) => item.product?.engine_model || "—")
       .filter(Boolean)
       .join(", ") || "—";
 
-    const suitableVehicles = (o.items || [])
+    const suitableVehicles = activeItems
       .map((item: any) => item.product?.suitable_vehicle || "—")
       .filter(Boolean)
       .join(", ") || "—";
 
-    const itemsCount = o.items?.length || 0;
-    const unitsCount = (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+    const itemsCount = activeItems.length;
+    const unitsCount = activeItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
     const itemsUnitsDisplay = `${itemsCount} Item${itemsCount !== 1 ? 's' : ''} (${unitsCount} Unit${unitsCount !== 1 ? 's' : ''})`;
 
     const customerPhone = o.customer?.phone || "";
@@ -632,7 +635,7 @@ export const exportOrdersPDF = async (
       engines,
       suitableVehicles,
       itemsUnitsDisplay,
-      o.items?.[0]?.warehouse?.name || "N/A",
+      activeItems[0]?.warehouse?.name || "N/A",
       destDisplay,
       new Date(o.created_at).toLocaleDateString("en-KE"),
       `${currency} ${Math.max(0, parseFloat(o.total_amount || 0) - parseFloat(o.shipping_fee || 0)).toLocaleString()}`,
@@ -808,13 +811,15 @@ export const exportWaybillManifestPDF = async (
   doc.text(shipment.destination || "N/A",  marginL + infoW * 0.52 + 32, infoY + 13);
   doc.text(shippedDate,                    marginL + infoW * 0.52 + 32, infoY + 19);
 
+  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status !== "Cancelled");
+
   // Calculate totals
-  const totalItems = orders.reduce((s: number, o: any) => s + (o.items?.length || 0), 0);
+  const totalItems = orders.reduce((s: number, o: any) => s + getActiveItems(o).length, 0);
   const totalUnits = orders.reduce((s: number, o: any) =>
-    s + (o.items || []).reduce((us: number, i: any) => us + (i.quantity || 0), 0), 0);
+    s + getActiveItems(o).reduce((us: number, i: any) => us + (i.quantity || 0), 0), 0);
 
   const shipmentProductSubtotal = orders.reduce((sum: number, order: any) => {
-    const itemsTotal = (order.items || []).reduce(
+    const itemsTotal = getActiveItems(order).reduce(
       (itemSum: number, item: any) =>
         itemSum + (Number(item.quantity) || 0) * parseFloat(item.price ?? item.product?.price ?? 0),
       0
@@ -871,7 +876,7 @@ export const exportWaybillManifestPDF = async (
     const customerPhone = order.customer?.phone || "";
     const customerDisplay = customerPhone ? `${customerName}\n${customerPhone}` : customerName;
 
-    const items = order.items || [];
+    const items = getActiveItems(order);
     const productNames = items
       .map((item: any) => {
         const qty = item.quantity || 1;
@@ -1173,7 +1178,7 @@ export const exportCustomerStatementPDF = async (
     const formattedDate = new Date(order.created_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
     const trackingRef = order.tracking_number || `#ORD-${order.id}`;
     
-    const items = order.items || [];
+    const items = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
     const itemsSummary = items.map((i: any) => `${i.product?.name || "Part"} (Qty: ${i.quantity})`).join(", ") || "No parts listed";
 
     const partNumbers = items
@@ -1726,12 +1731,15 @@ export const exportCustomerLedgerPDF = async (
     "Payment Mode",
   ]];
 
-  const grandTotalItemsCount = orders.reduce((sum: number, o: any) => sum + (o.items?.length || 0), 0);
-  const grandTotalUnitsCount = orders.reduce((sum: number, o: any) => sum + (o.items || []).reduce((s: number, item: any) => s + (item.quantity || 0), 0), 0);
+  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status !== "Cancelled");
+
+  const grandTotalItemsCount = orders.reduce((sum: number, o: any) => sum + getActiveItems(o).length, 0);
+  const grandTotalUnitsCount = orders.reduce((sum: number, o: any) => sum + getActiveItems(o).reduce((s: number, item: any) => s + (item.quantity || 0), 0), 0);
 
   const tableBody = orders.map((o: any) => {
     const subtotal = Math.max(0, Number(o.total_amount || 0) - Number(o.shipping_fee || 0));
-    const productNames = (o.items || [])
+    const activeItems = getActiveItems(o);
+    const productNames = activeItems
       .map((item: any) => {
         const name = item.product?.name || "Genuine Spare Part";
         const partNo = item.product?.part_number ? ` [${item.product.part_number}]` : "";
@@ -1740,22 +1748,22 @@ export const exportCustomerLedgerPDF = async (
       .filter(Boolean)
       .join(", ") || "Genuine Spare Part";
 
-    const partNumbers = (o.items || [])
+    const partNumbers = activeItems
       .map((item: any) => item.product?.part_number || "—")
       .filter(Boolean)
       .join(", ") || "—";
 
-    const engines = (o.items || [])
+    const engines = activeItems
       .map((item: any) => item.product?.engine_model || "—")
       .filter(Boolean)
       .join(", ") || "—";
 
-    const suitableVehicles = (o.items || [])
+    const suitableVehicles = activeItems
       .map((item: any) => item.product?.suitable_vehicle || "—")
       .filter(Boolean)
       .join(", ") || "—";
 
-    const totalQty = (o.items || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+    const totalQty = activeItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
     return [
       o.tracking_number || `ORD-${o.id}`,
       new Date(o.created_at).toLocaleDateString("en-KE"),
@@ -1763,8 +1771,8 @@ export const exportCustomerLedgerPDF = async (
       partNumbers,
       engines,
       suitableVehicles,
-      `${o.items?.length || 0} Item(s) (${totalQty} Unit${totalQty !== 1 ? 's' : ''})`,
-      o.items?.[0]?.warehouse?.name || "Main Warehouse Hub",
+      `${activeItems.length} Item(s) (${totalQty} Unit${totalQty !== 1 ? 's' : ''})`,
+      activeItems[0]?.warehouse?.name || "Main Warehouse Hub",
       o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || "Kenya"}` : "In-Store Collection",
       `${currency} ${subtotal.toLocaleString()}`,
       `${currency} ${Number(o.shipping_fee || 0).toLocaleString()}`,

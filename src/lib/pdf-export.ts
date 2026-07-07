@@ -540,7 +540,7 @@ export const exportOrdersPDF = async (
 
   // ── 3. SUMMARY STATS CARD ──────────────────────────────────────────────────
   const statsY = infoY + 26;
-  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status !== "Cancelled");
+  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status?.toLowerCase() !== "cancelled");
 
   const totalGross = orders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
   const totalFees  = orders.reduce((s, o) => s + Number(o.shipping_fee  || 0), 0);
@@ -811,7 +811,7 @@ export const exportWaybillManifestPDF = async (
   doc.text(shipment.destination || "N/A",  marginL + infoW * 0.52 + 32, infoY + 13);
   doc.text(shippedDate,                    marginL + infoW * 0.52 + 32, infoY + 19);
 
-  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status !== "Cancelled");
+  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status?.toLowerCase() !== "cancelled");
 
   // Calculate totals
   const totalItems = orders.reduce((s: number, o: any) => s + getActiveItems(o).length, 0);
@@ -1178,7 +1178,7 @@ export const exportCustomerStatementPDF = async (
     const formattedDate = new Date(order.created_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" });
     const trackingRef = order.tracking_number || `#ORD-${order.id}`;
     
-    const items = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+    const items = (order.items || []).filter((i: any) => i.cancellation_status?.toLowerCase() !== "cancelled");
     const itemsSummary = items.map((i: any) => `${i.product?.name || "Part"} (Qty: ${i.quantity})`).join(", ") || "No parts listed";
 
     const partNumbers = items
@@ -1487,7 +1487,7 @@ export const exportSingleOrderInvoicePDF = async (
   // ── 6. ITEM MANIFEST TABLE ──────────────────────────────────────────────────
   // Only show ACTIVE items — returned/cancelled items are excluded from the invoice
   const allItems = order?.items || [];
-  const items = allItems.filter((item: any) => item.cancellation_status !== "Cancelled");
+  const items = allItems.filter((item: any) => item.cancellation_status?.toLowerCase() !== "cancelled");
   const tableHead = [[
     "#",
     "Product Description",
@@ -1731,7 +1731,7 @@ export const exportCustomerLedgerPDF = async (
     "Payment Mode",
   ]];
 
-  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status !== "Cancelled");
+  const getActiveItems = (o: any) => (o.items || []).filter((item: any) => item.cancellation_status?.toLowerCase() !== "cancelled");
 
   const grandTotalItemsCount = orders.reduce((sum: number, o: any) => sum + getActiveItems(o).length, 0);
   const grandTotalUnitsCount = orders.reduce((sum: number, o: any) => sum + getActiveItems(o).reduce((s: number, item: any) => s + (item.quantity || 0), 0), 0);

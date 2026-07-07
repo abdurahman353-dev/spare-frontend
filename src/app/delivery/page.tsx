@@ -454,6 +454,9 @@ export default function DeliveryPortal() {
       );
       return;
     }
+    // ── Accidental Click Prevention Confirmation ─────────────────────────────
+    const confirmed = window.confirm(`Are you sure you want to secure and claim order ${order.tracking_number} for delivery?`);
+    if (!confirmed) return;
     // ─────────────────────────────────────────────────────────────────────────
     setClaimingId(order.id);
     try {
@@ -879,7 +882,7 @@ export default function DeliveryPortal() {
           ))}
         </div>
 
-        {/* Search + Filter row */}
+        {/* Search row */}
         <div className="flex gap-2 mb-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
@@ -895,16 +898,6 @@ export default function DeliveryPortal() {
               </button>
             )}
           </div>
-          {activeTab === "pool" && (
-            <button
-              onClick={() => setShowFilterPanel(!showFilterPanel)}
-              className={`h-10 w-10 flex items-center justify-center rounded-xl border shadow-sm transition-all shrink-0 ${
-                showFilterPanel ? "bg-[#0052cc] text-white border-[#0052cc]" : "bg-white border-zinc-200 text-zinc-600"
-              }`}
-            >
-              <Filter className="h-4 w-4" />
-            </button>
-          )}
           <button
             onClick={() => { fetchOrders(false); fetchStats(); fetchNotifications(); }}
             disabled={isSyncing}
@@ -913,91 +906,6 @@ export default function DeliveryPortal() {
             <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-[#0052cc]" : ""}`} />
           </button>
         </div>
-
-        {/* Filter panel (Open Pool only) */}
-        <AnimatePresence>
-          {showFilterPanel && activeTab === "pool" && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
-              className="bg-white border border-zinc-200 rounded-xl p-4 mb-4 shadow-sm overflow-hidden"
-            >
-              <div className="space-y-4">
-                {/* Country row */}
-                {availableCountries.length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">🌍 Filter by Country</p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => { setCountryFilter("all"); setCityFilter("all"); }}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${countryFilter === "all" ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
-                      >
-                        All Countries
-                      </button>
-                      {availableCountries.map(country => (
-                        <button
-                          key={country}
-                          onClick={() => { setCountryFilter(country); setCityFilter("all"); }}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${countryFilter === country ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
-                        >
-                          {country}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* City row */}
-                <div>
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">📍 Filter by City</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setCityFilter("all")}
-                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${cityFilter === "all" ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
-                    >
-                      All Cities
-                    </button>
-                    {availableCities.map(city => (
-                      <button
-                        key={city}
-                        onClick={() => setCityFilter(city)}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${cityFilter === city ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
-                      >
-                        {city}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Sort row */}
-                <div>
-                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Sort</p>
-                  <div className="flex gap-2">
-                    {(["newest", "oldest"] as const).map(s => (
-                      <button
-                        key={s}
-                        onClick={() => setSortOrder(s)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${sortOrder === s ? "bg-[#0052cc] text-white" : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"}`}
-                      >
-                        {s === "newest" ? <SortDesc className="h-3 w-3" /> : <SortAsc className="h-3 w-3" />}
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Reset all */}
-                {(countryFilter !== "all" || cityFilter !== "all") && (
-                  <button
-                    onClick={() => { setCountryFilter("all"); setCityFilter("all"); }}
-                    className="w-full text-[10px] font-black uppercase tracking-widest text-red-500 border border-red-200 rounded-lg py-1.5 hover:bg-red-50 transition-colors"
-                  >
-                    ✕ Reset All Filters
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
         {/* ── List Content ────────────────────────────────────────────────── */}
         {loading ? (
@@ -1079,29 +987,7 @@ export default function DeliveryPortal() {
             {/* ── COMPLETED TAB ─────────────────────────────────────────── */}
             {activeTab === "completed" && (
               <>
-                {completedOrders.length > 0 && (
-                  <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-2xl p-5 shadow-md mb-4 text-left">
-                    <div className="flex justify-between items-center mb-3">
-                      <div>
-                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100">End-of-Shift Summary</p>
-                        <h3 className="text-lg font-black tracking-tight">Daily Performance</h3>
-                      </div>
-                      <span className="bg-emerald-400/30 text-white font-bold text-[10px] px-2.5 py-1 rounded-full uppercase tracking-wider border border-white/20">
-                        Shift Active
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-[10px] text-emerald-100 font-bold uppercase tracking-wider">Total Handed Over</p>
-                        <p className="text-2xl font-black">{completedOrders.length} order{completedOrders.length !== 1 ? "s" : ""}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-emerald-100 font-bold uppercase tracking-wider">Total Value Handled</p>
-                        <p className="text-2xl font-black">{currency} {completedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0).toLocaleString()}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
+
                 {completedOrders.length === 0 ? (
                   <EmptyState
                     icon={CheckCircle2}

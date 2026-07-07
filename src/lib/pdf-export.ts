@@ -1480,7 +1480,9 @@ export const exportSingleOrderInvoicePDF = async (
   }
 
   // ── 6. ITEM MANIFEST TABLE ──────────────────────────────────────────────────
-  const items = order?.items || [];
+  // Only show ACTIVE items — returned/cancelled items are excluded from the invoice
+  const allItems = order?.items || [];
+  const items = allItems.filter((item: any) => item.cancellation_status !== "Cancelled");
   const tableHead = [[
     "#",
     "Product Description",
@@ -1556,13 +1558,17 @@ export const exportSingleOrderInvoicePDF = async (
   const subtotal = Math.max(0, Number(order?.total_amount || 0) - Number(order?.shipping_fee || 0));
   const shippingFee = Number(order?.shipping_fee || 0);
   const grandTotal  = Number(order?.total_amount || 0);
+  // If a partial/full return was applied, show the original paid vs refunded
+  const refundedAmount = Number(order?.refunded_amount || 0);
 
   const totalsX = pageWidth - marginR - 75;
   const totalsW = 75;
 
   let ty = finalY + 6;
-  doc.setFillColor(248, 250, 252).rect(totalsX, ty - 4, totalsW, 26, "F");
-  doc.setDrawColor(226, 232, 240).setLineWidth(0.3).rect(totalsX, ty - 4, totalsW, 26, "S");
+  const extraRows = refundedAmount > 0 ? 1 : 0;
+  const totalsBoxHeight = 26 + (extraRows * 6);
+  doc.setFillColor(248, 250, 252).rect(totalsX, ty - 4, totalsW, totalsBoxHeight, "F");
+  doc.setDrawColor(226, 232, 240).setLineWidth(0.3).rect(totalsX, ty - 4, totalsW, totalsBoxHeight, "S");
 
   const totalsRows: [string, string][] = [
     ["Items Subtotal",    `${currency} ${subtotal.toLocaleString()}`],
@@ -1574,6 +1580,14 @@ export const exportSingleOrderInvoicePDF = async (
     doc.text(value, totalsX + totalsW - 3, ty, { align: "right" });
     ty += 5;
   });
+
+  // Show refund line if a return was applied
+  if (refundedAmount > 0) {
+    doc.setFont("helvetica", "bold").setFontSize(8).setTextColor(185, 28, 28);
+    doc.text("Amount Refunded", totalsX + 3, ty);
+    doc.text(`- ${currency} ${refundedAmount.toLocaleString()}`, totalsX + totalsW - 3, ty, { align: "right" });
+    ty += 5;
+  }
 
   // Divider line
   doc.setDrawColor(203, 213, 225).line(totalsX + 3, ty, totalsX + totalsW - 3, ty);

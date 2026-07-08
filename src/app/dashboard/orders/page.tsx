@@ -762,13 +762,13 @@ function AdminOrdersPageInner() {
         api.get(API_ENDPOINTS.customers.base, { params: { per_page: -1 } }),
         api.get(API_ENDPOINTS.products.base, { params: { per_page: -1 } }),
         api.get(API_ENDPOINTS.locations.countries),
-        api.get(API_ENDPOINTS.admins.base),
+        api.get("/delivery-drivers"),
       ]);
       setWarehouses(wRes.data);
       setCustomers(cRes.data);
       setProducts(pRes.data);
       setCountriesData(locRes.data);
-      setDrivers((dRes.data || []).filter((u: any) => u.role === "delivery" && u.is_active));
+      setDrivers(dRes.data || []);
     } catch (err) {
       console.error("Failed to fetch metadata:", err);
     }
@@ -1982,12 +1982,17 @@ function AdminOrdersPageInner() {
                           </Badge>
                           {/* Driver badge for Shipped/Arrived/Delivered orders */}
                           {(order.status === "Shipped" || order.status === "Arrived" || order.status === "Delivered") && (() => {
-                            const assignedDriver = drivers.find((d: any) => d.id === order.delivered_by_user_id);
-                            return assignedDriver ? (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full">
-                                <Truck className="h-2.5 w-2.5" />
-                                {assignedDriver.name.split(" ")[0]}
-                              </span>
+                             const assignedDriver = drivers.find((d: any) => d.id === order.delivered_by_user_id);
+                             return assignedDriver ? (
+                               <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                 <Truck className="h-2.5 w-2.5 shrink-0" />
+                                 <span>{assignedDriver.name.split(" ")[0]}</span>
+                                 {(assignedDriver.city || assignedDriver.country) && (
+                                   <span className="text-indigo-400 font-bold">
+                                     ({assignedDriver.city || assignedDriver.country})
+                                   </span>
+                                 )}
+                               </span>
                             ) : (order.status === "Shipped" || order.status === "Arrived") ? (
                               <span className="inline-flex items-center gap-1 text-[9px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
                                 No Driver
@@ -2163,11 +2168,18 @@ function AdminOrdersPageInner() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-zinc-800 truncate">{currentSelectedOrder.driver.name}</p>
                         {currentSelectedOrder.driver.phone && <p className="text-xs text-zinc-500 truncate">{currentSelectedOrder.driver.phone}</p>}
-                        {currentSelectedOrder.driver.vehicle_plate && (
-                          <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block truncate max-w-full">
-                            Plate: {currentSelectedOrder.driver.vehicle_plate}
-                          </p>
-                        )}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {(currentSelectedOrder.driver.city || currentSelectedOrder.driver.country) && (
+                            <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded truncate">
+                              📍 {currentSelectedOrder.driver.city ? `${currentSelectedOrder.driver.city}, ` : ""}{currentSelectedOrder.driver.country || ""}
+                            </p>
+                          )}
+                          {currentSelectedOrder.driver.vehicle_plate && (
+                            <p className="text-[10px] font-black text-zinc-700 bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded truncate">
+                              Plate: {currentSelectedOrder.driver.vehicle_plate}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -3097,7 +3109,7 @@ function AdminOrdersPageInner() {
                   <option value="">— Unassign / No Driver —</option>
                   {drivers.map((d) => (
                     <option key={d.id} value={d.id.toString()}>
-                      {d.name}{d.vehicle_plate ? ` · ${d.vehicle_plate}` : ""}
+                      {d.name} {d.city || d.country ? `(${d.city || ""}${d.city && d.country ? ", " : ""}${d.country || ""})` : ""} {d.vehicle_plate ? ` · ${d.vehicle_plate}` : ""}
                     </option>
                   ))}
                 </select>
@@ -3114,9 +3126,18 @@ function AdminOrdersPageInner() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-zinc-800 truncate">{d.name}</p>
                     {d.phone && <p className="text-xs text-zinc-500 truncate">{d.phone}</p>}
-                    {d.vehicle_plate && (
-                      <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block truncate max-w-full">{d.vehicle_plate}</p>
-                    )}
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(d.city || d.country) && (
+                        <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded truncate">
+                          📍 {d.city ? `${d.city}, ` : ""}{d.country || ""}
+                        </p>
+                      )}
+                      {d.vehicle_plate && (
+                        <p className="text-[10px] font-black text-zinc-700 bg-zinc-100 border border-zinc-200 px-1.5 py-0.5 rounded truncate">
+                          Plate: {d.vehicle_plate}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

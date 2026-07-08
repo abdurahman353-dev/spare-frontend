@@ -99,7 +99,9 @@ function getShipmentRouteCities(order: any): { origin: string; destination: stri
 function isLocalShipmentRoute(order: any): boolean {
   const { origin, destination } = getShipmentRouteCities(order);
   if (!origin || !destination) return false;
-  return origin === destination;
+  // Use substring containment — handles "Nairobi Shop" vs "Nairobi", "NAIROBI" vs "nairobi", etc.
+  // Both sides are already lowercased by getShipmentRouteCities.
+  return origin.includes(destination) || destination.includes(origin);
 }
 
 /**
@@ -1392,30 +1394,37 @@ function AdminOrdersPageInner() {
                   "Mark Shipped"
                 )}
               </Button>
-              <Button
-                size="sm"
-                disabled={isBulkProcessing}
-                onClick={() => handleBulkStatusChange('Arrived')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
-              >
-                {isBulkProcessing ? (
-                  <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
-                ) : (
-                  "Mark Arrived"
-                )}
-              </Button>
-              <Button
-                size="sm"
-                disabled={isBulkProcessing}
-                onClick={() => handleBulkStatusChange('Delivered')}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
-              >
-                {isBulkProcessing ? (
-                  <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
-                ) : (
-                  "Mark Delivered"
-                )}
-              </Button>
+              {/* Mark Arrived & Delivered are ONLY available in Walk-In bulk ops.
+                  Shipment → Arrived is triggered by waybill in Logistics.
+                  Delivered → done by delivery guy after PIN confirmation. */}
+              {activeOrdersTab === "WalkIn" && (
+                <>
+                  <Button
+                    size="sm"
+                    disabled={isBulkProcessing}
+                    onClick={() => handleBulkStatusChange('Arrived')}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
+                  >
+                    {isBulkProcessing ? (
+                      <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                    ) : (
+                      "Mark Arrived"
+                    )}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={isBulkProcessing}
+                    onClick={() => handleBulkStatusChange('Delivered')}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
+                  >
+                    {isBulkProcessing ? (
+                      <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
+                    ) : (
+                      "Mark Delivered"
+                    )}
+                  </Button>
+                </>
+              )}
               <Button
                 size="sm"
                 variant="ghost"
@@ -2005,16 +2014,9 @@ function AdminOrdersPageInner() {
                                   <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                 </DropdownMenuItem>
                               )}
-                              {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped") && (
-                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Arrived')} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
-                                  <MapPin className="mr-2 h-4 w-4 text-indigo-400" /> Mark Arrived
-                                </DropdownMenuItem>
-                              )}
-                              {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped" || order.status === "Arrived" || order.status === "In Transit") && (
-                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Delivered')} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
-                                  <CheckCircle2 className="mr-2 h-4 w-4 animate-pulse" /> Mark Delivered
-                                </DropdownMenuItem>
-                              )}
+                              {/* Mark Arrived: NOT available for Shipment/Local tabs — only via waybill bulk in Logistics */}
+                              {/* Mark Delivered: NOT available for Shipment/Local tabs — only done by delivery guy via PIN */}
+
 
 
 

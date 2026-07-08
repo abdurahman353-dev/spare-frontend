@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
@@ -1186,23 +1186,45 @@ function AccountPortalInner() {
                               </thead>
                               <tbody>
                                 {myReturns.map((ret: any) => (
-                                  <tr key={ret.id} className="border-b border-[#f1f5f9] hover:bg-zinc-50/40 font-medium">
-                                    <td className="px-4 py-3.5 font-bold text-[#0052cc]">RET-{ret.id}</td>
-                                    <td className="px-4 py-3.5 font-semibold">{ret.order?.tracking_number || `#${ret.order_id}`}</td>
-                                    <td className="px-4 py-3.5 font-semibold text-slate-700">{ret.reason}</td>
-                                    <td className="px-4 py-3.5 text-zinc-500 max-w-[200px] truncate" title={ret.explanation}>{ret.explanation || "—"}</td>
-                                    <td className="px-4 py-3.5 text-zinc-500">{new Date(ret.created_at).toLocaleDateString()}</td>
-                                    <td className="px-4 py-3.5 text-center">
-                                      <Badge className={cn(
-                                        "rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase border-none tracking-wider",
-                                        ret.status === "Approved" ? "bg-emerald-500 text-white" :
-                                        ret.status === "Rejected" ? "bg-red-600 text-white" :
-                                        "bg-yellow-400 text-yellow-950"
-                                      )}>
-                                        {ret.status}
-                                      </Badge>
-                                    </td>
-                                  </tr>
+                                  <Fragment key={ret.id}>
+                                    <tr className="border-b border-[#f1f5f9] hover:bg-zinc-50/40 font-medium">
+                                      <td className="px-4 py-3.5 font-bold text-[#0052cc]">RET-{ret.id}</td>
+                                      <td className="px-4 py-3.5 font-semibold">{ret.order?.tracking_number || `#${ret.order_id}`}</td>
+                                      <td className="px-4 py-3.5 font-semibold text-slate-700">{ret.reason}</td>
+                                      <td className="px-4 py-3.5 text-zinc-500 max-w-[200px] truncate" title={ret.explanation}>{ret.explanation || "—"}</td>
+                                      <td className="px-4 py-3.5 text-zinc-500">{new Date(ret.created_at).toLocaleDateString()}</td>
+                                      <td className="px-4 py-3.5 text-center">
+                                        <Badge className={cn(
+                                          "rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase border-none tracking-wider",
+                                          ret.status === "Approved" ? "bg-emerald-500 text-white" :
+                                          ret.status === "Rejected" ? "bg-red-600 text-white" :
+                                          "bg-yellow-400 text-yellow-950"
+                                        )}>
+                                          {ret.status}
+                                        </Badge>
+                                      </td>
+                                    </tr>
+                                    {ret.admin_notes && (
+                                      <tr className="bg-zinc-50/20 border-b border-[#f1f5f9]">
+                                        <td colSpan={6} className="px-6 py-3">
+                                          <div className={cn(
+                                            "p-3 rounded-lg border text-xs font-semibold text-left flex items-start gap-2.5 shadow-xs max-w-2xl",
+                                            ret.status === "Rejected"
+                                              ? "bg-red-50/60 border-red-100 text-red-800"
+                                              : "bg-emerald-50/60 border-emerald-100 text-emerald-800"
+                                          )}>
+                                            <AlertCircle className={cn("h-4 w-4 shrink-0 mt-0.5", ret.status === "Rejected" ? "text-red-500" : "text-emerald-500")} />
+                                            <div>
+                                              <p className="font-extrabold uppercase tracking-widest text-[9px] opacity-80 mb-1">
+                                                {ret.status === "Rejected" ? "Rejection Reason from Administration" : "Approval Notes from Administration"}
+                                              </p>
+                                              <p className="leading-relaxed font-medium">{ret.admin_notes}</p>
+                                            </div>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </Fragment>
                                 ))}
                               </tbody>
                             </table>

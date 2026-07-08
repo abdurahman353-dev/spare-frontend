@@ -283,7 +283,7 @@ export default function ReturnsManagementPage() {
                     <Badge className={cn(
                       "rounded-full px-3 text-[10px] border-none font-bold uppercase tracking-wider",
                       ret.status === "Approved" ? "bg-emerald-500 text-white hover:bg-emerald-600" :
-                      ret.status === "Rejected" ? "bg-zinc-650 text-white hover:bg-zinc-750" :
+                      ret.status === "Rejected" ? "bg-red-600 text-white hover:bg-red-700" :
                       "bg-amber-100 text-amber-700 border border-amber-200"
                     )}>
                       {ret.status}
@@ -363,15 +363,14 @@ export default function ReturnsManagementPage() {
                 </div>
                 <div className="space-y-0.5">
                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Status</p>
-                   {selectedReturn.status === "Approved" ? (
-                     <Badge className="rounded-full px-2 py-0.5 text-[9px] font-black border-none bg-red-100 text-red-800 uppercase">
-                       Returned
-                     </Badge>
-                   ) : (
-                     <Badge className="rounded-full px-2 py-0.5 text-[9px] font-black border-none bg-amber-100 text-amber-800 uppercase">
-                       Pending
-                     </Badge>
-                   )}
+                   <Badge className={cn(
+                     "rounded-full px-2 py-0.5 text-[9px] font-black border-none uppercase",
+                     selectedReturn.order?.status === "Delivered" ? "bg-emerald-100 text-emerald-800" :
+                     selectedReturn.order?.status === "Cancelled" || selectedReturn.order?.status === "Returned" ? "bg-red-100 text-red-800" :
+                     "bg-blue-100 text-blue-800"
+                   )}>
+                     {selectedReturn.order?.status || "Pending"}
+                   </Badge>
                  </div>
                  <div className="space-y-0.5">
                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</p>
@@ -506,7 +505,7 @@ export default function ReturnsManagementPage() {
                 <Badge className={cn(
                   "rounded-full px-3 py-1 text-[10px] font-black uppercase border-none",
                   selectedReturn.status === "Approved" ? "bg-emerald-500 text-white" :
-                  selectedReturn.status === "Rejected" ? "bg-zinc-600 text-white" :
+                  selectedReturn.status === "Rejected" ? "bg-red-600 text-white" :
                   "bg-amber-100 text-amber-700 border border-amber-200"
                 )}>
                   {selectedReturn.status}

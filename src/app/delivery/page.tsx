@@ -160,6 +160,7 @@ export default function DeliveryPortal() {
   const [claimingId, setClaimingId]     = useState<number | null>(null);
   const [releasingId, setReleasingId]   = useState<number | null>(null);
   const [markingId, setMarkingId]       = useState<number | null>(null);
+  const [confirmClaimOrder, setConfirmClaimOrder] = useState<Order | null>(null); // custom claim confirm dialog
 
   // PIN verification
   const [pinOrder, setPinOrder]           = useState<Order | null>(null);
@@ -454,9 +455,14 @@ export default function DeliveryPortal() {
       );
       return;
     }
-    // ── Accidental Click Prevention Confirmation ─────────────────────────────
-    const confirmed = window.confirm(`Are you sure you want to secure and claim order ${order.tracking_number} for delivery?`);
-    if (!confirmed) return;
+    // ── Show branded custom confirmation dialog (replaces window.confirm) ─────
+    setConfirmClaimOrder(order);
+  };
+
+  const handleClaimConfirmed = async () => {
+    const order = confirmClaimOrder;
+    if (!order) return;
+    setConfirmClaimOrder(null);
     // ─────────────────────────────────────────────────────────────────────────
     setClaimingId(order.id);
     try {
@@ -1449,6 +1455,48 @@ export default function DeliveryPortal() {
           </Modal>
         )}
       </AnimatePresence>
+
+      {/* ── CUSTOM SECURE ORDER CONFIRMATION DIALOG ── */}
+      <AnimatePresence>
+        {confirmClaimOrder && (
+          <Modal onClose={() => setConfirmClaimOrder(null)}>
+            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-[#0052cc]" /> Confirm Secure Order
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Ref: {confirmClaimOrder.tracking_number}</p>
+              </div>
+              <button
+                onClick={() => setConfirmClaimOrder(null)}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-650 hover:bg-zinc-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-left">
+              <p className="text-xs font-bold text-zinc-600 leading-relaxed">
+                Are you sure you want to secure and claim this order for delivery? Once secured, you must deliver it within the 4-hour SLA window to prevent account strikes.
+              </p>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmClaimOrder(null)}
+                  className="flex-1 font-bold rounded-xl h-11 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleClaimConfirmed}
+                  className="flex-1 bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  Yes, Secure Order
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1543,8 +1591,8 @@ function SlaTimer({ order }: { order: Order }) {
       const diff = breachTime - Date.now();
 
       if (diff <= 0) {
-        setTimeLeft("SLA BREACHED ⚠️");
-        setColor("text-red-500 font-black animate-pulse");
+        setTimeLeft("SLA BREACHED ⚠️ (Auto-released + Strike Marked)");
+        setColor("text-red-600 font-black animate-pulse");
         return;
       }
 

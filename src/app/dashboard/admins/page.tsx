@@ -52,6 +52,8 @@ interface User {
   created_at: string;
   vehicle_plate?: string | null;
   license_number?: string | null;
+  sla_breaches?: number;
+  delivery_flagged?: boolean;
 }
 
 interface AuditLog {
@@ -804,8 +806,17 @@ export default function AdminsAndAuditsPage() {
                             {driver.name.substring(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-semibold text-zinc-900 text-sm">{driver.name}</div>
-                            <div className="text-zinc-400 text-xs font-mono">ID: {driver.id}</div>
+                            <div className="font-semibold text-zinc-900 text-sm flex items-center gap-1.5">
+                              {driver.name}
+                              {driver.delivery_flagged && (
+                                <Badge className="bg-red-100 text-red-700 border-none text-[9px] font-black rounded-full px-2 py-0.5 animate-pulse uppercase">
+                                  ⚠️ Flagged
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-zinc-400 text-xs font-mono">
+                              ID: {driver.id} • SLA Strikes: <span className={cn(driver.sla_breaches && driver.sla_breaches > 0 ? "text-red-600 font-bold" : "text-zinc-400")}>{driver.sla_breaches || 0}</span>
+                            </div>
                           </div>
                         </div>
                       </TableCell>

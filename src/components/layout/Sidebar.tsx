@@ -25,11 +25,12 @@ const sidebarLinks = [
   { name: "Products", href: "/dashboard/products", icon: Package },
   { name: "Inventory", href: "/dashboard/inventory", icon: Warehouse },
   { name: "Orders", href: "/dashboard/orders", icon: ShoppingCart },
+  { name: "Logistics", href: "/dashboard/logistics", icon: Truck },
   { name: "Returns", href: "/dashboard/returns", icon: RotateCcw },
+  { name: "Reports", href: "/dashboard/reports", icon: FileBarChart },
   { name: "Customers", href: "/dashboard/customers", icon: Users },
   { name: "Suppliers", href: "/dashboard/suppliers", icon: ShieldAlert },
-  { name: "Logistics", href: "/dashboard/logistics", icon: Truck },
-  { name: "Reports", href: "/dashboard/reports", icon: FileBarChart },
+  { name: "Admins & Audits", href: "/dashboard/admins", icon: ShieldCheck, superadminOnly: true },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
@@ -41,9 +42,12 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
   const brandName = settings.store_name || "";
   const storeLogo = settings.store_logo || "";
 
-  const links = user?.role === "superadmin" 
-    ? [...sidebarLinks, { name: "Admins & Audits", href: "/dashboard/admins", icon: ShieldCheck }]
-    : sidebarLinks;
+  const links = sidebarLinks.filter(link => {
+    if (link.superadminOnly && user?.role !== "superadmin") {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <>

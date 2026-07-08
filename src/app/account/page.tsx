@@ -836,7 +836,7 @@ function AccountPortalInner() {
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
                                       order.status === "Arrived" ? "bg-indigo-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
+                                      order.status === "Returned" ? "bg-red-600 text-white" : 
                                       (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
@@ -1068,7 +1068,7 @@ function AccountPortalInner() {
                                       (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
                                       order.status === "Arrived" ? "bg-indigo-600 text-white" : 
                                       order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
+                                      order.status === "Returned" ? "bg-red-600 text-white" : 
                                       (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
@@ -1279,7 +1279,7 @@ function AccountPortalInner() {
                (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" : 
                selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" : 
                selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" : 
-               selectedOrder?.status === "Returned" ? "bg-purple-600 text-white" : 
+               selectedOrder?.status === "Returned" ? "bg-red-600 text-white" : 
                (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
                "bg-zinc-200 text-zinc-700"
              )}>
@@ -1587,7 +1587,7 @@ function AccountPortalInner() {
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2 flex-wrap">
-              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && !myReturns.some((r: any) => r.order_id === selectedOrder.id && (r.status === "Pending" || r.status === "Approved")) && (
+              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && !myReturns.some((r: any) => r.order_id === selectedOrder.id && (r.status === "Pending" || r.status === "Approved" || r.status === "Rejected")) && (
                 <Button
                   variant="outline"
                   className="text-[12px] font-bold h-9 border-purple-200 text-purple-700 hover:bg-purple-50"
@@ -1596,6 +1596,18 @@ function AccountPortalInner() {
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Request Return
                 </Button>
               )}
+              {selectedOrder && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Rejected") && (
+                <a
+                  href={`mailto:support@spare.com?subject=Return Request Dispute — Order #${selectedOrder?.id}`}
+                  className="inline-flex items-center gap-1.5 text-[12px] font-bold h-9 px-3 rounded-md border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  Contact Support
+                </a>
+              )}
+
               {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Pending") && (
                 <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
                   <RotateCcw className="h-3 w-3" /> Return Requested — Pending Review
@@ -1606,6 +1618,22 @@ function AccountPortalInner() {
                   <CheckCircle2 className="h-3 w-3" /> Return Approved
                 </span>
               )}
+              {selectedOrder && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Rejected") && (() => {
+                const rejectedReturn = myReturns.find((r: any) => r.order_id === selectedOrder.id && r.status === "Rejected");
+                return (
+                  <div className="flex flex-col gap-1 text-left">
+                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
+                      <AlertCircle className="h-3 w-3 shrink-0" /> Return Request Rejected
+                    </span>
+                    {rejectedReturn?.admin_notes && (
+                      <span className="text-[10px] font-semibold text-red-700 bg-red-50/60 border border-red-100 px-2.5 py-1 rounded-md leading-snug">
+                        Reason: {rejectedReturn.admin_notes}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
             </div>
             <div className="flex gap-2">
               <Button variant="outline" className="text-[12px] font-bold border-[#e2e8f0] h-9" onClick={() => setIsOrderModalOpen(false)}>Close</Button>

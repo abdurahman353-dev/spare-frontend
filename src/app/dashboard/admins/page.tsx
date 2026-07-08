@@ -775,6 +775,7 @@ export default function AdminsAndAuditsPage() {
                 <TableRow>
                   <TableHead className="px-6 h-12 font-bold text-zinc-900 text-[13px]">Driver</TableHead>
                   <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Contact Info</TableHead>
+                  <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Hub / Location</TableHead>
                   <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Vehicle Plate</TableHead>
                   <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">License Number</TableHead>
                   <TableHead className="h-12 font-bold text-zinc-900 text-[13px]">Status</TableHead>
@@ -784,7 +785,7 @@ export default function AdminsAndAuditsPage() {
               <TableBody>
                 {loadingAdmins ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-48 text-center">
+                    <TableCell colSpan={7} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         <p className="text-sm text-zinc-500 font-medium">Loading delivery team...</p>
@@ -793,7 +794,7 @@ export default function AdminsAndAuditsPage() {
                   </TableRow>
                 ) : filteredDrivers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-48 text-center text-zinc-500 font-medium">
+                    <TableCell colSpan={7} className="h-48 text-center text-zinc-500 font-medium">
                       No delivery drivers matching criteria found.
                     </TableCell>
                   </TableRow>
@@ -832,6 +833,18 @@ export default function AdminsAndAuditsPage() {
                           )}
                         </div>
                       </TableCell>
+                      <TableCell>
+                        {driver.country || driver.city ? (
+                          <div className="space-y-0.5 text-xs text-zinc-600 font-medium">
+                            <div className="flex items-center gap-1.5">
+                              <Globe className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                              <span>{driver.city ? `${driver.city}, ` : ""}{driver.country || "Global"}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400 text-xs italic font-medium">No Hub Assigned</span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-semibold text-sm text-zinc-700">
                         {driver.vehicle_plate ? (
                           <span className="bg-zinc-100 border border-zinc-200 px-2 py-1 rounded text-xs font-black tracking-wider uppercase text-zinc-800">
@@ -854,6 +867,7 @@ export default function AdminsAndAuditsPage() {
                           {driver.is_active ? "Active" : "Deactivated"}
                         </Badge>
                       </TableCell>
+
                       <TableCell className="px-6 text-right">
                         <div className="flex justify-end gap-2">
                           <Button

@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Mail, Phone, MapPin, Clock, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import dynamic from "next/dynamic";
 
 const HubMap = dynamic(() => import("@/components/HubMap").then((mod) => mod.HubMap), { ssr: false });
@@ -37,7 +38,7 @@ export default function ContactPage() {
     try {
       setSending(true);
       setError("");
-      await api.post("/contact-inquiry", form);
+      await api.post(API_ENDPOINTS.contact.inquiry, form);
       setSuccess(true);
       setForm({ name: "", email: "", subject: "", message: "" });
     } catch (err) {

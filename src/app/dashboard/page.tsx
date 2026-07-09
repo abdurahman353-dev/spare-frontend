@@ -22,6 +22,7 @@ import {
   Bar,
 } from "recharts";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 
 interface DashboardData {
   stats: {
@@ -51,9 +52,9 @@ export default function Dashboard() {
   const handleReplenish = async () => {
     setReplenishing(true);
     try {
-      await api.post("/inventory/replenish");
+      await api.post(API_ENDPOINTS.inventory.replenish);
       // Refetch the data to show optimized stock instantly in real time
-      const res = await api.get("/dashboard");
+      const res = await api.get(API_ENDPOINTS.dashboard.base);
       setData(res.data);
     } catch (err) {
       console.error("Failed to replenish stock:", err);
@@ -66,7 +67,7 @@ export default function Dashboard() {
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    api.get("/dashboard")
+    api.get(API_ENDPOINTS.dashboard.base)
       .then((res) => { setData(res.data); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);

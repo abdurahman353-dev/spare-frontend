@@ -19,6 +19,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { Loader2, Percent, Ban, Check, X, ShieldAlert } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -142,7 +143,7 @@ export function BulkOffersModal({ isOpen, onClose, onSuccess, selectedProducts }
         })),
       };
 
-      await api.post("/products/bulk-offers", payload);
+      await api.post(API_ENDPOINTS.products.bulkOffers, payload);
       toast.success("Bulk offers updated successfully!");
       onSuccess();
       onClose();

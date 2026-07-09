@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Store, Settings, Bell, Shield, Loader2, Eye, EyeOff, Globe, Plus, Trash2, Image as ImageIcon, Upload, Star, X } from "lucide-react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -185,10 +186,10 @@ export default function AdminSettingsPage() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/settings");
+      const response = await api.get(API_ENDPOINTS.settings.base);
       
       // Fetch Shipping Zones (defined countries & cities)
-      const locationsResponse = await api.get("/locations/countries");
+      const locationsResponse = await api.get(API_ENDPOINTS.locations.countries);
       const countriesList = locationsResponse.data || [];
 
       const retrievedHubs = response.data.map_hubs 
@@ -448,7 +449,7 @@ export default function AdminSettingsPage() {
         ...settings,
         map_hubs: JSON.stringify(hubsList)
       };
-      await api.post("/settings", payload);
+      await api.post(API_ENDPOINTS.settings.base, payload);
       showAlert("Changes Saved", "Your enterprise platform settings have been successfully updated.", "success");
     } catch (error) {
       console.error("Failed to save settings:", error);
@@ -484,7 +485,7 @@ export default function AdminSettingsPage() {
     }
     try {
       setUpdatingPassword(true);
-      await api.post("/change-password", {
+      await api.post(API_ENDPOINTS.auth.changePassword, {
         current_password: passwordState.current_password,
         password: passwordState.password,
         password_confirmation: passwordState.password_confirmation
@@ -512,7 +513,7 @@ export default function AdminSettingsPage() {
       type: "confirm_logout",
       onConfirm: async () => {
         try {
-          await api.post("/logout-all");
+          await api.post(API_ENDPOINTS.auth.logoutAll);
           logout();
         } catch (error) {
           console.error("Failed to log out of all devices:", error);

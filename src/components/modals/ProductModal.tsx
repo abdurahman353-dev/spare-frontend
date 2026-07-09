@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { Loader2, X, Upload, ImageIcon } from "lucide-react";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import Image from "next/image";
@@ -86,8 +87,8 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
   const fetchOptions = async () => {
     try {
       const [catRes, brandRes] = await Promise.all([
-        api.get("/categories"),
-        api.get("/brands"),
+        api.get(API_ENDPOINTS.categories.base),
+        api.get(API_ENDPOINTS.brands.base),
       ]);
       setCategories(catRes.data);
       setBrands(brandRes.data);
@@ -126,7 +127,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
   /* ---------- Category / Brand CRUD ---------- */
   const handleAddCategory = async (name: string) => {
     try {
-      const res = await api.post("/categories", { name });
+      const res = await api.post(API_ENDPOINTS.categories.base, { name });
       const newCat = res.data;
       setCategories((prev) => [...prev, newCat]);
       setFormData((prev) => ({ ...prev, category_id: newCat.id.toString() }));
@@ -138,7 +139,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
 
   const handleDeleteCategory = async (id: string | number) => {
     try {
-      await api.delete(`/categories/${id}`);
+      await api.delete(API_ENDPOINTS.categories.byId(id));
       setCategories((prev) => prev.filter((c) => c.id.toString() !== id.toString()));
       if (formData.category_id === id.toString()) {
         setFormData((prev) => ({ ...prev, category_id: "" }));
@@ -151,7 +152,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
 
   const handleEditCategory = async (id: string | number, name: string) => {
     try {
-      await api.put(`/categories/${id}`, { name });
+      await api.put(API_ENDPOINTS.categories.byId(id), { name });
       setCategories((prev) => prev.map((c) => (c.id.toString() === id.toString() ? { ...c, name } : c)));
       toast.success("Category renamed successfully");
     } catch (err: any) {
@@ -161,7 +162,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
 
   const handleAddBrand = async (name: string) => {
     try {
-      const res = await api.post("/brands", { name });
+      const res = await api.post(API_ENDPOINTS.brands.base, { name });
       const newBrand = res.data;
       setBrands((prev) => [...prev, newBrand]);
       setFormData((prev) => ({ ...prev, brand_id: newBrand.id.toString() }));
@@ -173,7 +174,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
 
   const handleDeleteBrand = async (id: string | number) => {
     try {
-      await api.delete(`/brands/${id}`);
+      await api.delete(API_ENDPOINTS.brands.byId(id));
       setBrands((prev) => prev.filter((b) => b.id.toString() !== id.toString()));
       if (formData.brand_id === id.toString()) {
         setFormData((prev) => ({ ...prev, brand_id: "" }));
@@ -186,7 +187,7 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
 
   const handleEditBrand = async (id: string | number, name: string) => {
     try {
-      await api.put(`/brands/${id}`, { name });
+      await api.put(API_ENDPOINTS.brands.byId(id), { name });
       setBrands((prev) => prev.map((b) => (b.id.toString() === id.toString() ? { ...b, name } : b)));
       toast.success("Brand renamed successfully");
     } catch (err: any) {
@@ -235,12 +236,12 @@ export function ProductModal({ isOpen, onClose, onSuccess, product }: ProductMod
       };
 
       if (product) {
-        await api.put(`/products/${product.id}`, payload);
+        await api.put(API_ENDPOINTS.products.byId(product.id), payload);
         toast.success("Product updated successfully!");
         onSuccess();
         onClose();
       } else {
-        await api.post("/products", payload);
+        await api.post(API_ENDPOINTS.products.base, payload);
         toast.success("Product added successfully!");
         onSuccess();
 

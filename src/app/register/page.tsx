@@ -269,7 +269,7 @@ function RegisterPageInner() {
                   <div className="relative flex-1">
                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
                     <Input
-                      type="tel"
+                      type="number"
                       placeholder={selectedCountry.placeholder}
                       className="h-14 pl-12 bg-zinc-50 border-zinc-200 rounded-xl font-medium"
                       value={phoneVal}

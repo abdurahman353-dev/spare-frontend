@@ -10,6 +10,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import toast from "react-hot-toast";
 import { toastErrors } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ function ResetPasswordForm() {
     setLoading(true);
     
     try {
-      await api.post("/reset-password", {
+      await api.post(API_ENDPOINTS.auth.resetPassword, {
         email,
         token,
         password,

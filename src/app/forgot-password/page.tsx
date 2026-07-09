@@ -9,6 +9,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import toast from "react-hot-toast";
 
 export default function ForgotPasswordPage() {
@@ -24,7 +25,7 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     
     try {
-      await api.post("/forgot-password", { email });
+      await api.post(API_ENDPOINTS.auth.forgotPassword, { email });
       toast.success("Reset link sent to your email!");
       setSubmitted(true);
     } catch (err: any) {

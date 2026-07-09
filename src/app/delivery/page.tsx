@@ -15,6 +15,7 @@ import {
   WifiOff, Key, Lock, AlertTriangle, SortDesc, SortAsc, ArrowRightLeft,
 } from "lucide-react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { toast } from "react-hot-toast";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -132,28 +133,28 @@ export default function DeliveryPortal() {
   const router = useRouter();
 
   // Core data
-  const [orders, setOrders]   = useState<Order[]>([]);
-  const [stats, setStats]     = useState<Stats>({ today_completed: 0, active_count: 0, total_delivered: 0 });
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [stats, setStats] = useState<Stats>({ today_completed: 0, active_count: 0, total_delivered: 0 });
   const [notifications, setNotifications] = useState<DeliveryNotification[]>([]);
 
   // Loading states
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isOnline, setIsOnline]   = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
 
   // Tabs: "pool" | "mine" | "completed"
   const [activeTab, setActiveTab] = useState<"pool" | "mine" | "completed">("pool");
 
   // UI drawers
-  const [showProfile, setShowProfile]           = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifUnread, setNotifUnread]           = useState(0);
+  const [notifUnread, setNotifUnread] = useState(0);
 
   // Search & filter
-  const [searchQuery, setSearchQuery]       = useState("");
-  const [countryFilter, setCountryFilter]   = useState("all");
-  const [cityFilter, setCityFilter]         = useState("all");
-  const [sortOrder, setSortOrder]           = useState<"newest" | "oldest">("newest");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [countryFilter, setCountryFilter] = useState("all");
+  const [cityFilter, setCityFilter] = useState("all");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [showFilterPanel, setShowFilterPanel] = useState(false);
 
   // Order actions
@@ -163,44 +164,44 @@ export default function DeliveryPortal() {
   const [confirmClaimOrder, setConfirmClaimOrder] = useState<Order | null>(null); // custom claim confirm dialog
 
   // PIN verification
-  const [pinOrder, setPinOrder]           = useState<Order | null>(null);
-  const [pinValue, setPinValue]           = useState("");
-  const [pinLoading, setPinLoading]       = useState(false);
-  const [pinVerified, setPinVerified]     = useState(false);
-  const [pinError, setPinError]           = useState("");
+  const [pinOrder, setPinOrder] = useState<Order | null>(null);
+  const [pinValue, setPinValue] = useState("");
+  const [pinLoading, setPinLoading] = useState(false);
+  const [pinVerified, setPinVerified] = useState(false);
+  const [pinError, setPinError] = useState("");
   const [showPinDialog, setShowPinDialog] = useState(false);
 
   // Signature capture
-  const [signatureOrder, setSignatureOrder]       = useState<Order | null>(null);
+  const [signatureOrder, setSignatureOrder] = useState<Order | null>(null);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [submittingSignature, setSubmittingSignature] = useState(false);
-  const [isDrawing, setIsDrawing]                 = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [strokeCount, setStrokeCount]             = useState(0);
+  const [strokeCount, setStrokeCount] = useState(0);
 
   // Doorstep photo
-  const [photoBase64, setPhotoBase64]             = useState<string | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
 
   // Failed delivery attempt
   const [failedAttemptOrder, setFailedAttemptOrder] = useState<Order | null>(null);
-  const [failedReason, setFailedReason]           = useState("");
-  const [failedNotes, setFailedNotes]             = useState("");
-  const [failedLoading, setFailedLoading]         = useState(false);
-  const [showFailedModal, setShowFailedModal]     = useState(false);
+  const [failedReason, setFailedReason] = useState("");
+  const [failedNotes, setFailedNotes] = useState("");
+  const [failedLoading, setFailedLoading] = useState(false);
+  const [showFailedModal, setShowFailedModal] = useState(false);
 
   // Unified Release modal
   const [releaseModalOrder, setReleaseModalOrder] = useState<Order | null>(null);
-  const [releaseType, setReleaseType]             = useState<"failure" | "operational">("operational");
-  const [releaseReason, setReleaseReason]         = useState("");
-  const [releaseNotes, setReleaseNotes]           = useState("");
+  const [releaseType, setReleaseType] = useState<"failure" | "operational">("operational");
+  const [releaseReason, setReleaseReason] = useState("");
+  const [releaseNotes, setReleaseNotes] = useState("");
 
   // Manifest acknowledgement per order
-  const [manifestChecked, setManifestChecked]     = useState<{[orderId: number]: boolean}>({});
+  const [manifestChecked, setManifestChecked] = useState<{ [orderId: number]: boolean }>({});
 
   // Polling refs
   const knownAssignmentsRef = useRef<Map<number, number | null>>(new Map());
-  const pollingRef          = useRef<NodeJS.Timeout | null>(null);
-  const secondsRef          = useRef<NodeJS.Timeout | null>(null);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const secondsRef = useRef<NodeJS.Timeout | null>(null);
   const [secondsSinceSync, setSecondsSinceSync] = useState(0);
 
   const currency = settings?.currency ?? "Ksh";
@@ -224,12 +225,12 @@ export default function DeliveryPortal() {
 
   // ── Online/offline detection ───────────────────────────────────────────────
   useEffect(() => {
-    const handleOnline  = () => { setIsOnline(true);  toast.success("Connection restored", { icon: "📶" }); };
+    const handleOnline = () => { setIsOnline(true); toast.success("Connection restored", { icon: "📶" }); };
     const handleOffline = () => { setIsOnline(false); toast.error("You are offline. Data may be stale.", { duration: 6000 }); };
-    window.addEventListener("online",  handleOnline);
+    window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     return () => {
-      window.removeEventListener("online",  handleOnline);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
@@ -239,7 +240,7 @@ export default function DeliveryPortal() {
     if (!user) return;
     if (!silent) setLoading(true); else setIsSyncing(true);
     try {
-      const res = await api.get("/delivery/orders");
+      const res = await api.get(API_ENDPOINTS.delivery.orders);
       const incoming: Order[] = res.data as Order[];
 
       // Detect newly assigned orders (delivered_by_user_id changed to my id)
@@ -282,14 +283,14 @@ export default function DeliveryPortal() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await api.get("/delivery/stats");
+      const res = await api.get(API_ENDPOINTS.delivery.stats);
       setStats(res.data as Stats);
     } catch { /* silently fail */ }
   }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await api.get("/delivery/notifications");
+      const res = await api.get(API_ENDPOINTS.delivery.notifications);
       setNotifications((res.data.notifications ?? []) as DeliveryNotification[]);
     } catch { /* silently fail */ }
   }, []);
@@ -325,7 +326,7 @@ export default function DeliveryPortal() {
         const isLocal = (() => {
           if (o.shipping_method === "Pickup") return true;
           const location = o.items?.[0]?.warehouse?.location || "";
-          const whName   = o.items?.[0]?.warehouse?.name || "";
+          const whName = o.items?.[0]?.warehouse?.name || "";
           const destCity = (o.shipping_city || "").trim().toLowerCase();
           if (!destCity) return true;
           return location.toLowerCase().includes(destCity) || whName.toLowerCase().includes(destCity);
@@ -349,7 +350,7 @@ export default function DeliveryPortal() {
       const match = availableCities.find(c => c.toLowerCase() === (user.city ?? "").toLowerCase());
       if (match) setCityFilter(match);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, availableCountries, availableCities]);
 
   // 30-second polling
@@ -360,8 +361,8 @@ export default function DeliveryPortal() {
     }, 30000);
     secondsRef.current = setInterval(() => setSecondsSinceSync(s => s + 1), 1000);
     return () => {
-      if (pollingRef.current)  clearInterval(pollingRef.current);
-      if (secondsRef.current)  clearInterval(secondsRef.current);
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (secondsRef.current) clearInterval(secondsRef.current);
     };
   }, [user, isOnline, fetchOrders, fetchStats, fetchNotifications]);
 
@@ -393,11 +394,11 @@ export default function DeliveryPortal() {
       const isLocal = (() => {
         if (o.shipping_method === "Pickup") return true;
         const location = o.items?.[0]?.warehouse?.location || "";
-        const whName   = o.items?.[0]?.warehouse?.name || "";
+        const whName = o.items?.[0]?.warehouse?.name || "";
         const destCity = (o.shipping_city || "").trim().toLowerCase();
         if (!destCity) return true;
 
-        const locLower  = location.toLowerCase();
+        const locLower = location.toLowerCase();
         const nameLower = whName.toLowerCase();
         return locLower.includes(destCity) || nameLower.includes(destCity);
       })();
@@ -464,6 +465,9 @@ export default function DeliveryPortal() {
     if (!order) return;
     setConfirmClaimOrder(null);
     // ─────────────────────────────────────────────────────────────────────────
+    if (!window.confirm(`Are you sure you want to secure/claim order ${order.tracking_number}?`)) {
+      return;
+    }
     setClaimingId(order.id);
     try {
       await api.post(`/delivery/orders/${order.id}/claim`);
@@ -519,7 +523,7 @@ export default function DeliveryPortal() {
   const handleMarkArrived = async (order: Order) => {
     setMarkingId(order.id);
     try {
-      await api.post(`/delivery/orders/${order.id}/mark-arrived`);
+      await api.post(API_ENDPOINTS.delivery.markArrived(order.id));
       toast.success(`Order ${order.tracking_number} marked as Arrived!`, {
         icon: "📍",
         style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
@@ -696,7 +700,7 @@ export default function DeliveryPortal() {
 
     setSubmittingSignature(true);
     try {
-      await api.post(`/delivery/orders/${signatureOrder.id}/deliver`, {
+      await api.post(API_ENDPOINTS.delivery.deliver(signatureOrder.id), {
         signature: canvas.toDataURL("image/png"),
         delivery_lat: null,
         delivery_lng: null,
@@ -864,23 +868,21 @@ export default function DeliveryPortal() {
         {/* 3-Tab Navigation */}
         <div className="bg-white p-1 rounded-xl border border-zinc-200 shadow-sm flex mb-4">
           {([
-            { key: "pool",      label: "Open Pool", icon: Package,       count: openPool.length },
-            { key: "mine",      label: "My Tasks",  icon: Truck,         count: myTasks.length },
-            { key: "completed", label: "Completed", icon: CheckCircle2,  count: completedOrders.length },
+            { key: "pool", label: "Open Pool", icon: Package, count: openPool.length },
+            { key: "mine", label: "My Tasks", icon: Truck, count: myTasks.length },
+            { key: "completed", label: "Completed", icon: CheckCircle2, count: completedOrders.length },
           ] as const).map(tab => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === tab.key ? "bg-[#0052cc] text-white shadow-sm" : "text-zinc-500 hover:text-slate-800"
-              }`}
+              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.key ? "bg-[#0052cc] text-white shadow-sm" : "text-zinc-500 hover:text-slate-800"
+                }`}
             >
               <tab.icon className="h-3.5 w-3.5" />
               {tab.label}
               {tab.count > 0 && (
-                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
-                  activeTab === tab.key ? "bg-white text-[#0052cc]" : "bg-zinc-100 text-zinc-600"
-                }`}>
+                <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${activeTab === tab.key ? "bg-white text-[#0052cc]" : "bg-zinc-100 text-zinc-600"
+                  }`}>
                   {tab.count}
                 </span>
               )}
@@ -904,6 +906,15 @@ export default function DeliveryPortal() {
               </button>
             )}
           </div>
+          {activeTab === "pool" && (
+            <button
+              onClick={() => setShowFilterPanel(!showFilterPanel)}
+              className={`h-10 w-10 flex items-center justify-center rounded-xl border shadow-sm transition-all shrink-0 ${showFilterPanel ? "bg-[#0052cc] text-white border-[#0052cc]" : "bg-white border-zinc-200 text-zinc-600"
+                }`}
+            >
+              <Filter className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={() => { fetchOrders(false); fetchStats(); fetchNotifications(); }}
             disabled={isSyncing}
@@ -948,10 +959,10 @@ export default function DeliveryPortal() {
                     manifestChecked={manifestChecked}
                     onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
                     onClaim={() => handleClaim(order)}
-                    onRelease={() => {}}
-                    onMarkArrived={() => {}}
+                    onRelease={() => { }}
+                    onMarkArrived={() => { }}
                     onDeliver={() => openPinDialog(order)}
-                    onLogFailedAttempt={() => {}}
+                    onLogFailedAttempt={() => { }}
                   />
                 ))
               )
@@ -980,7 +991,7 @@ export default function DeliveryPortal() {
                     allOrders={orders}
                     manifestChecked={manifestChecked}
                     onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
-                    onClaim={() => {}}
+                    onClaim={() => { }}
                     onRelease={() => openReleaseModal(order)}
                     onMarkArrived={() => handleMarkArrived(order)}
                     onDeliver={() => openPinDialog(order)}
@@ -1237,7 +1248,7 @@ export default function DeliveryPortal() {
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
                   Doorstep / Package Photo (Optional)
                 </label>
-                
+
                 {photoBase64 ? (
                   <div className="relative rounded-xl overflow-hidden border border-zinc-200 bg-zinc-50 h-44 flex items-center justify-center">
                     <img src={photoBase64} alt="Doorstep delivery proof" className="h-full w-full object-cover" />
@@ -1319,7 +1330,7 @@ export default function DeliveryPortal() {
                   <option value="Other">Other (Specify in notes)</option>
                 </select>
               </div>
-              
+
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Additional Notes / Context</label>
                 <textarea
@@ -1611,7 +1622,7 @@ function SlaTimer({ order }: { order: Order }) {
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [order.updated_at]);
+  }, [order.status, order.updated_at]);
 
   return <span className={`text-xs font-bold ${color}`}>{timeLeft}</span>;
 }

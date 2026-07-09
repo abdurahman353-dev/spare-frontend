@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
@@ -88,9 +89,9 @@ export default function CheckoutPage() {
   useEffect(() => {
     const fetchZones = async () => {
       try {
-        const res = await api.get("/shipping-destinations/active");
+        const res = await api.get(API_ENDPOINTS.shippingDestinations.active);
         setDestinations(res.data);
-        const locRes = await api.get("/locations/countries");
+        const locRes = await api.get(API_ENDPOINTS.locations.countries);
         setLocations(locRes.data);
       } catch (err) {
         console.error("Failed to fetch shipping data");
@@ -267,7 +268,7 @@ export default function CheckoutPage() {
   const cleanupPendingOrders = async (orderIds: number[]) => {
     for (const id of orderIds) {
       try {
-        await api.delete(`/orders/${id}`);
+        await api.delete(API_ENDPOINTS.orders.byId(id));
       } catch {
         // Silent — backend callback already handles this; this is just a safety net
       }
@@ -293,7 +294,7 @@ export default function CheckoutPage() {
     pollIntervalRef.current = setInterval(async () => {
       attempts++;
       try {
-        const res = await api.post("/mpesa/query", { checkout_request_id: reqId });
+        const res = await api.post(API_ENDPOINTS.payments.mpesaQuery, { checkout_request_id: reqId });
         const { status } = res.data;
 
         if (status === "success") {
@@ -389,7 +390,7 @@ export default function CheckoutPage() {
         // POST /mpesa/checkout validates cart server-side, initiates STK push,
         // and stores cart data. The order is created ONLY by the Safaricom callback.
         const formattedPhone = formatKenyanPhone(mpesaPhone);
-        const stkResponse = await api.post("/mpesa/checkout", {
+        const stkResponse = await api.post(API_ENDPOINTS.payments.mpesaCheckout, {
           phone: formattedPhone,
           shipping: {
             first_name: sanitizeText(shippingDetails.firstName),
@@ -421,7 +422,7 @@ export default function CheckoutPage() {
       }
 
       // ── PAYBILL FLOW: still creates order first (customer needs tracking number) ──
-      const checkoutResponse = await api.post("/checkout", {
+      const checkoutResponse = await api.post(API_ENDPOINTS.payments.checkout, {
         shipping: {
           first_name: sanitizeText(shippingDetails.firstName),
           last_name:  sanitizeText(shippingDetails.lastName),
@@ -455,7 +456,7 @@ export default function CheckoutPage() {
       // Poll order status for auto-confirmation
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const res = await api.get(`/orders/${orderIds[0]}`);
+          const res = await api.get(API_ENDPOINTS.orders.byId(orderIds[0]));
           if (res.data.payment_status === "Paid") {
             if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             setPaymentStatus("success");
@@ -494,7 +495,7 @@ export default function CheckoutPage() {
     setIsVerifying(true);
     setMpesaCodeError("");
     try {
-      await api.post(`/orders/${paybillOrderId}/verify-mpesa-code`, { mpesa_code: mpesaCode });
+      await api.post(API_ENDPOINTS.orders.verifyMpesaCode(paybillOrderId), { mpesa_code: mpesaCode });
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       setPaymentStatus("success");
       setCompleted(true);

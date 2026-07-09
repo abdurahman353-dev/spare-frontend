@@ -27,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Label } from "@/components/ui/label";
 import { buttonVariants } from "@/components/ui/button";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
@@ -99,7 +100,7 @@ export default function AdminSuppliersPage() {
 
   const fetchSuppliers = () => {
     setLoading(true);
-    api.get("/suppliers")
+    api.get(API_ENDPOINTS.suppliers.base)
       .then((res) => {
         setSuppliers(res.data);
         setLoading(false);
@@ -122,7 +123,7 @@ export default function AdminSuppliersPage() {
 
     setIsSaving(true);
     try {
-      await api.post("/suppliers", formData);
+      await api.post(API_ENDPOINTS.suppliers.base, formData);
       toast.success(`${formData.name} successfully onboarded!`);
       setIsOnboardModalOpen(false);
       setFormData({ 
@@ -163,7 +164,7 @@ export default function AdminSuppliersPage() {
     }
     setIsSaving(true);
     try {
-      await api.put(`/suppliers/${editTarget.id}`, editFormData);
+      await api.put(API_ENDPOINTS.suppliers.byId(editTarget.id), editFormData);
       toast.success("Supplier updated successfully!");
       setIsEditModalOpen(false);
       setEditTarget(null);
@@ -179,7 +180,7 @@ export default function AdminSuppliersPage() {
   const handleDeleteSupplier = async (supplier: Supplier) => {
     if (window.confirm(`Are you sure you want to permanently remove ${supplier.name} from the suppliers list?`)) {
       try {
-        await api.delete(`/suppliers/${supplier.id}`);
+        await api.delete(API_ENDPOINTS.suppliers.byId(supplier.id));
         toast.success(`${supplier.name} has been removed.`);
         fetchSuppliers();
       } catch (err) {

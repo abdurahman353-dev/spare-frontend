@@ -158,30 +158,33 @@ export function Footer() {
           {hubs.length > 0 && (
             <div>
               <h3 className="font-semibold text-lg mb-4 text-zinc-900">Distribution points</h3>
-              <ul className="space-y-3.5 text-sm text-muted-foreground max-h-[260px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-200 hover:scrollbar-thumb-zinc-300 scrollbar-track-transparent">
-                {hubs.map((hub, idx) => {
-                  const parts = hub.split(", ");
-                  const city = parts[0];
-                  const countryAndHq = parts[1] || "";
-                  const isHq = countryAndHq.includes("(HQ)");
-                  const country = countryAndHq.replace(" (HQ)", "");
+              <div className="relative">
+                <ul className="space-y-3.5 text-sm text-muted-foreground max-h-[260px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-300 scrollbar-track-transparent [scrollbar-width:thin] [scrollbar-color:rgba(212,212,216,1)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-zinc-300 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-track]:bg-transparent">
+                  {hubs.map((hub, idx) => {
+                    const parts = hub.split(", ");
+                    const city = parts[0];
+                    const countryAndHq = parts[1] || "";
+                    const isHq = countryAndHq.includes("(HQ)");
+                    const country = countryAndHq.replace(" (HQ)", "");
 
-                  return (
-                    <li key={idx} className="flex items-center gap-2.5 group cursor-default">
-                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-300 group-hover:bg-primary transition-all duration-300 shrink-0" />
-                      <span className="group-hover:translate-x-1 group-hover:text-zinc-900 transition-all duration-300 flex items-center gap-1.5 font-medium text-zinc-600">
-                        <span>{city}</span>
-                        <span className="text-zinc-400 text-xs font-normal">| {country}</span>
-                        {isHq && (
-                          <span className="text-[9px] bg-blue-50/80 text-blue-600 font-extrabold px-1.5 py-0.5 rounded border border-blue-100 uppercase tracking-wider">
-                            HQ
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                    return (
+                      <li key={idx} className="flex items-center gap-2.5 group cursor-default">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-300 group-hover:bg-primary transition-all duration-300 shrink-0" />
+                        <span className="group-hover:translate-x-1 group-hover:text-zinc-900 transition-all duration-300 flex items-center gap-1.5 font-medium text-zinc-600">
+                          <span>{city}</span>
+                          <span className="text-zinc-400 text-xs font-normal">| {country}</span>
+                          {isHq && (
+                            <span className="text-[9px] bg-blue-50/80 text-blue-600 font-extrabold px-1.5 py-0.5 rounded border border-blue-100 uppercase tracking-wider">
+                              HQ
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-zinc-50 to-transparent pointer-events-none" />
+              </div>
             </div>
           )}
 

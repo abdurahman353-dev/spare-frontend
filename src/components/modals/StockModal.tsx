@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { Loader2, ArrowRightLeft, PackagePlus } from "lucide-react";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import toast from "react-hot-toast";
@@ -111,8 +112,8 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
   const fetchOptions = async () => {
     try {
       const [wRes, pRes] = await Promise.all([
-        api.get("/warehouses"),
-        api.get("/products", { params: { per_page: -1 } })
+        api.get(API_ENDPOINTS.warehouses.base),
+        api.get(API_ENDPOINTS.products.base, { params: { per_page: -1 } })
       ]);
       setWarehouses(wRes.data);
       setProducts(pRes.data);
@@ -124,7 +125,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
   const handleAddWarehouse = async (name: string) => {
     try {
       const code = "WH-" + Math.floor(Math.random() * 10000);
-      const res = await api.post("/warehouses", { name, location: "TBD", code });
+      const res = await api.post(API_ENDPOINTS.warehouses.base, { name, location: "TBD", code });
       const newWarehouse = res.data;
       setWarehouses((prev) => [...prev, newWarehouse]);
       setFormData((prev) => ({ ...prev, warehouse_id: newWarehouse.id.toString() }));
@@ -136,7 +137,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
 
   const handleEditWarehouse = async (id: string | number, newName: string) => {
     try {
-      await api.put(`/warehouses/${id}`, { name: newName });
+      await api.put(API_ENDPOINTS.warehouses.byId(id), { name: newName });
       setWarehouses((prev) =>
         prev.map((w) => (w.id.toString() === id.toString() ? { ...w, name: newName } : w))
       );
@@ -148,7 +149,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
 
   const handleDeleteWarehouse = async (id: string | number) => {
     try {
-      await api.delete(`/warehouses/${id}`);
+      await api.delete(API_ENDPOINTS.warehouses.byId(id));
       setWarehouses((prev) => prev.filter((w) => w.id.toString() !== id.toString()));
       if (formData.warehouse_id === id.toString()) {
         setFormData((prev) => ({ ...prev, warehouse_id: "" }));
@@ -206,9 +207,9 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
           };
 
           if (item.id) {
-            return api.put(`/inventory/${item.id}`, payload);
+            return api.put(API_ENDPOINTS.inventory.byId(item.id), payload);
           } else {
-            return api.post("/inventory", payload);
+            return api.post(API_ENDPOINTS.inventory.base, payload);
           }
         }));
 
@@ -229,7 +230,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
           const adjustment = formData.adjustment ? Number(formData.adjustment) : 0;
           const newQuantity = currentQty + adjustment;
 
-          await api.put(`/inventory/${formData.id}`, {
+          await api.put(API_ENDPOINTS.inventory.byId(formData.id), {
             product_id: Number(formData.product_id),
             warehouse_id: Number(formData.warehouse_id),
             quantity: newQuantity,
@@ -240,7 +241,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
           // Create new inventory record
           if (formData.quantity === "") return toast.error("Please enter the initial quantity.");
 
-          await api.post("/inventory", {
+          await api.post(API_ENDPOINTS.inventory.base, {
             product_id: Number(formData.product_id),
             warehouse_id: Number(formData.warehouse_id),
             quantity: Number(formData.quantity),
@@ -256,7 +257,7 @@ export function StockModal({ isOpen, onClose, onSuccess, type, initialData, pend
         if (formData.from_warehouse_id === formData.to_warehouse_id) return toast.error("Source and destination warehouses cannot be the same.");
         if (!formData.quantity || Number(formData.quantity) <= 0) return toast.error("Enter a valid transfer quantity.");
 
-        await api.post("/inventory/transfer", {
+        await api.post(API_ENDPOINTS.inventory.transfer, {
           product_id: Number(formData.product_id),
           from_warehouse_id: Number(formData.from_warehouse_id),
           to_warehouse_id: Number(formData.to_warehouse_id),

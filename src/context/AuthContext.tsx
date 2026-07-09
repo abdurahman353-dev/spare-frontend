@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { useRouter } from "next/navigation";
 
 interface User {
@@ -55,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /** Re-fetch user profile (including live total_spent) from /user */
   const refreshUser = useCallback(async () => {
     try {
-      const res = await api.get("/user");
+      const res = await api.get(API_ENDPOINTS.auth.user);
       setUser(res.data);
     } catch {
       // silently ignore — session may have expired
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (token) {
         api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         try {
-          const res = await api.get("/user");
+          const res = await api.get(API_ENDPOINTS.auth.user);
           setUser(res.data);
           // Refresh/extend the cookie
           setCookie("auth_token", token);
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           localStorage.setItem("auth_token", cookieToken);
           api.defaults.headers.common["Authorization"] = `Bearer ${cookieToken}`;
           try {
-            const res = await api.get("/user");
+            const res = await api.get(API_ENDPOINTS.auth.user);
             setUser(res.data);
           } catch (err) {
             localStorage.removeItem("auth_token");
@@ -100,7 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (credentials: any, redirectUrl?: string) => {
-    const res = await api.post("/login", credentials);
+    const res = await api.post(API_ENDPOINTS.auth.login, credentials);
     const { user: loginUser, token } = res.data;
     localStorage.setItem("auth_token", token);
 
@@ -111,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Set from login response immediately (already contains total_spent from backend)
     setUser(loginUser);
     // Also fire a background re-fetch so total_spent is always live real-time
-    api.get("/user").then(r => setUser(r.data)).catch(() => { });
+    api.get(API_ENDPOINTS.auth.user).then(r => setUser(r.data)).catch(() => { });
 
     if (loginUser.must_change_password) {
       router.push("/change-password");
@@ -127,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (data: any, redirectUrl?: string) => {
-    const res = await api.post("/register", data);
+    const res = await api.post(API_ENDPOINTS.auth.register, data);
     const { user: regUser, token } = res.data;
     localStorage.setItem("auth_token", token);
     setCookie("auth_token", token);
@@ -141,16 +142,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const changePassword = async (data: any) => {
-    const res = await api.post("/change-password", data);
+    const res = await api.post(API_ENDPOINTS.auth.changePassword, data);
     // Refresh user to get updated must_change_password flag and total_spent
-    const userRes = await api.get("/user");
+    const userRes = await api.get(API_ENDPOINTS.auth.user);
     setUser(userRes.data);
     return res.data;
   };
 
   const logout = async () => {
     try {
-      await api.post("/logout");
+      await api.post(API_ENDPOINTS.auth.logout);
     } finally {
       localStorage.removeItem("auth_token");
       deleteCookie("auth_token");

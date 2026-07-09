@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
@@ -44,7 +45,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
   const fetchNotifications = async () => {
     try {
-      const res = await api.get("/notifications");
+      const res = await api.get(API_ENDPOINTS.notifications.base);
       const dismissed = JSON.parse(localStorage.getItem("dismissed_notifications") || "[]");
       const active = res.data.notifications.filter((n: any) => !dismissed.includes(n.id));
       setNotifications(active);

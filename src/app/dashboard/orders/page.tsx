@@ -58,7 +58,7 @@ import { toast } from "react-hot-toast";
 import { exportOrdersPDF } from "@/lib/pdf-export";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { buildFilterCityOptions, buildFilterCountryOptions } from "@/lib/shipping-locations";
+import { buildFilterCityOptions, buildFilterCountryOptions, PREDEFINED_CITIES } from "@/lib/shipping-locations";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 
 /** Label for walk-in filter/table — mirrors Destination City + Delivery Address from the order form */
@@ -303,8 +303,13 @@ function AdminOrdersPageInner() {
   const [paymentStatus, setPaymentStatus] = useState<string>("Paid");
   const [shippingMethod, setShippingMethod] = useState<string>("Pickup");
   const [shippingFee, setShippingFee] = useState<number>(0);
+  const [shippingCountry, setShippingCountry] = useState<string>("");
   const [shippingCity, setShippingCity] = useState<string>("");
   const [shippingAddress, setShippingAddress] = useState<string>("");
+  // Recipient info — required when walk-in guest selects Dispatch/Shipping
+  const [recipientName, setRecipientName] = useState<string>("");
+  const [recipientPhone, setRecipientPhone] = useState<string>("");
+  const [recipientEmail, setRecipientEmail] = useState<string>("");
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [voidOrderTarget, setVoidOrderTarget] = useState<any>(null);
   const [selectedVoidItemIds, setSelectedVoidItemIds] = useState<number[]>([]);
@@ -313,6 +318,8 @@ function AdminOrdersPageInner() {
   const [voidReason, setVoidReason] = useState("");
   const [voidTransactionId, setVoidTransactionId] = useState("");
   const [walkInPayStatusFilter, setWalkInPayStatusFilter] = useState("All");
+  // PIN reveal toggle in order details modal
+  const [showDeliveryPin, setShowDeliveryPin] = useState(false);
 
   // Edit Walk-In Order
   const [isEditWalkInModalOpen, setIsEditWalkInModalOpen] = useState(false);
@@ -322,6 +329,7 @@ function AdminOrdersPageInner() {
     payment_ref_code: "",
     shipping_method: "",
     shipping_fee: 0,
+    shipping_country: "",
     shipping_city: "",
     shipping_address: "",
   });
@@ -409,6 +417,7 @@ function AdminOrdersPageInner() {
       payment_ref_code: order.payment_ref_code || "",
       shipping_method: order.shipping_method || "Pickup",
       shipping_fee: parseFloat(order.shipping_fee || 0),
+      shipping_country: order.shipping_country || "",
       shipping_city: order.shipping_city || "",
       shipping_address: order.shipping_address || "",
     });
@@ -508,6 +517,7 @@ function AdminOrdersPageInner() {
   const isDigitalPayment = (method: string) => ["M-Pesa", "Card", "Bank Transfer"].includes(method);
 
   const resetWalkInFormFields = () => {
+    setShippingCountry("");
     setShippingCity("");
     setShippingAddress("");
     setShippingFee(0);
@@ -515,6 +525,9 @@ function AdminOrdersPageInner() {
     setPaymentStatus("Paid");
     setPaymentMethod("Cash");
     setPaymentRefCode("");
+    setRecipientName("");
+    setRecipientPhone("");
+    setRecipientEmail("");
   };
 
   const handleMarkWalkInPaid = async (order: any) => {
@@ -595,13 +608,28 @@ function AdminOrdersPageInner() {
     }
 
     if (shippingMethod === "Local Delivery") {
+      if (!shippingCountry.trim()) {
+        toast.error("Please select a destination country.");
+        return;
+      }
       if (!shippingCity.trim()) {
-        toast.error("Please enter destination city.");
+        toast.error("Please select a destination city.");
         return;
       }
       if (!shippingAddress.trim()) {
         toast.error("Please enter delivery address.");
         return;
+      }
+      // Recipient info required for walk-in guests on dispatch
+      if (selectedCustomerId === "walkin") {
+        if (!recipientName.trim()) {
+          toast.error("Recipient name is required for walk-in dispatch orders.");
+          return;
+        }
+        if (!recipientPhone.trim()) {
+          toast.error("Recipient phone is required for walk-in dispatch orders.");
+          return;
+        }
       }
     }
 
@@ -698,7 +726,7 @@ function AdminOrdersPageInner() {
         : paymentMethod;
       const walkInRef = generateWalkInRef();
 
-      const orderPayload = {
+      const orderPayload: any = {
         customer_id: targetCustomerId,
         tracking_number: walkInRef,
         total_amount: totalAmount,
@@ -709,6 +737,7 @@ function AdminOrdersPageInner() {
         payment_method: finalPaymentMethod,
         shipping_method: shippingMethod,
         shipping_fee: shippingFee,
+        shipping_country: shippingMethod === "Pickup" ? "" : shippingCountry.trim(),
         shipping_city: shippingMethod === "Pickup" ? "In-Store" : shippingCity.trim(),
         shipping_address: shippingMethod === "Pickup" ? "Walk-In Counter" : shippingAddress.trim(),
         items: orderItems.map(item => ({
@@ -718,6 +747,10 @@ function AdminOrdersPageInner() {
           price: item.price
         }))
       };
+      // Attach recipient info for walk-in guest dispatch orders
+      if (shippingMethod === "Local Delivery" && selectedCustomerId === "walkin") {
+        orderPayload.notes = `Recipient: ${recipientName.trim()}${recipientPhone.trim() ? ` | Phone: ${recipientPhone.trim()}` : ""}${recipientEmail.trim() ? ` | Email: ${recipientEmail.trim()}` : ""}`;
+      }
 
       await api.post(API_ENDPOINTS.orders.base, orderPayload);
       toast.success(`Walk-in order ${walkInRef} created successfully!`);
@@ -1772,11 +1805,8 @@ function AdminOrdersPageInner() {
                                         <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                       </DropdownMenuItem>
                                     )}
-                                    {(order.status === "Pending" || order.status === "Processing" || order.status === "Shipped") && (
-                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Delivered")} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600">
-                                        <CheckCircle2 className="mr-2 h-4 w-4" /> Mark Delivered
-                                      </DropdownMenuItem>
-                                    )}
+                                    {/* Walk-in dispatch: admin can only go up to Shipped.
+                                        The delivery driver marks it Delivered from their portal. */}
                                     <DropdownMenuSeparator />
                                   </>
                                 )}
@@ -2156,6 +2186,38 @@ function AdminOrdersPageInner() {
               </div>
             </div>
 
+            {/* ── Delivery PIN — walk-in dispatch only, hidden by default ── */}
+            {(currentSelectedOrder?.tracking_number || "").startsWith("WK-") &&
+              currentSelectedOrder?.shipping_method === "Local Delivery" &&
+              currentSelectedOrder?.delivery_pin && (
+                <div className="mb-6">
+                  <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    🔑 Delivery Verification PIN
+                  </h4>
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Customer must share this PIN with the driver</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-2xl font-black tracking-[0.3em] text-amber-900 font-mono">
+                          {showDeliveryPin ? currentSelectedOrder.delivery_pin : "••••"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowDeliveryPin(p => !p)}
+                          className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          {showDeliveryPin ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          {showDeliveryPin ? "Hide" : "Reveal"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-semibold text-amber-600 text-right max-w-[140px] leading-snug">
+                      Tell this PIN to the customer before they leave the store
+                    </div>
+                  </div>
+                </div>
+              )}
+
             {currentSelectedOrder?.shipping_method !== "Pickup" && (currentSelectedOrder?.driver || currentSelectedOrder?.delivery_signature_url) && (
               <div className="mb-6">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Delivery &amp; Driver Details</h4>
@@ -2431,18 +2493,7 @@ function AdminOrdersPageInner() {
                   </div>
                 </div>
 
-                {/* Searchable Existing Customer Lookup */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-500">Or Search Existing Customer Account</label>
-                  <SearchableDropdown
-                    items={customers
-                      .filter(c => c.name.toLowerCase() !== "walk-in customer")
-                      .map(c => ({ id: c.id.toString(), name: `${c.name} — ${c.email}` }))}
-                    value={!["walkin", "new"].includes(selectedCustomerId) ? selectedCustomerId : ""}
-                    onChange={(val) => setSelectedCustomerId(val || "walkin")}
-                    placeholder="Search by name or email..."
-                  />
-                </div>
+
 
                 {selectedCustomerId === "new" && (
                   <div className="space-y-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
@@ -2527,7 +2578,7 @@ function AdminOrdersPageInner() {
                   <div className="col-span-1 md:col-span-5 space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Product</label>
                     <SearchableDropdown
-                      items={products.map(p => ({ id: p.id.toString(), name: `${p.name} — Ksh ${Number(p.price).toLocaleString()}` }))}
+                      items={products.map(p => ({ id: p.id.toString(), name: `${p.name} — Ksh ${Number((p.is_on_offer && p.offer_price) ? p.offer_price : p.price).toLocaleString()}${p.is_on_offer && p.offer_price ? ' 🏷️' : ''}` }))}
                       value={selectedProductId}
                       onChange={(val) => { setSelectedProductId(val); setSelectedWarehouseId(""); }}
                       placeholder="Search spare parts..."
@@ -2680,7 +2731,7 @@ function AdminOrdersPageInner() {
                     <select
                       className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20 text-zinc-600 font-medium"
                       value={shippingMethod}
-                      onChange={(e) => { setShippingMethod(e.target.value); if (e.target.value === "Pickup") { setShippingFee(0); setShippingCity(""); setShippingAddress(""); } }}
+                      onChange={(e) => { setShippingMethod(e.target.value); if (e.target.value === "Pickup") { setShippingFee(0); setShippingCountry(""); setShippingCity(""); setShippingAddress(""); setRecipientName(""); setRecipientPhone(""); setRecipientEmail(""); } }}
                     >
                       <option value="Pickup">In-Store Collection</option>
                       <option value="Local Delivery">Dispatch / Shipping</option>
@@ -2706,22 +2757,82 @@ function AdminOrdersPageInner() {
                 )}
 
                 {shippingMethod === "Local Delivery" && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Delivery Fee (Ksh)</label>
-                      <Input type="number" min={0} placeholder="e.g. 500" className="h-10 border-zinc-200 rounded-lg bg-white"
-                        value={shippingFee || ""} onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)} />
+                  <div className="space-y-4">
+                    {/* Delivery fee + country + city + address */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">Delivery Fee (Ksh)</label>
+                        <Input type="number" min={0} placeholder="e.g. 500" className="h-10 border-zinc-200 rounded-lg bg-white"
+                          value={shippingFee || ""} onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">Destination Country <span className="text-red-500">*</span></label>
+                        <select
+                          className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-200 text-zinc-700 font-medium"
+                          value={shippingCountry}
+                          onChange={(e) => { setShippingCountry(e.target.value); setShippingCity(""); }}
+                        >
+                          <option value="">— Select Country —</option>
+                          {countriesData.map((c: any) => (
+                            <option key={c.id} value={c.name}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">Destination City <span className="text-red-500">*</span></label>
+                        {shippingCountry ? (
+                          <select
+                            className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-200 text-zinc-700 font-medium"
+                            value={shippingCity}
+                            onChange={(e) => setShippingCity(e.target.value)}
+                          >
+                            <option value="">— Select City —</option>
+                            {(() => {
+                              const found = countriesData.find((c: any) => c.name === shippingCountry);
+                              const cities: string[] = found?.cities?.length
+                                ? found.cities.map((ct: any) => ct.name)
+                                : (PREDEFINED_CITIES[shippingCountry] || []);
+                              return cities.sort((a, b) => a.localeCompare(b)).map(city => (
+                                <option key={city} value={city}>{city}</option>
+                              ));
+                            })()}
+                          </select>
+                        ) : (
+                          <Input disabled placeholder="Select country first" className="h-10 border-zinc-200 rounded-lg bg-zinc-50 opacity-60" />
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-500">Delivery Address <span className="text-red-500">*</span></label>
+                        <Input placeholder="e.g. Tom Mboya St, CBD" className="h-10 border-zinc-200 rounded-lg bg-white"
+                          value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} />
+                      </div>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Destination City</label>
-                      <Input placeholder="e.g. Mombasa" className="h-10 border-zinc-200 rounded-lg bg-white"
-                        value={shippingCity} onChange={(e) => setShippingCity(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-semibold text-zinc-500">Delivery Address</label>
-                      <Input placeholder="e.g. Tom Mboya St, CBD" className="h-10 border-zinc-200 rounded-lg bg-white"
-                        value={shippingAddress} onChange={(e) => setShippingAddress(e.target.value)} />
-                    </div>
+
+                    {/* Recipient info — required for walk-in guest dispatch */}
+                    {selectedCustomerId === "walkin" && (
+                      <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4 space-y-3">
+                        <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5" /> Recipient Details (Required for Dispatch)
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-600">Recipient Name <span className="text-red-500">*</span></label>
+                            <Input placeholder="Full name" className="h-10 border-amber-200 rounded-lg bg-white"
+                              value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-600">Phone <span className="text-red-500">*</span></label>
+                            <Input placeholder="07XXXXXXXX" className="h-10 border-amber-200 rounded-lg bg-white"
+                              value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-semibold text-zinc-600">Email <span className="text-zinc-400 font-normal">(optional)</span></label>
+                            <Input type="email" placeholder="email@example.com" className="h-10 border-amber-200 rounded-lg bg-white"
+                              value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2986,16 +3097,51 @@ function AdminOrdersPageInner() {
                     onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_fee: parseFloat(e.target.value) || 0 })}
                   />
                 </div>
+                {/* Destination Country */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination Country</label>
+                  <select
+                    disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                    className={cn(
+                      "h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700",
+                      (editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") && "bg-zinc-100 cursor-not-allowed opacity-75"
+                    )}
+                    value={editWalkInForm.shipping_country}
+                    onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_country: e.target.value, shipping_city: "" })}
+                  >
+                    <option value="">— Select Country —</option>
+                    {countriesData.map((c: any) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
                 {/* Destination City */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
-                  <Input
-                    placeholder={(editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") ? "" : "e.g. Nairobi"}
-                    disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
-                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold disabled:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-75"
-                    value={editWalkInForm.shipping_city}
-                    onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_city: e.target.value })}
-                  />
+                  {editWalkInForm.shipping_country ? (
+                    <select
+                      disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                      className={cn(
+                        "h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700",
+                        (editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") && "bg-zinc-100 cursor-not-allowed opacity-75"
+                      )}
+                      value={editWalkInForm.shipping_city}
+                      onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_city: e.target.value })}
+                    >
+                      <option value="">— Select City —</option>
+                      {(() => {
+                        const found = countriesData.find((c: any) => c.name === editWalkInForm.shipping_country);
+                        const cities: string[] = found?.cities?.length
+                          ? found.cities.map((ct: any) => ct.name)
+                          : (PREDEFINED_CITIES[editWalkInForm.shipping_country] || []);
+                        return cities.sort((a, b) => a.localeCompare(b)).map(city => (
+                          <option key={city} value={city}>{city}</option>
+                        ));
+                      })()}
+                    </select>
+                  ) : (
+                    <Input disabled placeholder="Select country first" className="h-10 border-zinc-200 rounded-lg bg-zinc-100 text-sm font-semibold opacity-60" />
+                  )}
                 </div>
                 {/* Delivery Address */}
                 <div className="space-y-1.5">

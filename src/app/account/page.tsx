@@ -1294,7 +1294,6 @@ function AccountPortalInner() {
       <Dialog open={isOrderModalOpen} onOpenChange={setIsOrderModalOpen}>
         <DialogContent className="sm:max-w-[550px] p-0 rounded-lg overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-6 bg-white border-b border-[#e2e8f0] flex flex-row items-center justify-between">
-<<<<<<< HEAD
              <div className="space-y-1 text-left">
                <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
                <DialogDescription className="text-[#64748b] font-medium text-sm">
@@ -1314,46 +1313,6 @@ function AccountPortalInner() {
              )}>
                {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
              </Badge>
-=======
-            <div className="space-y-1 text-left">
-              <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
-              <DialogDescription className="text-[#64748b] font-medium text-sm">
-                Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
-              </DialogDescription>
-            </div>
-            <Badge className={cn(
-              "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
-              selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
-                selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
-                  (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" :
-                    selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" :
-                      selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
-                        selectedOrder?.status === "Returned" ? "bg-red-600 text-white" :
-                          (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
-                            "bg-zinc-200 text-zinc-700"
-            )}>
-              {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
-            </Badge>
-            <div className="space-y-1 text-left">
-              <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
-              <DialogDescription className="text-[#64748b] font-medium text-sm">
-                Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
-              </DialogDescription>
-            </div>
-            <Badge className={cn(
-              "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
-              selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
-                selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
-                  (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" :
-                    selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" :
-                      selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
-                        selectedOrder?.status === "Returned" ? "bg-red-600 text-white" :
-                          (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
-                            "bg-zinc-200 text-zinc-700"
-            )}>
-              {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
-            </Badge>
->>>>>>> back-up
           </DialogHeader>
           <div className="p-6 max-h-[60vh] overflow-y-auto space-y-6">
             <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">

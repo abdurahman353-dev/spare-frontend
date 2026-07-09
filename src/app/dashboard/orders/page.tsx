@@ -756,13 +756,13 @@ function AdminOrdersPageInner() {
         api.get(API_ENDPOINTS.customers.base, { params: { per_page: -1 } }),
         api.get(API_ENDPOINTS.products.base, { params: { per_page: -1 } }),
         api.get(API_ENDPOINTS.locations.countries),
-        api.get(API_ENDPOINTS.admins.base),
+        api.get("/delivery-drivers"),
       ]);
       setWarehouses(wRes.data);
       setCustomers(cRes.data);
       setProducts(pRes.data);
       setCountriesData(locRes.data);
-      setDrivers((dRes.data || []).filter((u: any) => u.role === "delivery" && u.is_active));
+      setDrivers(dRes.data || []);
     } catch (err) {
       console.error("Failed to fetch metadata:", err);
     }

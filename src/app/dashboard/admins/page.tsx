@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef, useRef } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaginationControls } from "@/components/ui/pagination-controls";
@@ -356,21 +356,11 @@ export default function AdminsAndAuditsPage() {
     }
   };
 
-  const fetchDestinations = async () => {
-    try {
-      const res = await api.get("/shipping-destinations/active");
-      setDestinations(res.data || []);
-    } catch (err) {
-      console.error("Failed to load active destinations:", err);
-    }
-  };
-
   useEffect(() => {
     fetchAdmins();
     fetchAuditLogs();
     fetchDestinations();
     fetchLocations();
-    fetchDestinations();
   }, []);
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
@@ -1287,11 +1277,7 @@ export default function AdminsAndAuditsPage() {
         <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
             <DialogTitle className="text-xl font-bold text-zinc-900">
-              {formData.role === 'delivery' ? 'Create New Delivery Driver' : '
-              {formData.role === "delivery" ? "Create New delivery" : "
               {formData.role === 'delivery' ? 'Create New Delivery Driver' : 'Create New Administrator'}
-            "}
-            '}
             </DialogTitle>
             <DialogDescription className="text-zinc-400 text-xs mt-1">
               {formData.role === 'delivery'
@@ -1411,27 +1397,15 @@ export default function AdminsAndAuditsPage() {
                       placeholder="Select Country"
                     />
                   ) : (
-                    {
-                      formData.role === "delivery" ? (
-                        <SearchableDropdown
-                          label="Country *"
-                          value={formData.country}
-                          onChange={(val) => setFormData({ ...formData, country: val, city: "" })}
-                          options={activeCountriesList}
-                          placeholder="Select Country"
-                        />
-                      ) : (
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-500">Country</label>
-                          <Input
-                            placeholder="e.g. Kenya"
-                            className="h-10 border-zinc-200 rounded-lg"
-                            value={formData.country}
-                            onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                          />
-                        </div>
-                      )
-                    }
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Country</label>
+                      <Input
+                        placeholder="e.g. Kenya"
+                        className="h-10 border-zinc-200 rounded-lg"
+                        value={formData.country}
+                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -1446,28 +1420,15 @@ export default function AdminsAndAuditsPage() {
                       disabled={!formData.country}
                     />
                   ) : (
-                    {
-                      formData.role === "delivery" ? (
-                        <SearchableDropdown
-                          label="City *"
-                          value={formData.city}
-                          onChange={(val) => setFormData({ ...formData, city: val })}
-                          options={activeCitiesForCreate}
-                          placeholder={formData.country ? "Select City" : "Please select country first"}
-                          disabled={!formData.country}
-                        />
-                      ) : (
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-500">City</label>
-                          <Input
-                            placeholder="e.g. Nairobi"
-                            className="h-10 border-zinc-200 rounded-lg"
-                            value={formData.city}
-                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                          />
-                        </div>
-                      )
-                    }
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">City</label>
+                      <Input
+                        placeholder="e.g. Nairobi"
+                        className="h-10 border-zinc-200 rounded-lg"
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      />
+                    </div>
                   )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>
@@ -1612,27 +1573,15 @@ export default function AdminsAndAuditsPage() {
                       placeholder="Select Country"
                     />
                   ) : (
-                    {
-                      editFormData.role === "delivery" ? (
-                        <SearchableDropdown
-                          label="Country *"
-                          value={editFormData.country}
-                          onChange={(val) => setEditFormData({ ...editFormData, country: val, city: "" })}
-                          options={activeCountriesList}
-                          placeholder="Select Country"
-                        />
-                      ) : (
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-500">Country</label>
-                          <Input
-                            placeholder="e.g. Kenya"
-                            className="h-10 border-zinc-200 rounded-lg"
-                            value={editFormData.country}
-                            onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
-                          />
-                        </div>
-                      )
-                    }
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">Country</label>
+                      <Input
+                        placeholder="e.g. Kenya"
+                        className="h-10 border-zinc-200 rounded-lg"
+                        value={editFormData.country}
+                        onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
+                      />
+                    </div>
                   )}
                 </div>
 
@@ -1647,28 +1596,15 @@ export default function AdminsAndAuditsPage() {
                       disabled={!editFormData.country}
                     />
                   ) : (
-                    {
-                      editFormData.role === "delivery" ? (
-                        <SearchableDropdown
-                          label="City *"
-                          value={editFormData.city}
-                          onChange={(val) => setEditFormData({ ...editFormData, city: val })}
-                          options={activeCitiesForEdit}
-                          placeholder={editFormData.country ? "Select City" : "Please select country first"}
-                          disabled={!editFormData.country}
-                        />
-                      ) : (
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-500">City</label>
-                          <Input
-                            placeholder="e.g. Nairobi"
-                            className="h-10 border-zinc-200 rounded-lg"
-                            value={editFormData.city}
-                            onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
-                          />
-                        </div>
-                      )
-                    }
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-zinc-500">City</label>
+                      <Input
+                        placeholder="e.g. Nairobi"
+                        className="h-10 border-zinc-200 rounded-lg"
+                        value={editFormData.city}
+                        onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
+                      />
+                    </div>
                   )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>

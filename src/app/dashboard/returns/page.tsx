@@ -41,8 +41,6 @@ interface ReturnRequest {
   created_at: string;
   updated_at: string;
   return_items?: Array<{ order_item_id: number; quantity: number }> | null;
-  return_items?: { order_item_id: number; quantity: number }[];
-  return_items?: { order_item_id: number; quantity: number }[];
   order?: {
     tracking_number: string;
     total_amount: number;
@@ -418,7 +416,7 @@ export default function ReturnsManagementPage() {
                 <div>
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 text-purple-600">Items Requested for Return (Full Return)</p>
                   <div className="border border-purple-100 rounded-lg overflow-hidden">
-                    {selectedReturn.return_items.map((ri: any, i: number) => {
+                    {(selectedReturn.return_items ?? []).map((ri: any, i: number) => {
                       const item = selectedReturn.order?.items?.find((it: any) => it.id === ri.order_item_id);
                       return (
                         <div key={i} className="flex justify-between text-xs px-3 py-2.5 border-b border-purple-50 last:border-0 bg-purple-50/30 hover:bg-purple-50/50">

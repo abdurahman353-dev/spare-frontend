@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 
 interface SettingsContextType {
   settings: Record<string, string>;
@@ -24,7 +25,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/settings/public");
+      const response = await api.get(API_ENDPOINTS.settings.public);
       setSettings(response.data);
     } catch (error) {
       console.error("Failed to load global settings:", error);

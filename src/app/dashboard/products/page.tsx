@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { ProductModal } from "@/components/modals/ProductModal";
 import { ProductViewModal } from "@/components/modals/ProductViewModal";
 import Image from "next/image";
@@ -69,7 +70,7 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/products", {
+      const res = await api.get(API_ENDPOINTS.products.base, {
         params: {
           page: currentPage,
           per_page: pageSize,
@@ -105,7 +106,7 @@ export default function ProductsPage() {
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this product?")) {
       try {
-        await api.delete(`/products/${id}`);
+        await api.delete(API_ENDPOINTS.products.byId(id));
         fetchProducts();
       } catch (err) {
         console.error("Delete failed", err);

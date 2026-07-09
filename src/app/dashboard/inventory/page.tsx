@@ -15,6 +15,7 @@ import { Search, Filter, RefreshCw, ArrowRightLeft, Loader2, MoreHorizontal, Map
 import { Badge } from "@/components/ui/badge";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn, getCategoryColor } from "@/lib/utils";
 import { StockModal } from "@/components/modals/StockModal";
 import {
@@ -50,7 +51,7 @@ export default function InventoryPage() {
   const fetchInventory = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/inventory");
+      const res = await api.get(API_ENDPOINTS.inventory.base);
       setInventory(res.data);
     } catch (err) {
       console.error("Failed to fetch inventory:", err);

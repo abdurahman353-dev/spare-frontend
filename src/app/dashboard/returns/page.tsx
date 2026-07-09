@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { toast } from "react-hot-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -40,6 +41,8 @@ interface ReturnRequest {
   created_at: string;
   updated_at: string;
   return_items?: Array<{ order_item_id: number; quantity: number }> | null;
+  return_items?: { order_item_id: number; quantity: number }[];
+  return_items?: { order_item_id: number; quantity: number }[];
   order?: {
     tracking_number: string;
     total_amount: number;
@@ -79,7 +82,7 @@ export default function ReturnsManagementPage() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/returns?per_page=-1");
+      const res = await api.get(API_ENDPOINTS.returns.allPages);
       setReturns(Array.isArray(res.data) ? res.data : res.data.data ?? []);
     } catch (err) {
       console.error("Failed to fetch returns:", err);
@@ -123,7 +126,7 @@ export default function ReturnsManagementPage() {
     if (!selectedReturn) return;
     setProcessingId(selectedReturn.id);
     try {
-      await api.post(`/returns/${selectedReturn.id}/approve`, { admin_notes: adminNotes });
+      await api.post(API_ENDPOINTS.returns.approve(selectedReturn.id), { admin_notes: adminNotes });
       toast.success(`Return RET-${selectedReturn.id} approved — inventory restored & payment marked refunded.`, {
         duration: 5000, icon: "✅"
       });
@@ -141,7 +144,7 @@ export default function ReturnsManagementPage() {
     if (!selectedReturn) return;
     setProcessingId(selectedReturn.id);
     try {
-      await api.post(`/returns/${selectedReturn.id}/reject`, { admin_notes: adminNotes });
+      await api.post(API_ENDPOINTS.returns.reject(selectedReturn.id), { admin_notes: adminNotes });
       toast.success(`Return RET-${selectedReturn.id} rejected.`);
       setIsActionModalOpen(false);
       setAdminNotes("");
@@ -283,8 +286,8 @@ export default function ReturnsManagementPage() {
                     <Badge className={cn(
                       "rounded-full px-3 text-[10px] border-none font-bold uppercase tracking-wider",
                       ret.status === "Approved" ? "bg-emerald-500 text-white hover:bg-emerald-600" :
-                      ret.status === "Rejected" ? "bg-zinc-650 text-white hover:bg-zinc-750" :
-                      "bg-amber-100 text-amber-700 border border-amber-200"
+                        ret.status === "Rejected" ? "bg-zinc-650 text-white hover:bg-zinc-750" :
+                          "bg-amber-100 text-amber-700 border border-amber-200"
                     )}>
                       {ret.status}
                     </Badge>
@@ -362,22 +365,21 @@ export default function ReturnsManagementPage() {
                   <p className="font-bold text-zinc-800">{selectedReturn.order?.tracking_number}</p>
                 </div>
                 <div className="space-y-0.5">
-                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Status</p>
-                   {selectedReturn.status === "Approved" ? (
-                     <Badge className="rounded-full px-2 py-0.5 text-[9px] font-black border-none bg-red-100 text-red-800 uppercase">
-                       Returned
-                     </Badge>
-                   ) : (
-                     <Badge className="rounded-full px-2 py-0.5 text-[9px] font-black border-none bg-amber-100 text-amber-800 uppercase">
-                       Pending
-                     </Badge>
-                   )}
-                 </div>
-                 <div className="space-y-0.5">
-                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</p>
-                   <p className="font-semibold text-zinc-800">{selectedReturn.order?.customer?.name}</p>
-                   <p className="text-xs text-zinc-400">{selectedReturn.order?.customer?.phone || selectedReturn.order?.customer?.email}</p>
-                 </div>
+                  <Badge className={cn(
+                    "rounded-full px-2 py-0.5 text-[9px] font-black border-none uppercase",
+                    selectedReturn.order?.status === "Returned" ? "bg-red-600 text-white" :
+                      selectedReturn.order?.status === "Cancelled" ? "bg-red-600 text-white" :
+                        selectedReturn.order?.status === "Delivered" ? "bg-emerald-500 text-white" :
+                          "bg-zinc-200 text-zinc-700"
+                  )}>
+                    {selectedReturn.order?.status}
+                  </Badge>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</p>
+                  <p className="font-semibold text-zinc-800">{selectedReturn.order?.customer?.name}</p>
+                  <p className="text-xs text-zinc-400">{selectedReturn.order?.customer?.phone || selectedReturn.order?.customer?.email}</p>
+                </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Value</p>
                   <p className="font-bold text-zinc-800">{currency} {Number(selectedReturn.order?.total_amount || 0).toLocaleString()}</p>
@@ -397,103 +399,37 @@ export default function ReturnsManagementPage() {
                 )}
               </div>
 
-              {selectedReturn.order?.items && selectedReturn.order.items.length > 0 && (() => {
-                const returnItems: any[] = (selectedReturn as any).return_items || [];
-                const itemsToRefund = returnItems.length > 0
-                  ? returnItems.map((ri: any) => {
-                      const item = selectedReturn.order!.items!.find((i: any) => i.id === ri.order_item_id);
-                      return item ? { ...item, returnQty: ri.quantity } : null;
-                    }).filter(Boolean)
-                  : selectedReturn.order.items.map((i: any) => ({ ...i, returnQty: i.quantity }));
-
-                const productRefund = itemsToRefund.reduce((s: number, i: any) => s + Number(i.price) * i.returnQty, 0);
-
-                let totalRefund = 0;
-                let shippingRefund = 0;
-
-                if (selectedReturn.status === "Approved") {
-                  totalRefund = Number(selectedReturn.order?.refunded_amount || 0);
-                  shippingRefund = Math.max(0, totalRefund - productRefund);
-                } else {
-                  const totalUnits = Math.max(1, selectedReturn.order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                  const shippingFee = Number(selectedReturn.order?.shipping_fee || 0);
-                  shippingRefund = itemsToRefund.reduce((s: number, i: any) => s + (shippingFee / totalUnits) * i.returnQty, 0);
-                  totalRefund = productRefund + shippingRefund;
-                }
-
-                return (
-                  <div>
-                    {/* Items in order list */}
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Items in Order</p>
-                    <div className="border border-zinc-100 rounded-lg overflow-hidden mb-3">
-                      {selectedReturn.order.items.map((item: any, i: number) => {
-                        const isReturned = item.cancellation_status === "Cancelled";
-                        return (
-                          <div key={i} className={cn("flex justify-between text-xs px-3 py-2.5 border-b border-zinc-100 last:border-0 bg-white hover:bg-zinc-50", isReturned && "bg-red-50/45")}>
-                            <span className={cn("font-semibold text-zinc-700", isReturned && "line-through text-zinc-450")}>
-                              {item.product?.name || "Part"}
-                              {isReturned && (
-                                <span className="ml-2 text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded">
-                                  RETURNED
-                                </span>
-                              )}
-                            </span>
-                            <span className={cn("text-zinc-500 font-medium", isReturned && "line-through text-zinc-400")}>
-                              QTY {item.quantity} × {currency} {Number(item.price).toLocaleString()}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Refund Preview — only show when pending */}
-                    {selectedReturn.status === "Pending" && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3.5 space-y-2">
-                        <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
-                          ⚡ Refund Preview (if approved)
-                        </p>
-                        {itemsToRefund.map((item: any, i: number) => {
-                          const pCost = Number(item.price) * item.returnQty;
-                          // If it is pending, original shipping shares are still accurate
-                          const totalUnits = Math.max(1, selectedReturn.order!.items!.reduce((s: number, it: any) => s + (it.quantity || 1), 0));
-                          const shippingFee = Number(selectedReturn.order?.shipping_fee || 0);
-                          const sShare = (shippingFee / totalUnits) * item.returnQty;
-                          return (
-                            <div key={i} className="text-[11px] text-amber-800 font-semibold">
-                              {item.product?.name || "Item"} (QTY {item.returnQty}): {currency} {Math.round(pCost).toLocaleString()} product + {currency} {Math.round(sShare).toLocaleString()} shipping = <span className="font-black">{currency} {Math.round(pCost + sShare).toLocaleString()}</span>
-                            </div>
-                          );
-                        })}
-                        <div className="border-t border-amber-200 pt-2 mt-1 flex justify-between items-center">
-                          <span className="text-[11px] font-black text-amber-900 uppercase tracking-wider">Total Refund to Customer</span>
-                          <span className="text-sm font-black text-amber-900">{currency} {Math.round(totalRefund).toLocaleString()}</span>
+              {selectedReturn.return_items && selectedReturn.return_items.length > 0 ? (
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 text-purple-600">Items Requested for Return</p>
+                  <div className="border border-purple-100 rounded-lg overflow-hidden">
+                    {selectedReturn.return_items.map((ri: any, i: number) => {
+                      const item = selectedReturn.order?.items?.find((it: any) => it.id === ri.order_item_id);
+                      return (
+                        <div key={i} className="flex justify-between text-xs px-3 py-2.5 border-b border-purple-50 last:border-0 bg-purple-50/30 hover:bg-purple-50/50">
+                          <span className="font-bold text-zinc-800">{item?.product?.name || `Order Item #${ri.order_item_id}`}</span>
+                          <span className="text-purple-700 font-bold">QTY {ri.quantity} × {currency} {Number(item?.price || 0).toLocaleString()}</span>
                         </div>
-                        <p className="text-[10px] text-amber-600 font-medium">Items returned will be restored to warehouse inventory.</p>
-                      </div>
-                    )}
-
-                    {/* Approved refund summary */}
-                    {selectedReturn.status === "Approved" && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3.5 space-y-1.5">
-                        <p className="text-[10px] font-black text-red-700 uppercase tracking-widest">Refund Issued</p>
-                        {itemsToRefund.map((item: any, i: number) => {
-                          const pCost = Number(item.price) * item.returnQty;
-                          const sShare = itemsToRefund.length > 0 ? (shippingRefund / itemsToRefund.reduce((s: number, it: any) => s + it.returnQty, 0)) * item.returnQty : 0;
-                          return (
-                            <div key={i} className="text-[11px] text-red-800 font-semibold">
-                              {item.product?.name || "Item"} (QTY {item.returnQty}): {currency} {Math.round(pCost).toLocaleString()} + {currency} {Math.round(sShare).toLocaleString()} shipping = {currency} {Math.round(pCost + sShare).toLocaleString()}
-                            </div>
-                          );
-                        })}
-                        <div className="border-t border-red-200 pt-1.5 flex justify-between">
-                          <span className="text-[11px] font-black text-red-900">Total Refunded</span>
-                          <span className="text-sm font-black text-red-900">{currency} {Math.round(totalRefund).toLocaleString()}</span>
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
-                );
-              })()}
+                </div>
+              ) : selectedReturn.order?.items && selectedReturn.order.items.length > 0 ? (
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 text-purple-600">Items Requested for Return (Full Return)</p>
+                  <div className="border border-purple-100 rounded-lg overflow-hidden">
+                    {selectedReturn.return_items.map((ri: any, i: number) => {
+                      const item = selectedReturn.order?.items?.find((it: any) => it.id === ri.order_item_id);
+                      return (
+                        <div key={i} className="flex justify-between text-xs px-3 py-2.5 border-b border-purple-50 last:border-0 bg-purple-50/30 hover:bg-purple-50/50">
+                          <span className="font-bold text-zinc-800">{item?.product?.name || `Order Item #${ri.order_item_id}`}</span>
+                          <span className="text-purple-700 font-bold">QTY {ri.quantity} × {currency} {Number(item?.price || 0).toLocaleString()}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {selectedReturn.admin_notes && (
                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
@@ -506,8 +442,8 @@ export default function ReturnsManagementPage() {
                 <Badge className={cn(
                   "rounded-full px-3 py-1 text-[10px] font-black uppercase border-none",
                   selectedReturn.status === "Approved" ? "bg-emerald-500 text-white" :
-                  selectedReturn.status === "Rejected" ? "bg-zinc-600 text-white" :
-                  "bg-amber-100 text-amber-700 border border-amber-200"
+                    selectedReturn.status === "Rejected" ? "bg-zinc-600 text-white" :
+                      "bg-amber-100 text-amber-700 border border-amber-200"
                 )}>
                   {selectedReturn.status}
                 </Badge>
@@ -586,7 +522,7 @@ export default function ReturnsManagementPage() {
               onClick={() => setIsActionModalOpen(false)}
               disabled={processingId !== null}
             >
-              Cancel
+              No, Cancel
             </Button>
             <Button
               className={cn(
@@ -599,7 +535,7 @@ export default function ReturnsManagementPage() {
               onClick={actionType === "approve" ? handleApprove : handleReject}
             >
               {processingId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {actionType === "approve" ? "Confirm Approval" : "Confirm Rejection"}
+              {actionType === "approve" ? "Yes, Approve" : "Yes, Reject"}
             </Button>
           </DialogFooter>
         </DialogContent>

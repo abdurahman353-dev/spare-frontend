@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { buttonVariants } from "@/components/ui/button";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { useSettings } from "@/components/providers/SettingsProvider";
@@ -93,7 +94,7 @@ export default function AdminCustomersPage() {
 
   const fetchCustomers = () => {
     setLoading(true);
-    api.get("/customers", { params: { per_page: -1 } })
+    api.get(API_ENDPOINTS.customers.base, { params: { per_page: -1 } })
       .then((res) => {
         setCustomers(res.data);
         setLoading(false);
@@ -145,7 +146,7 @@ export default function AdminCustomersPage() {
 
   const handleViewHistory = (customer: Customer) => {
     setLoading(true);
-    api.get(`/customers/${customer.id}`)
+    api.get(API_ENDPOINTS.customers.byId(customer.id))
       .then(res => {
         setSelectedCustomer(res.data);
         setIsHistoryModalOpen(true);
@@ -162,7 +163,7 @@ export default function AdminCustomersPage() {
 
     setIsSaving(true);
     try {
-      await api.post("/customers", formData);
+      await api.post(API_ENDPOINTS.customers.base, formData);
       setIsCreateModalOpen(false);
       setFormData({
         name: "",
@@ -214,7 +215,7 @@ export default function AdminCustomersPage() {
 
     setIsSavingEdit(true);
     try {
-      await api.put(`/customers/${editTarget.id}`, editFormData);
+      await api.put(API_ENDPOINTS.customers.byId(editTarget.id), editFormData);
       toast.success("Customer updated successfully!");
       setIsEditModalOpen(false);
       setEditTarget(null);
@@ -228,7 +229,7 @@ export default function AdminCustomersPage() {
 
   const handleToggleStatus = async (customer: Customer) => {
     try {
-      const res = await api.patch(`/customers/${customer.id}/toggle-status`);
+      const res = await api.patch(API_ENDPOINTS.customers.toggleStatus(customer.id));
       toast.success(res.data.message);
       fetchCustomers();
     } catch (err: any) {

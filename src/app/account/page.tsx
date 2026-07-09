@@ -6,8 +6,8 @@ import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
-  Package, Clock, Settings, ShoppingBag, MapPin, CreditCard, 
+import {
+  Package, Clock, Settings, ShoppingBag, MapPin, CreditCard,
   ChevronRight, LogOut, Loader2, User, Lock, ShieldCheck,
   Eye, EyeOff, CheckCircle2, AlertCircle, Plus, Home, Smartphone,
   Search, Download, ArrowRightLeft, FileText, Truck, Star, Compass,
@@ -18,6 +18,7 @@ import { Joyride, Step } from "react-joyride";
 const JoyrideComponent = Joyride as any;
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -84,17 +85,17 @@ function AccountPortalInner() {
     }
   }, [user, router]);
 
-  const bizName     = settings.store_name      || "our store";
-  const bizTagline  = settings.store_tagline   || "";
-  const bizCurrency = settings.currency        || "Ksh";
-  const bizEmail    = settings.contact_email   || "";
-  const bizPhone    = settings.contact_phone   || "";
-  const bizWA       = settings.contact_whatsapp|| "";
-  const bizAddress  = settings.physical_address|| "";
-  const bizHours    = settings.working_hours   || "";
-  const bizWebsite  = settings.store_website   || "";
-  const bizBranch   = settings.store_branch    || "";
-  const bizCountry  = settings.store_country   || "";
+  const bizName = settings.store_name || "our store";
+  const bizTagline = settings.store_tagline || "";
+  const bizCurrency = settings.currency || "Ksh";
+  const bizEmail = settings.contact_email || "";
+  const bizPhone = settings.contact_phone || "";
+  const bizWA = settings.contact_whatsapp || "";
+  const bizAddress = settings.physical_address || "";
+  const bizHours = settings.working_hours || "";
+  const bizWebsite = settings.store_website || "";
+  const bizBranch = settings.store_branch || "";
+  const bizCountry = settings.store_country || "";
 
   const tourSteps: Step[] = [
     {
@@ -193,7 +194,7 @@ function AccountPortalInner() {
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDeleteAddressModalOpen, setIsDeleteAddressModalOpen] = useState(false);
   const [hiddenAddresses, setHiddenAddresses] = useState<string[]>([]);
-  
+
   const [destinations, setDestinations] = useState<any[]>([]);
   const [availableCities, setAvailableCities] = useState<any[]>([]);
   const [addressFormData, setAddressFormData] = useState({
@@ -213,7 +214,7 @@ function AccountPortalInner() {
   }, [user]);
 
   useEffect(() => {
-    api.get("/shipping-destinations/active")
+    api.get(API_ENDPOINTS.shippingDestinations.active)
       .then(res => setDestinations(res.data))
       .catch(err => console.error(err));
   }, []);
@@ -227,7 +228,7 @@ function AccountPortalInner() {
 
   const handleSaveAddress = async () => {
     try {
-      await api.put('/user/profile', addressFormData);
+      await api.put(API_ENDPOINTS.profile.user, addressFormData);
       toast.success("Delivery address updated successfully!");
       setIsAddressModalOpen(false);
       // Optional: Store in localStorage for immediate checkout prefill
@@ -264,9 +265,18 @@ function AccountPortalInner() {
   const [returnExplanation, setReturnExplanation] = useState("");
   const [submittingReturn, setSubmittingReturn] = useState(false);
   const [myReturns, setMyReturns] = useState<any[]>([]);
+  const [selectedReturnItems, setSelectedReturnItems] = useState<Record<number, number>>({});
+
+  const openReturnModal = (order: any) => {
+    setSelectedOrder(order);
+    setSelectedReturnItems({});
+    setReturnReason("");
+    setReturnExplanation("");
+    setIsReturnModalOpen(true);
+  };
 
   const fetchReturns = () => {
-    api.get("/returns/my-returns")
+    api.get(API_ENDPOINTS.returns.mine)
       .then(res => setMyReturns(res.data))
       .catch(err => console.error("Failed to fetch returns history:", err));
   };
@@ -282,7 +292,7 @@ function AccountPortalInner() {
   }, [searchParams]);
 
   useEffect(() => {
-    api.get("/my-orders")
+    api.get(API_ENDPOINTS.userOrders.mine)
       .then(res => {
         setOrders(res.data);
         setLoading(false);
@@ -294,6 +304,16 @@ function AccountPortalInner() {
 
     // Load returns
     fetchReturns();
+
+    // 15-second silent polling in background
+    const interval = setInterval(() => {
+      api.get("/my-orders")
+        .then(res => setOrders(res.data))
+        .catch(err => console.error("Silent orders update failed:", err));
+      fetchReturns();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Refresh live user profile on mount so loyalty badge is real-time
@@ -309,18 +329,18 @@ function AccountPortalInner() {
     setPasswordStatus({ loading: true, success: false, error: "" });
 
     try {
-      await api.post("/change-password", passwordData);
+      await api.post(API_ENDPOINTS.auth.changePassword, passwordData);
       setPasswordStatus({ loading: false, success: true, error: "" });
-      
+
       setTimeout(async () => {
         await logout();
         router.push("/login");
       }, 2000);
     } catch (err: any) {
-      setPasswordStatus({ 
-        loading: false, 
-        success: false, 
-        error: err.response?.data?.message || "Verification failed. Please check your current password." 
+      setPasswordStatus({
+        loading: false,
+        success: false,
+        error: err.response?.data?.message || "Verification failed. Please check your current password."
       });
     }
   };
@@ -336,13 +356,21 @@ function AccountPortalInner() {
       toast.error("Please provide a detailed explanation of your reason");
       return;
     }
+    if (Object.keys(selectedReturnItems).length === 0) {
+      toast.error("Please select at least one item to return");
+      return;
+    }
 
     setSubmittingReturn(true);
     try {
-      await api.post("/returns/submit", {
+      await api.post(API_ENDPOINTS.returns.submit, {
         order_id: selectedOrder.id,
         reason: returnReason,
-        explanation: returnExplanation
+        explanation: returnExplanation,
+        return_items: Object.entries(selectedReturnItems).map(([id, qty]) => ({
+          order_item_id: parseInt(id),
+          quantity: qty
+        }))
       });
       toast.success("Return request submitted successfully! Administration will review your request.", {
         duration: 5000,
@@ -351,9 +379,11 @@ function AccountPortalInner() {
       setIsReturnModalOpen(false);
       setReturnReason("");
       setReturnExplanation("");
-      
+      setSelectedReturnItems({});
+
+
       // Refresh list
-      api.get("/my-orders").then(res => setOrders(res.data));
+      api.get(API_ENDPOINTS.userOrders.mine).then(res => setOrders(res.data));
       fetchReturns();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to submit return request");
@@ -385,7 +415,7 @@ function AccountPortalInner() {
     }
     setIsCancelling(true);
     try {
-      const res = await api.post(`/orders/${selectedOrder.id}/request-cancel`, { 
+      const res = await api.post(API_ENDPOINTS.orders.requestCancel(selectedOrder.id), {
         reason: cancelReason,
         cancel_item_ids: selectedItemIdsToCancel
       });
@@ -406,11 +436,11 @@ function AccountPortalInner() {
   };
 
   const totalSpent = orders
-    .filter((o: any) => o.status !== "Cancelled")
+    .filter((o: any) => o.status !== "Cancelled" && o.status !== "Returned")
     .reduce((sum: number, order: any) => sum + Number(order.total_amount), 0);
-  const activeOrders = orders.filter((o: any) => o.status !== "Delivered" && o.status !== "Cancelled").length;
+  const activeOrders = orders.filter((o: any) => o.status !== "Delivered" && o.status !== "Cancelled" && o.status !== "Returned").length;
   const partsPurchased = orders
-    .filter((o: any) => o.status !== "Cancelled")
+    .filter((o: any) => o.status !== "Cancelled" && o.status !== "Returned")
     .reduce((sum: number, order: any) => {
       const itemsCount = order.items?.reduce((itemSum: number, item: any) => {
         if (item.cancellation_status === "Cancelled") {
@@ -489,10 +519,10 @@ function AccountPortalInner() {
         />
       )}
       <Navbar />
-      
+
       <main className="flex-1 py-10">
         <div className="container mx-auto px-6 max-w-7xl">
-          
+
           {/* Header Section - Matching Image 1 Style */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
@@ -501,59 +531,59 @@ function AccountPortalInner() {
               </h1>
               <p className="text-[#64748b] text-[15px] mt-1">Manage your orders and account preferences.</p>
             </div>
-             <div className="flex items-center gap-3">
-               <Button 
-                 onClick={() => { setRunTour(true); }}
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => { setRunTour(true); }}
 
-                 className="bg-[#0052cc] hover:bg-[#004bb3] text-white font-bold text-xs h-9 px-4 rounded-md transition-all shadow-sm border-none flex items-center gap-2"
-               >
-                 <Compass className="h-4 w-4" /> Start Tour
-               </Button>
-               {loading ? (
-                 <div className="animate-pulse bg-slate-200 h-8 w-32 rounded-md" />
-               ) : (
-                 (() => {
-                   const ltv = totalSpent;
-                   const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
-                   const goldThresh  = parseFloat(settings.rank_gold_threshold    || "50000");
-                   const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
-                   let label = "Bronze Member",   bgClass = "bg-amber-700";
-                   if (ltv >= platThresh) { label = "Platinum Customer"; bgClass = "bg-[#0052cc]"; }
-                   else if (ltv >= goldThresh)  { label = "Gold Member";     bgClass = "bg-yellow-500"; }
-                   else if (ltv >= silverThresh) { label = "Silver Member";   bgClass = "bg-slate-400"; }
-                   return (
-                     <div id="tour-loyalty" className={cn("text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm", bgClass)}>
-                       <Star className="h-3 w-3 fill-white" /> {label}
-                     </div>
-                   );
-                 })()
-               )}
-             </div>
+                className="bg-[#0052cc] hover:bg-[#004bb3] text-white font-bold text-xs h-9 px-4 rounded-md transition-all shadow-sm border-none flex items-center gap-2"
+              >
+                <Compass className="h-4 w-4" /> Start Tour
+              </Button>
+              {loading ? (
+                <div className="animate-pulse bg-slate-200 h-8 w-32 rounded-md" />
+              ) : (
+                (() => {
+                  const ltv = totalSpent;
+                  const platThresh = parseFloat(settings.rank_platinum_threshold || "150000");
+                  const goldThresh = parseFloat(settings.rank_gold_threshold || "50000");
+                  const silverThresh = parseFloat(settings.rank_silver_threshold || "10000");
+                  let label = "Bronze Member", bgClass = "bg-amber-700";
+                  if (ltv >= platThresh) { label = "Platinum Customer"; bgClass = "bg-[#0052cc]"; }
+                  else if (ltv >= goldThresh) { label = "Gold Member"; bgClass = "bg-yellow-500"; }
+                  else if (ltv >= silverThresh) { label = "Silver Member"; bgClass = "bg-slate-400"; }
+                  return (
+                    <div id="tour-loyalty" className={cn("text-white px-4 py-2 rounded-md font-semibold text-xs uppercase tracking-wider flex items-center gap-2 shadow-sm", bgClass)}>
+                      <Star className="h-3 w-3 fill-white" /> {label}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
+
             {/* Sidebar - Clean Style */}
             <div id="tour-nav" className="lg:col-span-3 space-y-1">
               <p className="text-[11px] font-bold text-[#94a3b8] uppercase tracking-widest mb-4 ml-2">Account Portal</p>
               {tabs.map((item) => (
-                <button 
+                <button
                   key={item.name}
                   onClick={() => setActiveTab(item.name)}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 group text-[14px] font-medium",
-                    activeTab === item.name 
-                    ? "bg-[#f1f5f9] text-[#0052cc]" 
-                    : "text-[#64748b] hover:bg-[#f8fafc] hover:text-[#1e293b]"
+                    activeTab === item.name
+                      ? "bg-[#f1f5f9] text-[#0052cc]"
+                      : "text-[#64748b] hover:bg-[#f8fafc] hover:text-[#1e293b]"
                   )}
                 >
                   <item.icon className={cn("h-4 w-4", activeTab === item.name ? "text-[#0052cc]" : "text-[#94a3b8]")} />
                   <span>{item.name}</span>
                 </button>
               ))}
-              
+
               <div className="pt-6 mt-6 border-t border-[#f1f5f9] space-y-2">
-                 <Link 
+                <Link
                   id="tour-shop"
                   href="/products"
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-[#0052cc] hover:bg-[#eff6ff] text-[14px] font-medium transition-all border border-[#0052cc]/20"
@@ -561,7 +591,7 @@ function AccountPortalInner() {
                   <ShoppingBag className="h-4 w-4" />
                   Continue Shopping
                 </Link>
-                 <button 
+                <button
                   onClick={logout}
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-[#ef4444] hover:bg-red-50 text-[14px] font-medium transition-all"
                 >
@@ -575,35 +605,35 @@ function AccountPortalInner() {
             <div className="lg:col-span-9">
               <AnimatePresence mode="wait">
                 {activeTab === "Dashboard" && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     className="space-y-8"
                   >
                     {/* Stats Grid */}
                     <div id="tour-stats">
-                    {loading ? (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {[1, 2, 3].map((i) => (
-                          <div key={i} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm space-y-3 animate-pulse">
-                            <div className="h-3.5 bg-slate-200 rounded w-24"></div>
-                            <div className="h-7 bg-slate-200 rounded w-32"></div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {[
-                          { label: "Active Orders", value: activeOrders.toString(), color: "text-blue-600" },
-                          { label: "Total Spent", value: `Ksh ${totalSpent.toLocaleString()}`, color: "text-slate-900" },
-                          { label: "Parts Purchased", value: partsPurchased.toString(), color: "text-slate-900" },
-                        ].map((stat, idx) => (
-                          <div key={idx} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm">
-                            <p className="text-[12px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">{stat.label}</p>
-                            <p className={cn("text-2xl font-bold", stat.color)}>{stat.value}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                      {loading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm space-y-3 animate-pulse">
+                              <div className="h-3.5 bg-slate-200 rounded w-24"></div>
+                              <div className="h-7 bg-slate-200 rounded w-32"></div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {[
+                            { label: "Active Orders", value: activeOrders.toString(), color: "text-blue-600" },
+                            { label: "Total Spent", value: `Ksh ${totalSpent.toLocaleString()}`, color: "text-slate-900" },
+                            { label: "Parts Purchased", value: partsPurchased.toString(), color: "text-slate-900" },
+                          ].map((stat, idx) => (
+                            <div key={idx} className="bg-white p-6 rounded-lg border border-[#e2e8f0] shadow-sm">
+                              <p className="text-[12px] font-semibold text-[#64748b] uppercase tracking-wider mb-2">{stat.label}</p>
+                              <p className={cn("text-2xl font-bold", stat.color)}>{stat.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Logistics Lifecycle Stepper Guide */}
@@ -711,7 +741,7 @@ function AccountPortalInner() {
                         <h2 className="text-[16px] font-bold text-[#1e293b]">Recent Logistics History</h2>
                         <button onClick={() => setActiveTab("My Orders")} className="text-[12px] font-bold text-[#0052cc] hover:underline uppercase tracking-wider">Explore All</button>
                       </div>
-                      
+
                       <div className="overflow-x-auto overflow-y-auto max-h-[480px] custom-scrollbar">
                         <table className="w-full text-left">
                           <thead className="sticky top-0 z-10 bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
@@ -802,7 +832,7 @@ function AccountPortalInner() {
                                     {(() => {
                                       const refundedTotal = getOrderRefundedTotal(order);
                                       const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
-                                      
+
                                       if (order.status === "Cancelled" || allCancelled) {
                                         return (
                                           <>
@@ -813,7 +843,7 @@ function AccountPortalInner() {
                                           </>
                                         );
                                       }
-                                      
+
                                       return (
                                         <>
                                           <p className="text-[14px] font-black text-[#1e293b]">
@@ -831,20 +861,20 @@ function AccountPortalInner() {
                                   <td className="px-6 py-4 text-center">
                                     <Badge className={cn(
                                       "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
-                                      order.status === "Processing" ? "bg-orange-500 text-white" :
-                                      (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
-                                      order.status === "Arrived" ? "bg-indigo-600 text-white" : 
-                                      order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
-                                      (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
-                                      "bg-zinc-200 text-zinc-700"
+                                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
+                                        order.status === "Processing" ? "bg-orange-500 text-white" :
+                                          (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
+                                            order.status === "Arrived" ? "bg-indigo-600 text-white" :
+                                              order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                                                order.status === "Returned" ? "bg-red-600 text-white" :
+                                                  (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
+                                                    "bg-zinc-200 text-zinc-700"
                                     )}>
                                       {order.status === "In Transit" ? "SHIPPED" : order.status}
                                     </Badge>
                                   </td>
                                   <td className="px-6 py-4 text-right">
-                                    <button 
+                                    <button
                                       onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }}
                                       className="text-[#0052cc] hover:text-[#0747a6] font-bold text-[13px] hover:underline"
                                     >
@@ -901,7 +931,7 @@ function AccountPortalInner() {
                             <div className="space-y-1.5">
                               <label className="text-[12px] font-bold text-[#64748b] uppercase tracking-wider">Current Password</label>
                               <div className="relative">
-                                <Input type={showCurrentPassword ? "text" : "password"} required className="border-[#e2e8f0] pr-10" value={passwordData.current_password} onChange={(e) => setPasswordData({...passwordData, current_password: e.target.value})} />
+                                <Input type={showCurrentPassword ? "text" : "password"} required className="border-[#e2e8f0] pr-10" value={passwordData.current_password} onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })} />
                                 <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-3 top-2.5 text-[#94a3b8] hover:text-[#64748b]">
                                   {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
@@ -910,7 +940,7 @@ function AccountPortalInner() {
                             <div className="space-y-1.5">
                               <label className="text-[12px] font-bold text-[#64748b] uppercase tracking-wider">New Password</label>
                               <div className="relative">
-                                <Input type={showNewPassword ? "text" : "password"} required className="border-[#e2e8f0] pr-10" value={passwordData.password} onChange={(e) => setPasswordData({...passwordData, password: e.target.value})} />
+                                <Input type={showNewPassword ? "text" : "password"} required className="border-[#e2e8f0] pr-10" value={passwordData.password} onChange={(e) => setPasswordData({ ...passwordData, password: e.target.value })} />
                                 <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-2.5 text-[#94a3b8] hover:text-[#64748b]">
                                   {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
@@ -919,7 +949,7 @@ function AccountPortalInner() {
                             <div className="space-y-1.5">
                               <label className="text-[12px] font-bold text-[#64748b] uppercase tracking-wider">Confirm New Password</label>
                               <div className="relative">
-                                <Input type={showConfirmPassword ? "text" : "password"} required className="border-[#e2e8f0] pr-10" value={passwordData.password_confirmation} onChange={(e) => setPasswordData({...passwordData, password_confirmation: e.target.value})} />
+                                <Input type={showConfirmPassword ? "text" : "password"} required className="border-[#e2e8f0] pr-10" value={passwordData.password_confirmation} onChange={(e) => setPasswordData({ ...passwordData, password_confirmation: e.target.value })} />
                                 <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-2.5 text-[#94a3b8] hover:text-[#64748b]">
                                   {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
@@ -946,7 +976,7 @@ function AccountPortalInner() {
                           <FileText className="h-4 w-4 mr-2" /> Download Statement PDF
                         </Button>
                       </div>
-                      
+
                       <div className="overflow-x-auto">
                         <table className="w-full text-left">
                           <thead className="bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
@@ -969,124 +999,124 @@ function AccountPortalInner() {
                             {loading ? (
                               <tr><td colSpan={9} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#64748b]" /></td></tr>
                             ) : orders.map((order: any) => (
-                                <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
-                                  <td className="px-6 py-4">
-                                    <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
-                                    {order.payment_ref_code && (
-                                      <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
-                                        M-Pesa: {order.payment_ref_code}
-                                      </p>
+                              <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
+                                <td className="px-6 py-4">
+                                  <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
+                                  {order.payment_ref_code && (
+                                    <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                                      M-Pesa: {order.payment_ref_code}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 text-[13px] text-[#64748b]">
+                                  {new Date(order.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="space-y-0.5 max-w-[200px]">
+                                    <p className="text-[13px] font-bold text-[#1e293b] truncate">
+                                      {order.items?.[0]?.product?.name || "Genuine Spare Part"}
+                                    </p>
+                                    {order.items && order.items.length > 1 && (
+                                      <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
                                     )}
-                                  </td>
-                                  <td className="px-6 py-4 text-[13px] text-[#64748b]">
-                                    {new Date(order.created_at).toLocaleDateString()}
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <div className="space-y-0.5 max-w-[200px]">
-                                      <p className="text-[13px] font-bold text-[#1e293b] truncate">
-                                        {order.items?.[0]?.product?.name || "Genuine Spare Part"}
-                                      </p>
-                                      {order.items && order.items.length > 1 && (
-                                        <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <div className="flex flex-col gap-0.5">
-                                      {order.items?.map((item: any, i: number) => (
-                                        <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
-                                          {item.product?.part_number || "—"}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <div className="flex flex-col gap-0.5">
-                                      {order.items?.map((item: any, i: number) => (
-                                        <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
-                                          {item.product?.engine_model || "—"}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <div className="flex flex-col gap-0.5">
-                                      {order.items?.map((item: any, i: number) => (
-                                        <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
-                                          {item.product?.suitable_vehicle || "—"}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4">
-                                    <div className="flex items-center gap-1.5">
-                                      <Package className="h-3 w-3 text-[#94a3b8]" />
-                                      <span className="text-xs font-bold text-[#1e293b]">{order.items?.length || 0}</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
-                                    Ksh {Math.max(0, (Number(order.total_amount) - Number(order.shipping_fee || 0))).toLocaleString()}
-                                  </td>
-                                  <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
-                                    Ksh {Number(order.shipping_fee || 0).toLocaleString()}
-                                  </td>
-                                  <td className="px-6 py-4 text-right pr-10">
-                                    {(() => {
-                                      const refundedTotal = getOrderRefundedTotal(order);
-                                      const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
-                                      
-                                      if (order.status === "Cancelled" || allCancelled) {
-                                        return (
-                                          <>
-                                            <p className="text-[14px] font-black text-red-500 line-through opacity-75">
-                                              Ksh {refundedTotal.toLocaleString()}
-                                            </p>
-                                            <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">Refunded</p>
-                                          </>
-                                        );
-                                      }
-                                      
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col gap-0.5">
+                                    {order.items?.map((item: any, i: number) => (
+                                      <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                        {item.product?.part_number || "—"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col gap-0.5">
+                                    {order.items?.map((item: any, i: number) => (
+                                      <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                        {item.product?.engine_model || "—"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-col gap-0.5">
+                                    {order.items?.map((item: any, i: number) => (
+                                      <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                        {item.product?.suitable_vehicle || "—"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <Package className="h-3 w-3 text-[#94a3b8]" />
+                                    <span className="text-xs font-bold text-[#1e293b]">{order.items?.length || 0}</span>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
+                                  Ksh {Math.max(0, (Number(order.total_amount) - Number(order.shipping_fee || 0))).toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
+                                  Ksh {Number(order.shipping_fee || 0).toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 text-right pr-10">
+                                  {(() => {
+                                    const refundedTotal = getOrderRefundedTotal(order);
+                                    const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+
+                                    if (order.status === "Cancelled" || allCancelled) {
                                       return (
                                         <>
-                                          <p className="text-[14px] font-black text-[#1e293b]">
-                                            Ksh {Number(order.total_amount || 0).toLocaleString()}
+                                          <p className="text-[14px] font-black text-red-500 line-through opacity-75">
+                                            Ksh {refundedTotal.toLocaleString()}
                                           </p>
-                                          {refundedTotal > 0 && (
-                                            <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
-                                              Ksh {refundedTotal.toLocaleString()} Refunded
-                                            </p>
-                                          )}
+                                          <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">Refunded</p>
                                         </>
                                       );
-                                    })()}
-                                  </td>
-                                  <td className="px-6 py-4 text-center">
-                                    <Badge className={cn(
-                                      "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+                                    }
+
+                                    return (
+                                      <>
+                                        <p className="text-[14px] font-black text-[#1e293b]">
+                                          Ksh {Number(order.total_amount || 0).toLocaleString()}
+                                        </p>
+                                        {refundedTotal > 0 && (
+                                          <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
+                                            Ksh {refundedTotal.toLocaleString()} Refunded
+                                          </p>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <Badge className={cn(
+                                    "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                                    order.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
                                       order.status === "Processing" ? "bg-orange-500 text-white" :
-                                      (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
-                                      order.status === "Arrived" ? "bg-indigo-600 text-white" : 
-                                      order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-purple-600 text-white" : 
-                                      (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
-                                      "bg-zinc-200 text-zinc-700"
-                                    )}>
-                                      {order.status === "In Transit" ? "SHIPPED" : order.status}
-                                    </Badge>
-                                  </td>
-                                  <td className="px-6 py-4 text-right">
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm" 
-                                      onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }}
-                                      className="text-[#0052cc] hover:text-[#0747a6] font-bold text-[13px] hover:underline"
-                                    >
-                                      Inspect
-                                    </Button>
-                                  </td>
-                                </tr>
-                              ))
+                                        (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
+                                          order.status === "Arrived" ? "bg-indigo-600 text-white" :
+                                            order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                                              order.status === "Returned" ? "bg-red-600 text-white" :
+                                                (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
+                                                  "bg-zinc-200 text-zinc-700"
+                                  )}>
+                                    {order.status === "In Transit" ? "SHIPPED" : order.status}
+                                  </Badge>
+                                </td>
+                                <td className="px-6 py-4 text-right">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }}
+                                    className="text-[#0052cc] hover:text-[#0747a6] font-bold text-[13px] hover:underline"
+                                  >
+                                    Inspect
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))
                             }
                           </tbody>
                         </table>
@@ -1116,38 +1146,38 @@ function AccountPortalInner() {
                                   const [city, address] = locString.split('|');
                                   return (
                                     <div key={idx} className="border border-[#e2e8f0] rounded-lg p-5 bg-[#f8fafc] relative">
-                                       {idx === 0 && <div className="absolute top-3 right-3 text-[#166534] bg-[#f0fdf4] text-[10px] font-bold px-2 py-0.5 rounded uppercase">Latest</div>}
-                                       <h3 className="font-bold text-[#1e293b] mb-1">{city}</h3>
-                                       <p className="text-[#64748b] text-[13px] mb-4">
-                                          {address}<br/>
-                                          {city}, Kenya
-                                       </p>
-                                       <div className="flex gap-2">
-                                         <button 
-                                           onClick={() => {
-                                             localStorage.setItem("spare_prefill_shipping", JSON.stringify({ city, address }));
-                                             toast.success(`Shipping to ${city} selected!`, {
-                                               style: { background: '#0052cc', color: '#fff', fontWeight: 'bold' }
-                                             });
-                                           }}
-                                           className="text-[12px] font-bold text-[#0052cc] hover:underline"
-                                         >
-                                           Select for Order
-                                         </button>
-                                         <button 
-                                           onClick={() => {
-                                             const updated = [...hiddenAddresses, locString];
-                                             setHiddenAddresses(updated);
-                                             localStorage.setItem("spare_hidden_addresses", JSON.stringify(updated));
-                                             toast.error(`Destination removed`, {
-                                               style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' }
-                                             });
-                                           }}
-                                           className="text-[12px] font-bold text-red-600 hover:underline"
-                                         >
-                                           Remove
-                                         </button>
-                                       </div>
+                                      {idx === 0 && <div className="absolute top-3 right-3 text-[#166534] bg-[#f0fdf4] text-[10px] font-bold px-2 py-0.5 rounded uppercase">Latest</div>}
+                                      <h3 className="font-bold text-[#1e293b] mb-1">{city}</h3>
+                                      <p className="text-[#64748b] text-[13px] mb-4">
+                                        {address}<br />
+                                        {city}, Kenya
+                                      </p>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => {
+                                            localStorage.setItem("spare_prefill_shipping", JSON.stringify({ city, address }));
+                                            toast.success(`Shipping to ${city} selected!`, {
+                                              style: { background: '#0052cc', color: '#fff', fontWeight: 'bold' }
+                                            });
+                                          }}
+                                          className="text-[12px] font-bold text-[#0052cc] hover:underline"
+                                        >
+                                          Select for Order
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            const updated = [...hiddenAddresses, locString];
+                                            setHiddenAddresses(updated);
+                                            localStorage.setItem("spare_hidden_addresses", JSON.stringify(updated));
+                                            toast.error(`Destination removed`, {
+                                              style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' }
+                                            });
+                                          }}
+                                          className="text-[12px] font-bold text-red-600 hover:underline"
+                                        >
+                                          Remove
+                                        </button>
+                                      </div>
                                     </div>
                                   );
                                 })
@@ -1196,8 +1226,8 @@ function AccountPortalInner() {
                                       <Badge className={cn(
                                         "rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase border-none tracking-wider",
                                         ret.status === "Approved" ? "bg-emerald-500 text-white" :
-                                        ret.status === "Rejected" ? "bg-red-600 text-white" :
-                                        "bg-yellow-400 text-yellow-950"
+                                          ret.status === "Rejected" ? "bg-red-600 text-white" :
+                                            "bg-yellow-400 text-yellow-950"
                                       )}>
                                         {ret.status}
                                       </Badge>
@@ -1229,7 +1259,7 @@ function AccountPortalInner() {
                   </a>
                 </div>
                 <div className="absolute -right-10 -bottom-10 opacity-10 rotate-12">
-                   <Package className="h-60 w-60 text-white" />
+                  <Package className="h-60 w-60 text-white" />
                 </div>
               </div>
 
@@ -1244,223 +1274,242 @@ function AccountPortalInner() {
       <Dialog open={isOrderModalOpen} onOpenChange={setIsOrderModalOpen}>
         <DialogContent className="sm:max-w-[550px] p-0 rounded-lg overflow-hidden border-none shadow-2xl">
           <DialogHeader className="p-6 bg-white border-b border-[#e2e8f0] flex flex-row items-center justify-between">
-             <div className="space-y-1 text-left">
-               <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
-               <DialogDescription className="text-[#64748b] font-medium text-sm">
-                 Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
-               </DialogDescription>
-             </div>
-             <Badge className={cn(
-               "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
-               selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
-               selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
-               (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" : 
-               selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" : 
-               selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" : 
-               selectedOrder?.status === "Returned" ? "bg-purple-600 text-white" : 
-               (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
-               "bg-zinc-200 text-zinc-700"
-             )}>
-               {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
-             </Badge>
+            <div className="space-y-1 text-left">
+              <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
+              <DialogDescription className="text-[#64748b] font-medium text-sm">
+                Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
+              </DialogDescription>
+            </div>
+            <Badge className={cn(
+              "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
+              selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
+                selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
+                  (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" :
+                    selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" :
+                      selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+                        selectedOrder?.status === "Returned" ? "bg-red-600 text-white" :
+                          (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
+                            "bg-zinc-200 text-zinc-700"
+            )}>
+              {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
+            </Badge>
+            <div className="space-y-1 text-left">
+              <DialogTitle className="text-xl font-bold text-[#1e293b]">Order Ref: {selectedOrder?.tracking_number || selectedOrder?.id}</DialogTitle>
+              <DialogDescription className="text-[#64748b] font-medium text-sm">
+                Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
+              </DialogDescription>
+            </div>
+            <Badge className={cn(
+              "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
+              selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
+                selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
+                  (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" :
+                    selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" :
+                      selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+                        selectedOrder?.status === "Returned" ? "bg-red-600 text-white" :
+                          (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
+                            "bg-zinc-200 text-zinc-700"
+            )}>
+              {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
+            </Badge>
           </DialogHeader>
           <div className="p-6 max-h-[60vh] overflow-y-auto space-y-6">
-             <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
-               <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Logistics Intelligence</h4>
-               <div className="flex items-center justify-between">
+            <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
+              <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Logistics Intelligence</h4>
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Origin Node</p>
+                  <p className="text-[13px] font-bold text-[#1e293b]">
+                    {selectedOrder?.items?.[0]?.warehouse?.name ||
+                      selectedOrder?.items?.[0]?.warehouse?.code || "Warehouse"}
+                  </p>
+                </div>
+                <div className="flex-1 px-4 flex items-center">
+                  <div className="h-px flex-1 bg-dashed border-t border-[#cbd5e1]"></div>
+                  <ArrowRightLeft className="h-4 w-4 text-[#0052cc] mx-2" />
+                  <div className="h-px flex-1 bg-dashed border-t border-[#cbd5e1]"></div>
+                </div>
+                <div className="space-y-1 text-right">
+                  <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Final Destination</p>
+                  <p className="text-[13px] font-bold text-[#1e293b]">
+                    {selectedOrder?.shipping_city
+                      ? `${selectedOrder.shipping_country || 'Tanzania'}, ${selectedOrder.shipping_city}, ${selectedOrder.shipping_address}`
+                      : (selectedOrder?.customer?.address || "Shipping Details")}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-[#64748b]">
+                <MapPin className="h-3 w-3" />
+                <span>Automated Logistics Tracking Active</span>
+              </div>
+            </div>
+
+            {selectedOrder?.shipment && (
+              <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
+                <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Live Container Tracking</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Origin Node</p>
-                    <p className="text-[13px] font-bold text-[#1e293b]">
-                      {selectedOrder?.items?.[0]?.warehouse?.name || 
-                        selectedOrder?.items?.[0]?.warehouse?.code || "Warehouse"}
-                    </p>
+                    <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Waybill / Container</p>
+                    <p className="text-[13px] font-black text-[#0052cc] tracking-wider">{selectedOrder.shipment.waybill}</p>
                   </div>
-                  <div className="flex-1 px-4 flex items-center">
-                    <div className="h-px flex-1 bg-dashed border-t border-[#cbd5e1]"></div>
-                    <ArrowRightLeft className="h-4 w-4 text-[#0052cc] mx-2" />
-                    <div className="h-px flex-1 bg-dashed border-t border-[#cbd5e1]"></div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Carrier</p>
+                    <p className="text-[13px] font-bold text-[#1e293b]">{selectedOrder.shipment.carrier}</p>
                   </div>
-                  <div className="space-y-1 text-right">
-                    <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Final Destination</p>
-                    <p className="text-[13px] font-bold text-[#1e293b]">
-                      {selectedOrder?.shipping_city 
-                        ? `${selectedOrder.shipping_country || 'Tanzania'}, ${selectedOrder.shipping_city}, ${selectedOrder.shipping_address}` 
-                        : (selectedOrder?.customer?.address || "Shipping Details")}
-                    </p>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Status</p>
+                    <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase",
+                      selectedOrder.shipment.status === "Delivered" ? "bg-[#f0fdf4] text-[#166534]" : "bg-[#eff6ff] text-[#1e40af]"
+                    )}>{selectedOrder.shipment.status}</span>
                   </div>
-               </div>
-               <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-[#64748b]">
-                 <MapPin className="h-3 w-3" />
-                 <span>Automated Logistics Tracking Active</span>
-               </div>
-             </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-[#94a3b8] uppercase">ETA</p>
+                    <p className="text-[13px] font-bold text-[#1e293b]">{selectedOrder.shipment.eta || "Pending"}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
-             {selectedOrder?.shipment && (
-               <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">
-                 <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Live Container Tracking</h4>
-                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Waybill / Container</p>
-                     <p className="text-[13px] font-black text-[#0052cc] tracking-wider">{selectedOrder.shipment.waybill}</p>
-                   </div>
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Carrier</p>
-                     <p className="text-[13px] font-bold text-[#1e293b]">{selectedOrder.shipment.carrier}</p>
-                   </div>
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">Status</p>
-                     <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-bold uppercase", 
-                       selectedOrder.shipment.status === "Delivered" ? "bg-[#f0fdf4] text-[#166534]" : "bg-[#eff6ff] text-[#1e40af]"
-                     )}>{selectedOrder.shipment.status}</span>
-                   </div>
-                   <div className="space-y-1">
-                     <p className="text-[10px] font-bold text-[#94a3b8] uppercase">ETA</p>
-                     <p className="text-[13px] font-bold text-[#1e293b]">{selectedOrder.shipment.eta || "Pending"}</p>
-                   </div>
-                 </div>
-               </div>
-             )}
-
-             {/* ── DRIVER & DELIVERY PROOFS — shown when order is Shipped/Arrived/Delivered ── */}
-             {selectedOrder?.shipping_method !== "Pickup" && (selectedOrder?.driver || selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
-               <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] space-y-3">
-                 <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest">Delivery &amp; Driver Details</h4>
-                 {selectedOrder?.driver && (
-                   <div className="flex items-center gap-3">
-                     <div className="h-9 w-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-700 font-black text-xs border border-indigo-200">
-                       {selectedOrder.driver.name.substring(0, 2).toUpperCase()}
-                     </div>
-                     <div className="min-w-0 flex-1">
-                       <p className="text-sm font-bold text-zinc-800 truncate">{selectedOrder.driver.name}</p>
-                       {selectedOrder.driver.phone && <p className="text-xs text-zinc-500 truncate">{selectedOrder.driver.phone}</p>}
-                       {selectedOrder.driver.vehicle_plate && (
-                         <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
-                           Plate: {selectedOrder.driver.vehicle_plate}
-                         </p>
-                       )}
-                     </div>
-                   </div>
-                 )}
-                 {(selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
-                   <div className="pt-3 border-t border-[#e2e8f0] grid grid-cols-1 sm:grid-cols-2 gap-3">
-                     {selectedOrder?.delivery_signature_url && (
-                       <div>
-                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Recipient Signature (POD)</p>
-                         <div className="border border-zinc-200 rounded-lg p-2 bg-white inline-block">
-                           <img src={selectedOrder.delivery_signature_url} alt="Recipient Signature" className="h-16 max-w-full object-contain" />
-                         </div>
-                       </div>
-                     )}
-                     {selectedOrder?.delivery_photo_url && (
-                       <div>
-                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Doorstep Photo Proof</p>
-                         <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white max-w-[160px]">
-                           <img src={selectedOrder.delivery_photo_url} alt="Doorstep Photo" className="w-full h-auto object-cover max-h-[100px]" />
-                         </div>
-                       </div>
-                     )}
-                   </div>
-                 )}
-               </div>
-             )}
+            {/* ── DRIVER & DELIVERY PROOFS — shown when order is Shipped/Arrived/Delivered ── */}
+            {selectedOrder?.shipping_method !== "Pickup" && (selectedOrder?.driver || selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
+              <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] space-y-3">
+                <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest">Delivery &amp; Driver Details</h4>
+                {selectedOrder?.driver && (
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-700 font-black text-xs border border-indigo-200">
+                      {selectedOrder.driver.name.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-zinc-800 truncate">{selectedOrder.driver.name}</p>
+                      {selectedOrder.driver.phone && <p className="text-xs text-zinc-500 truncate">{selectedOrder.driver.phone}</p>}
+                      {selectedOrder.driver.vehicle_plate && (
+                        <p className="text-[10px] font-black text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                          Plate: {selectedOrder.driver.vehicle_plate}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {(selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
+                  <div className="pt-3 border-t border-[#e2e8f0] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {selectedOrder?.delivery_signature_url && (
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Recipient Signature (POD)</p>
+                        <div className="border border-zinc-200 rounded-lg p-2 bg-white inline-block">
+                          <img src={selectedOrder.delivery_signature_url} alt="Recipient Signature" className="h-16 max-w-full object-contain" />
+                        </div>
+                      </div>
+                    )}
+                    {selectedOrder?.delivery_photo_url && (
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Doorstep Photo Proof</p>
+                        <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white max-w-[160px]">
+                          <img src={selectedOrder.delivery_photo_url} alt="Doorstep Photo" className="w-full h-auto object-cover max-h-[100px]" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
 
-             {(selectedOrder?.status === "Shipped" || selectedOrder?.status === "Arrived") && selectedOrder?.delivery_pin && (
-               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-center shadow-inner">
-                 <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1 flex items-center justify-center gap-1.5">
-                   <Lock className="h-3.5 w-3.5" /> Delivery Verification PIN
-                 </p>
-                 <p className="text-[11px] text-amber-600 font-medium mb-3">
-                   For order <span className="font-black">{selectedOrder.tracking_number}</span>
-                 </p>
-                 <div className="flex items-center justify-center gap-3 mb-3">
-                   {String(selectedOrder.delivery_pin).split("").map((digit: string, i: number) => (
-                     <div
-                       key={i}
-                       className="h-14 w-12 rounded-xl bg-white border-2 border-amber-400 flex items-center justify-center text-2xl font-black text-amber-800 shadow-sm"
-                     >
-                       {digit}
-                     </div>
-                   ))}
-                 </div>
-                 <p className="text-[10px] text-amber-700 font-bold leading-snug max-w-[280px] mx-auto">
-                   🔐 Share this PIN <strong>only</strong> with the driver when they arrive at your door to confirm delivery. Never share it before arrival.
-                 </p>
-               </div>
-             )}
+            {(selectedOrder?.status === "Shipped" || selectedOrder?.status === "Arrived") && selectedOrder?.delivery_pin && (
+              <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-center shadow-inner">
+                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1 flex items-center justify-center gap-1.5">
+                  <Lock className="h-3.5 w-3.5" /> Delivery Verification PIN
+                </p>
+                <p className="text-[11px] text-amber-600 font-medium mb-3">
+                  For order <span className="font-black">{selectedOrder.tracking_number}</span>
+                </p>
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  {String(selectedOrder.delivery_pin).split("").map((digit: string, i: number) => (
+                    <div
+                      key={i}
+                      className="h-14 w-12 rounded-xl bg-white border-2 border-amber-400 flex items-center justify-center text-2xl font-black text-amber-800 shadow-sm"
+                    >
+                      {digit}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-amber-700 font-bold leading-snug max-w-[280px] mx-auto">
+                  🔐 Share this PIN <strong>only</strong> with the driver when they arrive at your door to confirm delivery. Never share it before arrival.
+                </p>
+              </div>
+            )}
 
-             <div>
-               <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Manifest Summary</h4>
-               {(() => {
-                 // Derive per-item shipping from backend-persisted refunded_amount (ground truth)
-                 // so the display is always accurate even after partial returns change shipping_fee
-                 const cancelledItems = (selectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
-                 const cancelledProductTotal = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
-                 const refundedAmount = Number(selectedOrder?.refunded_amount || 0);
-                 // Total shipping that was actually refunded = refunded_amount - product costs of cancelled items
-                 const refundedShippingTotal = Math.max(0, refundedAmount - cancelledProductTotal);
-                 const cancelledQtyTotal = Math.max(1, cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0));
-                 // Per-unit shipping refunded (spread evenly across returned units)
-                 const perUnitShippingRefunded = cancelledQtyTotal > 0 ? refundedShippingTotal / cancelledQtyTotal : 0;
+            <div>
+              <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest mb-3">Manifest Summary</h4>
+              {(() => {
+                // Derive per-item shipping from backend-persisted refunded_amount (ground truth)
+                // so the display is always accurate even after partial returns change shipping_fee
+                const cancelledItems = (selectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                const cancelledProductTotal = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
+                const refundedAmount = Number(selectedOrder?.refunded_amount || 0);
+                // Total shipping that was actually refunded = refunded_amount - product costs of cancelled items
+                const refundedShippingTotal = Math.max(0, refundedAmount - cancelledProductTotal);
+                const cancelledQtyTotal = Math.max(1, cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0));
+                // Per-unit shipping refunded (spread evenly across returned units)
+                const perUnitShippingRefunded = cancelledQtyTotal > 0 ? refundedShippingTotal / cancelledQtyTotal : 0;
 
-                 return (selectedOrder?.items || []).map((item: any, idx: number) => {
-                   const isItemCancelled = item.cancellation_status === "Cancelled";
-                   const itemProductCost = Number(item.price) * Number(item.quantity);
-                   // Use the backend-derived per-unit shipping for accuracy
-                   const itemShippingShare = isItemCancelled ? perUnitShippingRefunded * Number(item.quantity) : 0;
-                   const itemRefundTotal = itemProductCost + itemShippingShare;
-                   return (
-                     <div key={idx} className={cn("flex justify-between items-start pb-4 border-b border-[#f1f5f9] last:border-0 last:pb-0", isItemCancelled && "bg-red-50/60 px-3 py-3 rounded-lg border border-red-100 mb-2")}>
-                       <div className="space-y-1 flex-1 min-w-0">
-                         <p className={cn("font-semibold text-[#1e293b] text-[14px]", isItemCancelled && "line-through text-zinc-400")}>{item.product?.name || `Product ID: ${item.product_id}`}</p>
-                         <div className="flex flex-wrap items-center gap-2">
-                           <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
-                           <span className={cn("text-[11px] font-semibold text-slate-700", isItemCancelled && "line-through text-zinc-400")}>Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
-                           {item.product?.part_number && (
-                             <span className={cn("text-xs font-bold text-[#0052cc]", isItemCancelled && "line-through text-zinc-400")}>Part No: {item.product.part_number}</span>
-                           )}
-                           {item.product?.engine_model && (
-                             <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Engine: {item.product.engine_model}</span>
-                           )}
-                           {item.product?.suitable_vehicle && (
-                             <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</span>
-                           )}
-                           {item.cancellation_status && item.cancellation_status !== "None" && (
-                             <span className={cn(
-                               "text-[9px] font-black uppercase px-2 py-0.5 rounded border tracking-wider",
-                               item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-600 text-white border-red-600"
-                             )}>
-                               {item.cancellation_status === "Pending" ? "Return Pending" : "Returned"}
-                             </span>
-                           )}
-                         </div>
-                         {/* Per-item refund breakdown — uses backend refunded_amount for accuracy */}
-                         {isItemCancelled && (
-                           <p className="text-[11px] font-semibold text-red-600 mt-1">
-                             Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
-                             {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
-                             {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
-                           </p>
-                         )}
-                       </div>
-                       <p className={cn("font-bold text-[#1e293b] text-[14px] shrink-0 ml-2", isItemCancelled && "line-through text-red-400")}>Ksh {(Number(item.price) * Number(item.quantity)).toLocaleString()}</p>
-                     </div>
-                   );
-                 });
-               })()}
-             </div>
-             
-             {/* Cancellation / Refund block — shows for partial OR full cancellations */}
-             {(selectedOrder?.status === "Cancelled" ||
-               selectedOrder?.status === "Cancellation Requested" ||
-               selectedOrder?.refund_status ||
-               selectedOrder?.refund_transaction_id ||
-               selectedOrder?.items?.some((i: any) => i.cancellation_status === "Cancelled")) && (
+                return (selectedOrder?.items || []).map((item: any, idx: number) => {
+                  const isItemCancelled = item.cancellation_status === "Cancelled";
+                  const itemProductCost = Number(item.price) * Number(item.quantity);
+                  // Use the backend-derived per-unit shipping for accuracy
+                  const itemShippingShare = isItemCancelled ? perUnitShippingRefunded * Number(item.quantity) : 0;
+                  const itemRefundTotal = itemProductCost + itemShippingShare;
+                  return (
+                    <div key={idx} className={cn("flex justify-between items-start pb-4 border-b border-[#f1f5f9] last:border-0 last:pb-0", isItemCancelled && "bg-red-50/60 px-3 py-3 rounded-lg border border-red-100 mb-2")}>
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <p className={cn("font-semibold text-[#1e293b] text-[14px]", isItemCancelled && "line-through text-zinc-400")}>{item.product?.name || `Product ID: ${item.product_id}`}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-bold bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded uppercase">From: {item.warehouse?.name || "Processing Hub"}</span>
+                          <span className={cn("text-[11px] font-semibold text-slate-700", isItemCancelled && "line-through text-zinc-400")}>Quantity: {item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
+                          {item.product?.part_number && (
+                            <span className={cn("text-xs font-bold text-[#0052cc]", isItemCancelled && "line-through text-zinc-400")}>Part No: {item.product.part_number}</span>
+                          )}
+                          {item.product?.engine_model && (
+                            <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Engine: {item.product.engine_model}</span>
+                          )}
+                          {item.product?.suitable_vehicle && (
+                            <span className={cn("text-xs text-zinc-500 font-medium", isItemCancelled && "line-through text-zinc-400")}>Suitable: {item.product.suitable_vehicle}</span>
+                          )}
+                          {item.cancellation_status && item.cancellation_status !== "None" && (
+                            <span className={cn(
+                              "text-[9px] font-black uppercase px-2 py-0.5 rounded border tracking-wider",
+                              item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-red-600 text-white border-red-600"
+                            )}>
+                              {item.cancellation_status === "Pending" ? "Return Pending" : "Returned"}
+                            </span>
+                          )}
+                        </div>
+                        {/* Per-item refund breakdown — uses backend refunded_amount for accuracy */}
+                        {isItemCancelled && (
+                          <p className="text-[11px] font-semibold text-red-600 mt-1">
+                            Refunded: Ksh {Math.round(itemProductCost).toLocaleString()} product
+                            {itemShippingShare > 0 && <> + Ksh {Math.round(itemShippingShare).toLocaleString()} shipping</>}
+                            {" "}= <span className="font-black">Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
+                          </p>
+                        )}
+                      </div>
+                      <p className={cn("font-bold text-[#1e293b] text-[14px] shrink-0 ml-2", isItemCancelled && "line-through text-red-400")}>Ksh {(Number(item.price) * Number(item.quantity)).toLocaleString()}</p>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Cancellation / Refund block — shows for partial OR full cancellations */}
+            {(selectedOrder?.status === "Cancelled" ||
+              selectedOrder?.status === "Cancellation Requested" ||
+              selectedOrder?.refund_status ||
+              selectedOrder?.refund_transaction_id ||
+              selectedOrder?.items?.some((i: any) => i.cancellation_status === "Cancelled")) && (
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200 mt-4 mb-4">
                   <h4 className="text-[13px] font-bold text-red-800 flex items-center gap-2 mb-3">
                     <AlertCircle className="h-4 w-4" />
                     {selectedOrder?.status === "Cancellation Requested" ? "Cancellation Requested" :
-                     selectedOrder?.status === "Cancelled" ? "Order Cancelled" : "Partial Cancellation"}
+                      selectedOrder?.status === "Cancelled" ? "Order Cancelled" : "Partial Cancellation"}
                   </h4>
                   {selectedOrder?.status === "Cancellation Requested" ? (
                     <div className="space-y-2">
@@ -1517,69 +1566,72 @@ function AccountPortalInner() {
                     </div>
                   )}
                 </div>
-             )}
+              )}
 
-             {/* Verification PIN Section (only shows when order is Shipped/Arrived) */}
-             {selectedOrder && (selectedOrder.status === "Shipped" || selectedOrder.status === "Arrived") && selectedOrder.delivery_pin && (
-               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left my-4 shadow-sm">
-                 <div className="flex items-center gap-2 mb-2 text-amber-800">
-                   <ShieldCheck className="h-4.5 w-4.5 text-amber-600" />
-                   <h5 className="text-[12px] font-bold uppercase tracking-wider">Delivery Verification PIN</h5>
-                 </div>
-                 <p className="text-[11px] text-amber-700 leading-relaxed mb-3">
-                   Please quote this secure PIN to the delivery driver upon collection. The driver will verify it to authorize your handover.
-                 </p>
-                 <div className="inline-flex items-center bg-white border border-amber-300 rounded-lg px-4 py-2 font-mono text-lg font-black tracking-widest text-[#0052cc] shadow-sm select-all">
-                   {selectedOrder.delivery_pin}
-                 </div>
-               </div>
-             )}
-
-              <div className="pt-6 border-t border-[#f1f5f9] space-y-2">
-                <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
-                  <span>Logistics Fee ({selectedOrder?.shipping_method || 'Standard'})</span>
-                  <span className="flex items-center gap-1.5">
-                    Ksh {selectedOrder ? Number(selectedOrder.shipping_fee || 0).toLocaleString() : 0}
-                    {selectedOrder && Number(selectedOrder.shipping_fee || 0) === 0 && Number(selectedOrder.refunded_amount || 0) > 0 && (
-                      <span className="text-[9px] font-black text-red-500 uppercase bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Refunded</span>
-                    )}
-                  </span>
+            {/* Verification PIN Section (only shows when order is Shipped/Arrived) */}
+            {selectedOrder && (selectedOrder.status === "Shipped" || selectedOrder.status === "Arrived") && selectedOrder.delivery_pin && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left my-4 shadow-sm">
+                <div className="flex items-center gap-2 mb-2 text-amber-800">
+                  <ShieldCheck className="h-4.5 w-4.5 text-amber-600" />
+                  <h5 className="text-[12px] font-bold uppercase tracking-wider">Delivery Verification PIN</h5>
                 </div>
-                {selectedOrder?.payment_method && (
-                  <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
-                    <span>Payment Method</span>
-                    <span className="text-[#1e293b] font-semibold text-[13px]">{selectedOrder.payment_method}</span>
-                  </div>
-                )}
-                {selectedOrder?.payment_ref_code && (
-                  <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
-                    <span>Payment Ref Code</span>
-                    <span className="text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 font-bold">{selectedOrder.payment_ref_code}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold text-[#1e293b] text-[13px] uppercase tracking-wider">Total Settlement</span>
-                  <span className="text-xl font-bold text-[#1e293b]">Ksh {selectedOrder ? Number(selectedOrder.total_amount).toLocaleString() : 0}</span>
+                <p className="text-[11px] text-amber-700 leading-relaxed mb-3">
+                  Please quote this secure PIN to the delivery driver upon collection. The driver will verify it to authorize your handover.
+                </p>
+                <div className="inline-flex items-center bg-white border border-amber-300 rounded-lg px-4 py-2 font-mono text-lg font-black tracking-widest text-[#0052cc] shadow-sm select-all">
+                  {selectedOrder.delivery_pin}
                 </div>
               </div>
+            )}
+
+            <div className="pt-6 border-t border-[#f1f5f9] space-y-2">
+              <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
+                <span>Logistics Fee ({selectedOrder?.shipping_method || 'Standard'})</span>
+                <span className="flex items-center gap-1.5">
+                  Ksh {selectedOrder ? Number(selectedOrder.shipping_fee || 0).toLocaleString() : 0}
+                  {selectedOrder && Number(selectedOrder.shipping_fee || 0) === 0 && Number(selectedOrder.refunded_amount || 0) > 0 && (
+                    <span className="text-[9px] font-black text-red-500 uppercase bg-red-50 px-1.5 py-0.5 rounded border border-red-100">Refunded</span>
+                  )}
+                </span>
+              </div>
+              {selectedOrder?.payment_method && (
+                <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
+                  <span>Payment Method</span>
+                  <span className="text-[#1e293b] font-semibold text-[13px]">{selectedOrder.payment_method}</span>
+                </div>
+              )}
+              {selectedOrder?.payment_ref_code && (
+                <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
+                  <span>Payment Ref Code</span>
+                  <span className="text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 font-bold">{selectedOrder.payment_ref_code}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-[#1e293b] text-[13px] uppercase tracking-wider">Total Settlement</span>
+                <span className="text-xl font-bold text-[#1e293b]">Ksh {selectedOrder ? Number(selectedOrder.total_amount).toLocaleString() : 0}</span>
+              </div>
+            </div>
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2 flex-wrap">
-              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && !myReturns.some((r: any) => r.order_id === selectedOrder.id && (r.status === "Pending" || r.status === "Approved")) && (
+              {(selectedOrder?.status === "Pending" || selectedOrder?.status === "Processing" || selectedOrder?.status === "Arrived" || selectedOrder?.status === "Delivered") && !myReturns.some((r: any) => r.order_id === selectedOrder?.id && (r.status === "Pending" || r.status === "Approved")) && (
                 <Button
                   variant="outline"
                   className="text-[12px] font-bold h-9 border-purple-200 text-purple-700 hover:bg-purple-50"
-                  onClick={() => { setIsOrderModalOpen(false); setIsReturnModalOpen(true); }}
+                  onClick={() => {
+                    setIsOrderModalOpen(false);
+                    openReturnModal(selectedOrder);
+                  }}
                 >
                   <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Request Return
                 </Button>
               )}
-              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Pending") && (
+              {myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Pending") && (
                 <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
                   <RotateCcw className="h-3 w-3" /> Return Requested — Pending Review
                 </span>
               )}
-              {selectedOrder && ["Pending", "Processing", "Arrived", "Delivered"].includes(selectedOrder.status) && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Approved") && (
+              {myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Approved") && (
                 <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
                   <CheckCircle2 className="h-3 w-3" /> Return Approved
                 </span>
@@ -1599,17 +1651,157 @@ function AccountPortalInner() {
 
       {/* Return Request Modal */}
       <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
-        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[480px] p-0 overflow-hidden">
+        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[500px] p-0 overflow-hidden">
           <DialogHeader className="px-6 py-5 bg-purple-50 border-b border-purple-100">
             <DialogTitle className="font-bold text-[#1e293b] flex items-center gap-2">
               <RotateCcw className="h-4 w-4 text-purple-600" /> Request Return — {selectedOrder?.tracking_number}
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748b] font-medium mt-1">
-              Please provide the reason for your return. Our team will review your request and get in touch within 2–3 business days.
+              Select the items you wish to return and specify quantities. Our team will review your request within 2–3 business days.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {selectedOrder?.items && (
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider block">Tick Products to Cancel *</label>
+                <div className="space-y-2 max-h-[180px] overflow-y-auto border border-[#e2e8f0] rounded-md p-3 bg-slate-50/50">
+                  {selectedOrder.items.map((item: any) => {
+                    const isItemCancelled = item.cancellation_status === "Cancelled" || item.cancellation_status === "Pending";
+                    return (
+                      <label key={item.id} className={cn("flex items-start gap-3 p-2 rounded-lg border border-transparent hover:bg-white transition-colors cursor-pointer", isItemCancelled && "opacity-60 cursor-not-allowed")}>
+                        <input
+                          type="checkbox"
+                          disabled={isItemCancelled}
+                          checked={isItemCancelled || selectedItemIdsToCancel.includes(item.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItemIdsToCancel([...selectedItemIdsToCancel, item.id]);
+                            } else {
+                              setSelectedItemIdsToCancel(selectedItemIdsToCancel.filter(id => id !== item.id));
+                            }
+                          }}
+                          className="w-4 h-4 accent-[#0052cc] rounded mt-0.5 cursor-pointer"
+                        />
+                        <div className="text-xs">
+                          <p className="font-bold text-slate-800 leading-tight">{item.product?.name || "Genuine Part"}</p>
+                          <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                            Qty: {item.quantity} · Price: Ksh {Number(item.price).toLocaleString()}
+                          </p>
+                          {item.cancellation_status && item.cancellation_status !== "None" && (
+                            <span className={cn(
+                              "text-[9px] font-black uppercase border px-1.5 py-0.2 rounded mt-1 inline-block",
+                              item.cancellation_status === "Pending" ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-red-50 text-red-700 border-red-100"
+                            )}>
+                              {item.cancellation_status === "Pending" ? "Pending Approval" : "Cancelled / Refunded"}
+                            </span>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Cancellation Reason *</label>
+              <textarea
+                rows={3}
+                placeholder="e.g., I ordered the wrong item, or I changed my mind..."
+                className="w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc]"
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="font-bold" onClick={() => setIsCancelModalOpen(false)}>Back</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white font-bold" onClick={handleRequestCancel} disabled={isCancelling}>
+              {isCancelling ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Submit Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return Request Modal */}
+      <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
+        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[500px] p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 bg-purple-50 border-b border-purple-100">
+            <DialogTitle className="font-bold text-[#1e293b] flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-purple-600" /> Request Return — {selectedOrder?.tracking_number}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748b] font-medium mt-1">
+              Select the items you wish to return and specify quantities. Our team will review your request within 2–3 business days.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRequestReturn}>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* Item Selection with Quantity Pickers */}
+              {selectedOrder?.items && selectedOrder.items.filter((i: any) => i.cancellation_status !== "Cancelled").length > 0 && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">Select Items to Return *</label>
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto border border-purple-100 rounded-lg p-3 bg-purple-50/30">
+                    {selectedOrder.items
+                      .filter((item: any) => item.cancellation_status !== "Cancelled")
+                      .map((item: any) => {
+                        const selected = selectedReturnItems[item.id] !== undefined;
+                        const qty = selectedReturnItems[item.id] ?? 0;
+                        return (
+                          <div key={item.id} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${selected ? "bg-white border-purple-300 shadow-sm" : "bg-white/60 border-transparent hover:border-purple-200"}`}>
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 accent-purple-600 rounded cursor-pointer shrink-0"
+                              checked={selected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedReturnItems({ ...selectedReturnItems, [item.id]: 1 });
+                                } else {
+                                  const updated = { ...selectedReturnItems };
+                                  delete updated[item.id];
+                                  setSelectedReturnItems(updated);
+                                }
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-zinc-800 text-xs leading-tight truncate">{item.product?.name || "Genuine Part"}</p>
+                              <p className="text-[10px] text-zinc-400 font-medium">Ksh {Number(item.price).toLocaleString()} · Available: {item.quantity}</p>
+                            </div>
+                            {selected && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  className="w-6 h-6 rounded bg-purple-100 text-purple-700 font-black text-sm flex items-center justify-center hover:bg-purple-200 transition"
+                                  onClick={() => {
+                                    if (qty > 1) setSelectedReturnItems({ ...selectedReturnItems, [item.id]: qty - 1 });
+                                    else {
+                                      const updated = { ...selectedReturnItems };
+                                      delete updated[item.id];
+                                      setSelectedReturnItems(updated);
+                                    }
+                                  }}
+                                >−</button>
+                                <span className="w-6 text-center font-black text-zinc-800 text-sm">{qty}</span>
+                                <button
+                                  type="button"
+                                  className="w-6 h-6 rounded bg-purple-100 text-purple-700 font-black text-sm flex items-center justify-center hover:bg-purple-200 transition"
+                                  onClick={() => {
+                                    if (qty < item.quantity) setSelectedReturnItems({ ...selectedReturnItems, [item.id]: qty + 1 });
+                                  }}
+                                >+</button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                  {Object.keys(selectedReturnItems).length > 0 && (
+                    <p className="text-[10px] font-bold text-purple-600">
+                      {Object.keys(selectedReturnItems).length} item(s) selected for return
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">Return Reason *</label>
                 <select
@@ -1634,7 +1826,7 @@ function AccountPortalInner() {
                   Additional Details {returnReason === "Other (Specify in text box)" ? "*" : "(Optional)"}
                 </label>
                 <textarea
-                  className="w-full h-24 px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-purple-200 text-[#1e293b] resize-none"
+                  className="w-full h-20 px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm font-medium bg-white outline-none focus:ring-2 focus:ring-purple-200 text-[#1e293b] resize-none"
                   placeholder="Provide more detail to help us process your return faster..."
                   value={returnExplanation}
                   onChange={(e) => setReturnExplanation(e.target.value)}
@@ -1668,7 +1860,7 @@ function AccountPortalInner() {
           <div className="space-y-4 py-4">
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Destination Country</label>
-              <select 
+              <select
                 className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc]"
                 value={addressFormData.country}
                 onChange={(e) => handleCountryChange(e.target.value)}
@@ -1679,11 +1871,11 @@ function AccountPortalInner() {
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Destination City</label>
-              <select 
+              <select
                 disabled={!addressFormData.country}
                 className="h-10 w-full rounded-md border border-[#e2e8f0] bg-white px-3 py-2 text-sm text-[#1e293b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0052cc] disabled:opacity-50"
                 value={addressFormData.city}
-                onChange={(e) => setAddressFormData({...addressFormData, city: e.target.value})}
+                onChange={(e) => setAddressFormData({ ...addressFormData, city: e.target.value })}
               >
                 <option value="" disabled>Select Destination City</option>
                 {availableCities.map(c => <option key={c.id} value={c.city}>{c.city}</option>)}
@@ -1691,10 +1883,10 @@ function AccountPortalInner() {
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-[#64748b] uppercase tracking-wider">Street Address</label>
-              <Input 
-                className="border-[#e2e8f0]" 
+              <Input
+                className="border-[#e2e8f0]"
                 value={addressFormData.address}
-                onChange={(e) => setAddressFormData({...addressFormData, address: e.target.value})}
+                onChange={(e) => setAddressFormData({ ...addressFormData, address: e.target.value })}
               />
             </div>
           </div>

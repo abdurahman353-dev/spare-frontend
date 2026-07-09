@@ -16,6 +16,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import jsPDF from "jspdf";
@@ -111,7 +112,7 @@ export default function AdminReportsPage() {
 
   useEffect(() => {
     // Fetch admin settings to get business name and KRA PIN
-    api.get("/settings").then(r => {
+    api.get(API_ENDPOINTS.settings.base).then(r => {
       if (r.data?.store_name) setStoreName(r.data.store_name);
       if (r.data?.store_kra_pin) setStoreKraPin(r.data.store_kra_pin);
       if (r.data?.store_address) setStoreAddress(r.data.store_address);
@@ -124,10 +125,10 @@ export default function AdminReportsPage() {
     }).catch(() => { });
 
     Promise.all([
-      api.get("/orders", { params: { per_page: -1 } }),
-      api.get("/inventory", { params: { per_page: -1 } }),
-      api.get("/customers", { params: { per_page: -1 } }),
-      api.get("/warehouses"),
+      api.get(API_ENDPOINTS.orders.base, { params: { per_page: -1 } }),
+      api.get(API_ENDPOINTS.inventory.base, { params: { per_page: -1 } }),
+      api.get(API_ENDPOINTS.customers.base, { params: { per_page: -1 } }),
+      api.get(API_ENDPOINTS.warehouses.base),
     ]).then(([o, i, c, w]) => {
       setOrders(o.data);
       setInventory(i.data);

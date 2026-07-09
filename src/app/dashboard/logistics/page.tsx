@@ -27,6 +27,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { toast } from "react-hot-toast";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { SearchableDropdown } from "@/components/ui/searchable-dropdown";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { exportWaybillManifestPDF } from "@/lib/pdf-export";
@@ -497,7 +498,7 @@ export default function AdminLogisticsPage() {
 
   const fetchShipments = async () => {
     try {
-      const res = await api.get("/shipments");
+      const res = await api.get(API_ENDPOINTS.shipments.base);
       setShipments(res.data);
     } catch (err) {
       toast.error("Failed to fetch shipments");
@@ -506,7 +507,7 @@ export default function AdminLogisticsPage() {
 
   const fetchUnassignedOrders = async () => {
     try {
-      const res = await api.get("/shipments/unassigned-orders");
+      const res = await api.get(API_ENDPOINTS.shipments.unassignedOrders);
       setUnassignedOrders(res.data);
     } catch (err) {
       toast.error("Failed to fetch unassigned orders");
@@ -514,7 +515,7 @@ export default function AdminLogisticsPage() {
   };
   const fetchDestinations = async () => {
     try {
-      const res = await api.get("/shipping-destinations");
+      const res = await api.get(API_ENDPOINTS.shippingDestinations.base);
       setDestinations(res.data);
     } catch (err) {
       toast.error("Failed to fetch shipping zones");
@@ -523,7 +524,7 @@ export default function AdminLogisticsPage() {
 
   const fetchProducts = async () => {
     try {
-      const res = await api.get("/products", { params: { per_page: -1 } });
+      const res = await api.get(API_ENDPOINTS.products.base, { params: { per_page: -1 } });
       setProducts(res.data);
     } catch (err) {
       console.error("Failed to fetch products");
@@ -532,7 +533,7 @@ export default function AdminLogisticsPage() {
 
   const fetchWarehouses = async () => {
     try {
-      const res = await api.get("/warehouses");
+      const res = await api.get(API_ENDPOINTS.warehouses.base);
       setWarehousesData(res.data);
     } catch (err) {
       console.error("Failed to fetch warehouses");
@@ -541,7 +542,7 @@ export default function AdminLogisticsPage() {
 
   const fetchLocations = async () => {
     try {
-      const res = await api.get("/locations/unique");
+      const res = await api.get(API_ENDPOINTS.locations.unique);
       setCountries(res.data.countries);
       setCities(res.data.cities);
     } catch (err) {
@@ -551,7 +552,7 @@ export default function AdminLogisticsPage() {
 
   const fetchCountriesData = async () => {
     try {
-      const res = await api.get("/locations/countries");
+      const res = await api.get(API_ENDPOINTS.locations.countries);
       setCountriesData(res.data);
     } catch (err) {
       toast.error("Failed to fetch shipping zones");
@@ -570,16 +571,16 @@ export default function AdminLogisticsPage() {
   const fetchActiveTabData = useCallback(async (silent = false) => {
     if (activeTab === "Active Shipments") {
       if (!silent) setLoading(true);
-      try { const res = await api.get("/shipments"); setShipments(res.data); } catch { toast.error("Failed to refresh shipments"); } finally { if (!silent) setLoading(false); }
+      try { const res = await api.get(API_ENDPOINTS.shipments.base); setShipments(res.data); } catch { toast.error("Failed to refresh shipments"); } finally { if (!silent) setLoading(false); }
     } else if (activeTab === "Unassigned Orders") {
       if (!silent) setUnassignedOrdersLoading(true);
-      try { const res = await api.get("/shipments/unassigned-orders"); setUnassignedOrders(res.data); } catch { toast.error("Failed to refresh orders"); } finally { if (!silent) setUnassignedOrdersLoading(false); }
+      try { const res = await api.get(API_ENDPOINTS.shipments.unassignedOrders); setUnassignedOrders(res.data); } catch { toast.error("Failed to refresh orders"); } finally { if (!silent) setUnassignedOrdersLoading(false); }
     } else if (activeTab === "Shipping Fee") {
       if (!silent) setLoading(true);
-      try { const res = await api.get("/shipping-destinations"); setDestinations(res.data); } catch { toast.error("Failed to refresh shipping zones"); } finally { if (!silent) setLoading(false); }
+      try { const res = await api.get(API_ENDPOINTS.shippingDestinations.base); setDestinations(res.data); } catch { toast.error("Failed to refresh shipping zones"); } finally { if (!silent) setLoading(false); }
     } else if (activeTab === "Shipping Zones") {
       if (!silent) setLoading(true);
-      try { const res = await api.get("/locations/countries"); setCountriesData(res.data); } catch { toast.error("Failed to refresh shipping zones"); } finally { if (!silent) setLoading(false); }
+      try { const res = await api.get(API_ENDPOINTS.locations.countries); setCountriesData(res.data); } catch { toast.error("Failed to refresh shipping zones"); } finally { if (!silent) setLoading(false); }
     }
     setLastSyncedAt(new Date());
     setSecondsSinceSync(0);
@@ -713,7 +714,7 @@ export default function AdminLogisticsPage() {
     setIsSaving(true);
     try {
       if (editingShipmentId) {
-        const res = await api.put(`/shipments/${editingShipmentId}`, formData);
+        const res = await api.put(API_ENDPOINTS.shipments.byId(editingShipmentId), formData);
         toast.success("Shipment updated successfully!");
         if (res.data?.sms_logs && res.data.sms_logs.length > 0) {
           res.data.sms_logs.forEach((log: any) => {
@@ -725,7 +726,7 @@ export default function AdminLogisticsPage() {
           });
         }
       } else {
-        const res = await api.post("/shipments", {
+        const res = await api.post(API_ENDPOINTS.shipments.base, {
           ...formData,
           order_ids: selectedOrders
         });
@@ -756,7 +757,7 @@ export default function AdminLogisticsPage() {
   const updateShipmentStatus = async (shipmentId: number, status: string) => {
     setUpdatingShipmentId(shipmentId);
     try {
-      const res = await api.put(`/shipments/${shipmentId}`, { status });
+      const res = await api.put(API_ENDPOINTS.shipments.byId(shipmentId), { status });
       toast.success("Shipment status updated!");
 
       // If there are SMS logs, check for success or failures
@@ -829,10 +830,10 @@ export default function AdminLogisticsPage() {
 
     try {
       if (zoneFormData.id) {
-        await api.put(`/shipping-destinations/${zoneFormData.id}`, payload);
+        await api.put(API_ENDPOINTS.shippingDestinations.byId(zoneFormData.id), payload);
         toast.success("Zone updated successfully!");
       } else {
-        await api.post("/shipping-destinations", payload);
+        await api.post(API_ENDPOINTS.shippingDestinations.base, payload);
         toast.success("Zone created successfully!");
       }
 
@@ -915,7 +916,7 @@ export default function AdminLogisticsPage() {
     const weight = prod ? parseFloat(prod.weight || 0) : 0;
     for (const route of routesToSave) {
       try {
-        await api.post("/shipping-destinations", {
+        await api.post(API_ENDPOINTS.shippingDestinations.base, {
           product_id: bulkZoneProductId || null,
           warehouse_id: route.warehouse_id || null,
           country: route.country,
@@ -946,7 +947,7 @@ export default function AdminLogisticsPage() {
   const handleDeleteZone = async () => {
     if (!zoneToDelete) return;
     try {
-      await api.delete(`/shipping-destinations/${zoneToDelete}`);
+      await api.delete(API_ENDPOINTS.shippingDestinations.byId(zoneToDelete));
       toast.success("Zone deleted");
       setIsDeleteModalOpen(false);
       setZoneToDelete(null);
@@ -961,10 +962,10 @@ export default function AdminLogisticsPage() {
     setIsSaving(true);
     try {
       if (countryFormData.id) {
-        await api.put(`/locations/countries/${countryFormData.id}`, countryFormData);
+        await api.put(API_ENDPOINTS.locations.country(countryFormData.id), countryFormData);
         toast.success("Country updated");
       } else {
-        await api.post("/locations/countries", countryFormData);
+        await api.post(API_ENDPOINTS.locations.countries, countryFormData);
         toast.success("Country added");
       }
       setIsCountryModalOpen(false);
@@ -980,7 +981,7 @@ export default function AdminLogisticsPage() {
     if (!cityFormData.cities) return toast.error("Cities are required");
     setIsSaving(true);
     try {
-      await api.post(`/locations/countries/${cityFormData.countryId}/cities/bulk`, { cities: cityFormData.cities });
+      await api.post(API_ENDPOINTS.locations.countryCitiesBulk(cityFormData.countryId), { cities: cityFormData.cities });
       toast.success("Cities added successfully");
       setIsCityModalOpen(false);
       fetchCountriesData();
@@ -994,7 +995,7 @@ export default function AdminLogisticsPage() {
   const handleDeleteCountry = async () => {
     if (!countryToDelete) return;
     try {
-      await api.delete(`/locations/countries/${countryToDelete}`);
+      await api.delete(API_ENDPOINTS.locations.country(countryToDelete));
       toast.success("Country deleted");
       setIsDeleteCountryModalOpen(false);
       setCountryToDelete(null);
@@ -1007,7 +1008,7 @@ export default function AdminLogisticsPage() {
   const handleDeleteCity = async () => {
     if (!cityToDelete) return;
     try {
-      await api.delete(`/locations/cities/${cityToDelete}`);
+      await api.delete(API_ENDPOINTS.locations.city(cityToDelete));
       toast.success("City deleted");
       setIsDeleteCityModalOpen(false);
       setCityToDelete(null);

@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  Users, 
-  Truck, 
-  Warehouse, 
-  FileBarChart, 
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  Users,
+  Truck,
+  Warehouse,
+  FileBarChart,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -41,7 +41,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
   const brandName = settings.store_name || "";
   const storeLogo = settings.store_logo || "";
 
-  const links = user?.role === "superadmin" 
+  const links = user?.role === "superadmin"
     ? [...sidebarLinks, { name: "Admins & Audits", href: "/dashboard/admins", icon: ShieldCheck }]
     : sidebarLinks;
 
@@ -49,13 +49,13 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
     <>
       {/* Backdrop overlay for mobile screens */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/40 z-30 md:hidden"
           onClick={onClose}
         />
       )}
 
-      <aside 
+      <aside
         className={cn(
           "w-64 border-r bg-card flex flex-col h-full min-h-screen transition-transform duration-300 z-40",
           "fixed inset-y-0 left-0 md:relative md:translate-x-0",
@@ -83,7 +83,7 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           </Link>
           {/* Close button for mobile screens */}
           {onClose && (
-            <button 
+            <button
               onClick={onClose}
               className="md:hidden text-zinc-500 hover:text-zinc-700 p-1"
             >
@@ -101,15 +101,15 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
               const isActive = link.href === "/dashboard"
                 ? pathname === "/dashboard"
                 : pathname === link.href || pathname.startsWith(link.href + "/");
-              
+
               return (
                 <Link
                   key={link.name}
                   href={link.href}
                   className={cn(
                     "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
-                    isActive 
-                      ? "bg-primary text-primary-foreground" 
+                    isActive
+                      ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   )}
                   onClick={onClose}

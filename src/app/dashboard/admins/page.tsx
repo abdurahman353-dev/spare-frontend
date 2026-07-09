@@ -1,32 +1,32 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useRef } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from "@/components/ui/table";
-import { 
-  Search, 
-  Plus, 
-  Loader2, 
-  Shield, 
-  UserCheck, 
-  Lock, 
-  Globe, 
-  Mail, 
-  Phone, 
-  MapPin, 
-  RefreshCw, 
-  Eye, 
-  EyeOff, 
-  Activity, 
+import {
+  Search,
+  Plus,
+  Loader2,
+  Shield,
+  UserCheck,
+  Lock,
+  Globe,
+  Mail,
+  Phone,
+  MapPin,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Activity,
   Smartphone,
   Info,
   Pencil,
@@ -36,6 +36,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { cn, toastErrors } from "@/lib/utils";
 import { toast } from "react-hot-toast";
 
@@ -65,13 +66,117 @@ interface AuditLog {
   user: User | null;
 }
 
+interface SearchableDropdownProps {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  options: string[];
+  placeholder: string;
+  disabled?: boolean;
+}
+
+function SearchableDropdown({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled = false
+}: SearchableDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSearch(value);
+  }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setSearch(value);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [value]);
+
+  const filteredOptions = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    // If user hasn't typed anything new (search == current value or empty), show everything
+    if (!q || q === value.toLowerCase().trim()) return options;
+    return options.filter(opt => opt.toLowerCase().includes(q));
+  }, [options, search, value]);
+
+  return (
+    <div className="space-y-1.5 relative w-full text-left" ref={dropdownRef}>
+      <label className="text-xs font-semibold text-zinc-500">{label}</label>
+      <div className="relative">
+        <Input
+          placeholder={placeholder}
+          className="h-10 border-zinc-200 rounded-lg pr-8 disabled:opacity-50 text-sm"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setIsOpen(true);
+            if (!e.target.value) {
+              onChange("");
+            }
+          }}
+          onFocus={() => {
+            if (!disabled) setIsOpen(true);
+          }}
+          disabled={disabled}
+        />
+        <button
+          type="button"
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 disabled:opacity-50"
+          disabled={disabled}
+        >
+          <svg className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      {isOpen && !disabled && (
+        <div className="absolute left-0 right-0 mt-1 bg-white border border-zinc-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-[9999] py-1 custom-scrollbar">
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-zinc-400 italic">No matches found</div>
+          ) : (
+            filteredOptions.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  onChange(opt);
+                  setSearch(opt);
+                  setIsOpen(false);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors",
+                  value === opt && "bg-blue-50/50 text-[#0052cc] font-bold"
+                )}
+              >
+                {opt}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminsAndAuditsPage() {
   const [activeTab, setActiveTab] = useState<"admins" | "delivery" | "audits">("admins");
-  
+
   // Data State
   const [admins, setAdmins] = useState<User[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  
+
   // Loading State
   const [loadingAdmins, setLoadingAdmins] = useState(true);
   const [loadingAudits, setLoadingAudits] = useState(true);
@@ -87,7 +192,7 @@ export default function AdminsAndAuditsPage() {
   const [selectedActor, setSelectedActor] = useState("all");
   const [ipFilter, setIpFilter] = useState("");
   const [selectedSeverity, setSelectedSeverity] = useState("all");
-  
+
   // Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -120,6 +225,31 @@ export default function AdminsAndAuditsPage() {
     license_number: ""
   });
 
+  const [destinations, setDestinations] = useState<{ id: number; country: string; city: string; is_active: boolean }[]>([]);
+
+  const activeCountriesList = useMemo(() => {
+    const list = destinations.map(d => d.country).filter(Boolean);
+    return Array.from(new Set(list)).sort();
+  }, [destinations]);
+
+  const activeCitiesForCreate = useMemo(() => {
+    if (!formData.country) return [];
+    const list = destinations
+      .filter(d => d.country.toLowerCase() === formData.country.toLowerCase())
+      .map(d => d.city)
+      .filter(Boolean);
+    return Array.from(new Set(list)).sort();
+  }, [destinations, formData.country]);
+
+  const activeCitiesForEdit = useMemo(() => {
+    if (!editFormData.country) return [];
+    const list = destinations
+      .filter(d => d.country.toLowerCase() === editFormData.country.toLowerCase())
+      .map(d => d.city)
+      .filter(Boolean);
+    return Array.from(new Set(list)).sort();
+  }, [destinations, editFormData.country]);
+
   const handleOpenEditModal = (admin: User) => {
     setSelectedAdminId(admin.id);
     setEditFormData({
@@ -150,6 +280,11 @@ export default function AdminsAndAuditsPage() {
       return;
     }
 
+    if (editFormData.role === "delivery" && (!editFormData.country || !editFormData.city)) {
+      toast.error("Please select a valid Country and City from your shipping zones for the delivery driver.");
+      return;
+    }
+
     // Phone format validation (flexible for international/E.164 and local formats)
     if (editFormData.phone) {
       const cleanedPhone = editFormData.phone.replace(/[\s\-\(\)]/g, "");
@@ -162,7 +297,7 @@ export default function AdminsAndAuditsPage() {
 
     setIsSaving(true);
     try {
-      await api.put(`/admins/${selectedAdminId}`, editFormData);
+      await api.put(API_ENDPOINTS.admins.byId(selectedAdminId), editFormData);
       toast.success("Administrator details updated successfully!");
       setIsEditModalOpen(false);
       fetchAdmins();
@@ -178,7 +313,7 @@ export default function AdminsAndAuditsPage() {
   const fetchAdmins = async () => {
     setLoadingAdmins(true);
     try {
-      const res = await api.get("/admins");
+      const res = await api.get(API_ENDPOINTS.admins.base);
       setAdmins(res.data);
     } catch (err: any) {
       console.error("Failed to fetch admins:", err);
@@ -191,13 +326,22 @@ export default function AdminsAndAuditsPage() {
   const fetchAuditLogs = async () => {
     setLoadingAudits(true);
     try {
-      const res = await api.get("/admins/logs");
+      const res = await api.get(API_ENDPOINTS.admins.logs);
       setAuditLogs(res.data);
     } catch (err: any) {
       console.error("Failed to fetch audit logs:", err);
       toast.error(err.response?.data?.message || "Failed to load audit logs.");
     } finally {
       setLoadingAudits(false);
+    }
+  };
+
+  const fetchDestinations = async () => {
+    try {
+      const res = await api.get("/shipping-destinations/active");
+      setDestinations(res.data || []);
+    } catch (err) {
+      console.error("Failed to load active destinations:", err);
     }
   };
 
@@ -212,16 +356,37 @@ export default function AdminsAndAuditsPage() {
     }
   };
 
+  const fetchDestinations = async () => {
+    try {
+      const res = await api.get("/shipping-destinations/active");
+      setDestinations(res.data || []);
+    } catch (err) {
+      console.error("Failed to load active destinations:", err);
+    }
+  };
+
   useEffect(() => {
     fetchAdmins();
     fetchAuditLogs();
+    fetchDestinations();
     fetchLocations();
+    fetchDestinations();
   }, []);
 
   const handleCreateAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.password || !formData.password_confirmation) {
       toast.error("Please fill in all required fields.");
+      return;
+    }
+
+    if (formData.role === "delivery" && (!formData.country || !formData.city)) {
+      toast.error("Please select a valid Country and City from your shipping zones for the delivery driver.");
+      return;
+    }
+
+    if (formData.role === "delivery" && (!formData.country || !formData.city)) {
+      toast.error("Please select a valid Country and City from your shipping zones for the delivery driver.");
       return;
     }
 
@@ -254,7 +419,7 @@ export default function AdminsAndAuditsPage() {
 
     setIsSaving(true);
     try {
-      await api.post("/admins", formData);
+      await api.post(API_ENDPOINTS.admins.base, formData);
       toast.success("Administrator successfully created! Force password change pending.");
       setIsCreateModalOpen(false);
       setFormData({
@@ -286,7 +451,7 @@ export default function AdminsAndAuditsPage() {
   const handleToggleStatus = async (id: number) => {
     setIsTogglingId(id);
     try {
-      const res = await api.patch(`/admins/${id}/toggle-status`);
+      const res = await api.patch(API_ENDPOINTS.admins.toggleStatus(id));
       toast.success(res.data.message || "Status updated successfully.");
       fetchAdmins();
       fetchAuditLogs();
@@ -301,7 +466,7 @@ export default function AdminsAndAuditsPage() {
   const filteredAdmins = useMemo(() => {
     return admins
       .filter(admin => admin.role === "admin" || admin.role === "superadmin")
-      .filter(admin => 
+      .filter(admin =>
         admin.name.toLowerCase().includes(adminSearch.toLowerCase()) ||
         admin.email.toLowerCase().includes(adminSearch.toLowerCase()) ||
         (admin.phone && admin.phone.includes(adminSearch)) ||
@@ -312,7 +477,7 @@ export default function AdminsAndAuditsPage() {
   const filteredDrivers = useMemo(() => {
     return admins
       .filter(admin => admin.role === "delivery")
-      .filter(admin => 
+      .filter(admin =>
         admin.name.toLowerCase().includes(driverSearch.toLowerCase()) ||
         admin.email.toLowerCase().includes(driverSearch.toLowerCase()) ||
         (admin.phone && admin.phone.includes(driverSearch)) ||
@@ -359,7 +524,7 @@ export default function AdminsAndAuditsPage() {
       // 1. Text Search
       if (auditSearch) {
         const query = auditSearch.toLowerCase();
-        const matchesText = 
+        const matchesText =
           log.action.toLowerCase().includes(query) ||
           log.description.toLowerCase().includes(query) ||
           (log.user && log.user.name.toLowerCase().includes(query)) ||
@@ -488,8 +653,8 @@ export default function AdminsAndAuditsPage() {
   // Reset pagination when search or filters change
   useMemo(() => { setAdminPage(1); }, [adminSearch]);
   useMemo(() => { setDriverPage(1); }, [driverSearch]);
-  useMemo(() => { 
-    setAuditPage(1); 
+  useMemo(() => {
+    setAuditPage(1);
   }, [auditSearch, dateFrom, dateTo, selectedAction, selectedActor, ipFilter, selectedSeverity]);
 
   const getActionBadgeColor = (action: string) => {
@@ -530,7 +695,7 @@ export default function AdminsAndAuditsPage() {
         </div>
         <div className="flex gap-2">
           {activeTab === "admins" && (
-            <Button 
+            <Button
               className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
               onClick={() => {
                 setFormData(prev => ({ ...prev, role: "admin" }));
@@ -541,7 +706,7 @@ export default function AdminsAndAuditsPage() {
             </Button>
           )}
           {activeTab === "delivery" && (
-            <Button 
+            <Button
               className="bg-primary text-white hover:bg-primary/90 rounded-lg shadow-sm font-bold"
               onClick={() => {
                 setFormData(prev => ({ ...prev, role: "delivery" }));
@@ -607,8 +772,8 @@ export default function AdminsAndAuditsPage() {
           {/* Search Bar */}
           <div className="relative max-w-md bg-white rounded-lg shadow-sm border border-zinc-100 p-1.5 flex items-center">
             <Search className="h-4 w-4 text-zinc-400 ml-3" />
-            <Input 
-              placeholder="Search admins by name, email or phone..." 
+            <Input
+              placeholder="Search admins by name, email or phone..."
               className="pl-3 h-9 border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm font-medium"
               value={adminSearch}
               onChange={(e) => setAdminSearch(e.target.value)}
@@ -684,7 +849,7 @@ export default function AdminsAndAuditsPage() {
                         {admin.country || admin.city || admin.address ? (
                           <div className="space-y-0.5 text-xs text-zinc-600">
                             <div className="flex items-center gap-1.5 font-medium">
-                              <Globe className="h-3.5 w-3.5 text-zinc-400" /> 
+                              <Globe className="h-3.5 w-3.5 text-zinc-400" />
                               {admin.city ? `${admin.city}, ` : ""}{admin.country || "Global"}
                             </div>
                             {admin.address && (
@@ -745,7 +910,7 @@ export default function AdminsAndAuditsPage() {
             currentPage={adminPage}
             setCurrentPage={setAdminPage}
             pageSize={PAGE_SIZE}
-            setPageSize={() => {}}
+            setPageSize={() => { }}
             totalItems={filteredAdmins.length}
             itemName="admins"
           />
@@ -758,8 +923,8 @@ export default function AdminsAndAuditsPage() {
           {/* Search Bar */}
           <div className="relative max-w-md bg-white rounded-lg shadow-sm border border-zinc-100 p-1.5 flex items-center">
             <Search className="h-4 w-4 text-zinc-400 ml-3" />
-            <Input 
-              placeholder="Search drivers by name, plate, license or phone..." 
+            <Input
+              placeholder="Search drivers by name, plate, license or phone..."
               className="pl-3 h-9 border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm font-medium"
               value={driverSearch}
               onChange={(e) => setDriverSearch(e.target.value)}
@@ -883,7 +1048,7 @@ export default function AdminsAndAuditsPage() {
             currentPage={driverPage}
             setCurrentPage={setDriverPage}
             pageSize={PAGE_SIZE}
-            setPageSize={() => {}}
+            setPageSize={() => { }}
             totalItems={filteredDrivers.length}
             itemName="drivers"
           />
@@ -916,18 +1081,18 @@ export default function AdminsAndAuditsPage() {
               </h3>
               <div className="flex items-center gap-2 w-full md:w-auto justify-end">
                 {(dateFrom || dateTo || selectedAction !== "all" || selectedActor !== "all" || ipFilter || selectedSeverity !== "all" || auditSearch) && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={clearAllFilters}
                     className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 font-bold h-9 rounded-lg"
                   >
                     Clear All
                   </Button>
                 )}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={exportToCSV}
                   className="text-xs border-zinc-200 text-zinc-700 hover:bg-zinc-50 font-bold h-9 rounded-lg flex items-center gap-1.5 shadow-sm"
                 >
@@ -942,8 +1107,8 @@ export default function AdminsAndAuditsPage() {
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Search Keyword</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                  <Input 
-                    placeholder="Search by action description, email, user name..." 
+                  <Input
+                    placeholder="Search by action description, email, user name..."
                     className="pl-10 h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold"
                     value={auditSearch}
                     onChange={(e) => setAuditSearch(e.target.value)}
@@ -954,7 +1119,7 @@ export default function AdminsAndAuditsPage() {
               {/* Date From */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Date From</label>
-                <Input 
+                <Input
                   type="date"
                   className="h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold text-zinc-600 focus:ring-1 focus:ring-primary/10"
                   value={dateFrom}
@@ -965,7 +1130,7 @@ export default function AdminsAndAuditsPage() {
               {/* Date To */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">Date To</label>
-                <Input 
+                <Input
                   type="date"
                   className="h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold text-zinc-600 focus:ring-1 focus:ring-primary/10"
                   value={dateTo}
@@ -1006,7 +1171,7 @@ export default function AdminsAndAuditsPage() {
               {/* IP Address */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">IP Address</label>
-                <Input 
+                <Input
                   placeholder="e.g. 127.0.0.1"
                   className="h-10 border-zinc-200 rounded-lg text-xs bg-white font-semibold"
                   value={ipFilter}
@@ -1092,7 +1257,7 @@ export default function AdminsAndAuditsPage() {
                       <TableCell className="px-6">
                         <div className="space-y-0.5 text-[11px] font-mono text-zinc-500">
                           <div className="flex items-center gap-1">
-                            <span className="font-bold text-zinc-400">IP:</span> 
+                            <span className="font-bold text-zinc-400">IP:</span>
                             {log.ip_address || "N/A"}
                           </div>
                           <div className="text-zinc-400 max-w-[180px] truncate" title={log.user_agent || "N/A"}>
@@ -1110,7 +1275,7 @@ export default function AdminsAndAuditsPage() {
             currentPage={auditPage}
             setCurrentPage={setAuditPage}
             pageSize={PAGE_SIZE}
-            setPageSize={() => {}}
+            setPageSize={() => { }}
             totalItems={filteredAuditLogs.length}
             itemName="logs"
           />
@@ -1122,12 +1287,16 @@ export default function AdminsAndAuditsPage() {
         <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
             <DialogTitle className="text-xl font-bold text-zinc-900">
-              {formData.role === "delivery" ? "Create New delivery" : "Create New Administrator"}
+              {formData.role === 'delivery' ? 'Create New Delivery Driver' : '
+              {formData.role === "delivery" ? "Create New delivery" : "
+              {formData.role === 'delivery' ? 'Create New Delivery Driver' : 'Create New Administrator'}
+            "}
+            '}
             </DialogTitle>
             <DialogDescription className="text-zinc-400 text-xs mt-1">
-              {formData.role === "delivery"
-                ? "Add credential profiles for delivery guys. They will be directed to change their password instantly upon first login."
-                : "Add credential profiles for admins and superadmins. They will be directed to change their password instantly upon first login."}
+              {formData.role === 'delivery'
+                ? 'Register a new delivery driver. They will only see orders assigned to their registered city and country.'
+                : 'Add credential profiles for admins and superadmins. They will be directed to change their password instantly upon first login.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateAdmin}>
@@ -1138,22 +1307,22 @@ export default function AdminsAndAuditsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
-                    <Input 
-                      placeholder="e.g. Samuel Kiptoo" 
-                      className="h-10 border-zinc-200 rounded-lg focus:ring-primary/20" 
+                    <Input
+                      placeholder="e.g. Samuel Kiptoo"
+                      className="h-10 border-zinc-200 rounded-lg focus:ring-primary/20"
                       value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Work Email *</label>
-                    <Input 
+                    <Input
                       type="email"
-                      placeholder="s.kiptoo@autospare.com" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                      placeholder="s.kiptoo@autospare.com"
+                      className="h-10 border-zinc-200 rounded-lg"
                       value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
                     />
                   </div>
@@ -1164,12 +1333,12 @@ export default function AdminsAndAuditsPage() {
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Password *</label>
                     <div className="relative">
-                      <Input 
+                      <Input
                         type={showPassword ? "text" : "password"}
-                        placeholder="••••••••" 
-                        className="h-10 border-zinc-200 rounded-lg pr-10" 
+                        placeholder="••••••••"
+                        className="h-10 border-zinc-200 rounded-lg pr-10"
                         value={formData.password}
-                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         required
                       />
                       <button
@@ -1185,12 +1354,12 @@ export default function AdminsAndAuditsPage() {
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Confirm Password *</label>
                     <div className="relative">
-                      <Input 
+                      <Input
                         type={showConfirmPassword ? "text" : "password"}
-                        placeholder="••••••••" 
-                        className="h-10 border-zinc-200 rounded-lg pr-10" 
+                        placeholder="••••••••"
+                        className="h-10 border-zinc-200 rounded-lg pr-10"
                         value={formData.password_confirmation}
-                        onChange={(e) => setFormData({...formData, password_confirmation: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, password_confirmation: e.target.value })}
                         required
                       />
                       <button
@@ -1206,10 +1375,10 @@ export default function AdminsAndAuditsPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Access Privilege Level *</label>
-                  <select 
+                  <select
                     className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10"
                     value={formData.role}
-                    onChange={(e) => setFormData({...formData, role: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                     required
                   >
                     <option value="admin">Admin (Logistics, Orders, Stock Management)</option>
@@ -1222,65 +1391,91 @@ export default function AdminsAndAuditsPage() {
               {/* Extra Details Section */}
               <div className="space-y-4 pt-3 border-t border-zinc-100">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-primary">2. Additional Contact & Address Details</h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
-                    <Input 
-                      placeholder="+254 700 000 000" 
-                      className="h-10 border-zinc-200 rounded-lg" 
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500">Country</label>
-                    <select
-                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
-                      value={formData.country}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setFormData({
-                          ...formData,
-                          country: val,
-                          city: ""
-                        });
-                      }}
-                    >
-                      <option value="">Select country...</option>
-                      {countriesList.map((c: any) => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500">City</label>
-                    <select
-                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
-                      value={formData.city}
-                      onChange={(e) => setFormData({...formData, city: e.target.value})}
-                      disabled={!formData.country}
-                    >
-                      <option value="">Select city...</option>
-                      {(() => {
-                        const countryObj = countriesList.find((c: any) => c.name === formData.country);
-                        const cities = countryObj ? countryObj.cities || [] : [];
-                        return cities.map((city: any) => (
-                          <option key={city.id} value={city.name}>{city.name}</option>
-                        ));
-                      })()}
-                    </select>
+                    <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
+                    <Input
+                      placeholder="+254 700 000 000"
+                      className="h-10 border-zinc-200 rounded-lg"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    />
                   </div>
+                  {formData.role === "delivery" ? (
+                    <SearchableDropdown
+                      label="Country *"
+                      value={formData.country}
+                      onChange={(val) => setFormData({ ...formData, country: val, city: "" })}
+                      options={activeCountriesList}
+                      placeholder="Select Country"
+                    />
+                  ) : (
+                    {
+                      formData.role === "delivery" ? (
+                        <SearchableDropdown
+                          label="Country *"
+                          value={formData.country}
+                          onChange={(val) => setFormData({ ...formData, country: val, city: "" })}
+                          options={activeCountriesList}
+                          placeholder="Select Country"
+                        />
+                      ) : (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-500">Country</label>
+                          <Input
+                            placeholder="e.g. Kenya"
+                            className="h-10 border-zinc-200 rounded-lg"
+                            value={formData.country}
+                            onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                          />
+                        </div>
+                      )
+                    }
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {formData.role === "delivery" ? (
+                    <SearchableDropdown
+                      label="City *"
+                      value={formData.city}
+                      onChange={(val) => setFormData({ ...formData, city: val })}
+                      options={activeCitiesForCreate}
+                      placeholder={formData.country ? "Select City" : "Please select country first"}
+                      disabled={!formData.country}
+                    />
+                  ) : (
+                    {
+                      formData.role === "delivery" ? (
+                        <SearchableDropdown
+                          label="City *"
+                          value={formData.city}
+                          onChange={(val) => setFormData({ ...formData, city: val })}
+                          options={activeCitiesForCreate}
+                          placeholder={formData.country ? "Select City" : "Please select country first"}
+                          disabled={!formData.country}
+                        />
+                      ) : (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-500">City</label>
+                          <Input
+                            placeholder="e.g. Nairobi"
+                            className="h-10 border-zinc-200 rounded-lg"
+                            value={formData.city}
+                            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                          />
+                        </div>
+                      )
+                    }
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>
-                    <Input 
-                      placeholder="e.g. Mombasa Rd Central Hub" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                    <Input
+                      placeholder="e.g. Mombasa Rd Central Hub"
+                      className="h-10 border-zinc-200 rounded-lg"
                       value={formData.address}
-                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     />
                   </div>
                 </div>
@@ -1293,21 +1488,21 @@ export default function AdminsAndAuditsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Vehicle Plate Number *</label>
-                      <Input 
-                        placeholder="e.g. KAA 123A" 
-                        className="h-10 border-zinc-200 rounded-lg" 
+                      <Input
+                        placeholder="e.g. KAA 123A"
+                        className="h-10 border-zinc-200 rounded-lg"
                         value={formData.vehicle_plate}
-                        onChange={(e) => setFormData({...formData, vehicle_plate: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, vehicle_plate: e.target.value })}
                         required
                       />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Driver License Number *</label>
-                      <Input 
-                        placeholder="e.g. DL-12345678" 
-                        className="h-10 border-zinc-200 rounded-lg" 
+                      <Input
+                        placeholder="e.g. DL-12345678"
+                        className="h-10 border-zinc-200 rounded-lg"
                         value={formData.license_number}
-                        onChange={(e) => setFormData({...formData, license_number: e.target.value})}
+                        onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
                         required
                       />
                     </div>
@@ -1316,17 +1511,17 @@ export default function AdminsAndAuditsPage() {
               )}
             </div>
             <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" 
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200"
                 onClick={() => setIsCreateModalOpen(false)}
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
-                className="h-10 bg-primary text-white hover:bg-primary/95 rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" 
+                className="h-10 bg-primary text-white hover:bg-primary/95 rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm"
                 disabled={isSaving}
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -1341,9 +1536,13 @@ export default function AdminsAndAuditsPage() {
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-[650px] p-0 overflow-hidden bg-white rounded-xl shadow-2xl border border-zinc-200">
           <DialogHeader className="p-6 border-b bg-white">
-            <DialogTitle className="text-xl font-bold text-zinc-900">Edit Administrator Details</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-zinc-900">
+              {editFormData.role === 'delivery' ? 'Edit Delivery Driver Details' : 'Edit Administrator Details'}
+            </DialogTitle>
             <DialogDescription className="text-zinc-400 text-xs mt-1">
-              Update spelling errors, edit roles, contact details, or logistics hub information.
+              {editFormData.role === 'delivery'
+                ? 'Update delivery driver information, vehicle details, and location assignment.'
+                : 'Update spelling errors, edit roles, contact details, or logistics hub information.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleUpdateAdmin}>
@@ -1354,22 +1553,22 @@ export default function AdminsAndAuditsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
-                    <Input 
-                      placeholder="e.g. Samuel Kiptoo" 
-                      className="h-10 border-zinc-200 rounded-lg focus:ring-primary/20" 
+                    <Input
+                      placeholder="e.g. Samuel Kiptoo"
+                      className="h-10 border-zinc-200 rounded-lg focus:ring-primary/20"
                       value={editFormData.name}
-                      onChange={(e) => setEditFormData({...editFormData, name: e.target.value})}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
                       required
                     />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Work Email *</label>
-                    <Input 
+                    <Input
                       type="email"
-                      placeholder="s.kiptoo@autospare.com" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                      placeholder="s.kiptoo@autospare.com"
+                      className="h-10 border-zinc-200 rounded-lg"
                       value={editFormData.email}
-                      onChange={(e) => setEditFormData({...editFormData, email: e.target.value})}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                       required
                     />
                   </div>
@@ -1377,10 +1576,10 @@ export default function AdminsAndAuditsPage() {
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-zinc-500">Access Privilege Level *</label>
-                  <select 
+                  <select
                     className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-medium"
                     value={editFormData.role}
-                    onChange={(e) => setEditFormData({...editFormData, role: e.target.value})}
+                    onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
                     required
                   >
                     <option value="admin">Admin (Logistics, Orders, Stock Management)</option>
@@ -1393,65 +1592,91 @@ export default function AdminsAndAuditsPage() {
               {/* Extra Details Section */}
               <div className="space-y-4 pt-3 border-t border-zinc-100">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-primary">2. Additional Contact & Address Details</h3>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
-                    <Input 
-                      placeholder="+254 700 000 000" 
-                      className="h-10 border-zinc-200 rounded-lg" 
-                      value={editFormData.phone}
-                      onChange={(e) => setEditFormData({...editFormData, phone: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500">Country</label>
-                    <select
-                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
-                      value={editFormData.country}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setEditFormData({
-                          ...editFormData,
-                          country: val,
-                          city: ""
-                        });
-                      }}
-                    >
-                      <option value="">Select country...</option>
-                      {countriesList.map((c: any) => (
-                        <option key={c.id} value={c.name}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-zinc-500">City</label>
-                    <select
-                      className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/10 font-semibold"
-                      value={editFormData.city}
-                      onChange={(e) => setEditFormData({...editFormData, city: e.target.value})}
-                      disabled={!editFormData.country}
-                    >
-                      <option value="">Select city...</option>
-                      {(() => {
-                        const countryObj = countriesList.find((c: any) => c.name === editFormData.country);
-                        const cities = countryObj ? countryObj.cities || [] : [];
-                        return cities.map((city: any) => (
-                          <option key={city.id} value={city.name}>{city.name}</option>
-                        ));
-                      })()}
-                    </select>
+                    <label className="text-xs font-semibold text-zinc-500">Phone Number</label>
+                    <Input
+                      placeholder="+254 700 000 000"
+                      className="h-10 border-zinc-200 rounded-lg"
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                    />
                   </div>
+                  {editFormData.role === "delivery" ? (
+                    <SearchableDropdown
+                      label="Country *"
+                      value={editFormData.country}
+                      onChange={(val) => setEditFormData({ ...editFormData, country: val, city: "" })}
+                      options={activeCountriesList}
+                      placeholder="Select Country"
+                    />
+                  ) : (
+                    {
+                      editFormData.role === "delivery" ? (
+                        <SearchableDropdown
+                          label="Country *"
+                          value={editFormData.country}
+                          onChange={(val) => setEditFormData({ ...editFormData, country: val, city: "" })}
+                          options={activeCountriesList}
+                          placeholder="Select Country"
+                        />
+                      ) : (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-500">Country</label>
+                          <Input
+                            placeholder="e.g. Kenya"
+                            className="h-10 border-zinc-200 rounded-lg"
+                            value={editFormData.country}
+                            onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
+                          />
+                        </div>
+                      )
+                    }
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {editFormData.role === "delivery" ? (
+                    <SearchableDropdown
+                      label="City *"
+                      value={editFormData.city}
+                      onChange={(val) => setEditFormData({ ...editFormData, city: val })}
+                      options={activeCitiesForEdit}
+                      placeholder={editFormData.country ? "Select City" : "Please select country first"}
+                      disabled={!editFormData.country}
+                    />
+                  ) : (
+                    {
+                      editFormData.role === "delivery" ? (
+                        <SearchableDropdown
+                          label="City *"
+                          value={editFormData.city}
+                          onChange={(val) => setEditFormData({ ...editFormData, city: val })}
+                          options={activeCitiesForEdit}
+                          placeholder={editFormData.country ? "Select City" : "Please select country first"}
+                          disabled={!editFormData.country}
+                        />
+                      ) : (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-500">City</label>
+                          <Input
+                            placeholder="e.g. Nairobi"
+                            className="h-10 border-zinc-200 rounded-lg"
+                            value={editFormData.city}
+                            onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
+                          />
+                        </div>
+                      )
+                    }
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Logistics Hub / Street Address</label>
-                    <Input 
-                      placeholder="e.g. Mombasa Rd Central Hub" 
-                      className="h-10 border-zinc-200 rounded-lg" 
+                    <Input
+                      placeholder="e.g. Mombasa Rd Central Hub"
+                      className="h-10 border-zinc-200 rounded-lg"
                       value={editFormData.address}
-                      onChange={(e) => setEditFormData({...editFormData, address: e.target.value})}
+                      onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
                     />
                   </div>
                 </div>
@@ -1464,21 +1689,21 @@ export default function AdminsAndAuditsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Vehicle Plate Number *</label>
-                      <Input 
-                        placeholder="e.g. KAA 123A" 
-                        className="h-10 border-zinc-200 rounded-lg" 
+                      <Input
+                        placeholder="e.g. KAA 123A"
+                        className="h-10 border-zinc-200 rounded-lg"
                         value={editFormData.vehicle_plate}
-                        onChange={(e) => setEditFormData({...editFormData, vehicle_plate: e.target.value})}
+                        onChange={(e) => setEditFormData({ ...editFormData, vehicle_plate: e.target.value })}
                         required
                       />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-semibold text-zinc-500">Driver License Number *</label>
-                      <Input 
-                        placeholder="e.g. DL-12345678" 
-                        className="h-10 border-zinc-200 rounded-lg" 
+                      <Input
+                        placeholder="e.g. DL-12345678"
+                        className="h-10 border-zinc-200 rounded-lg"
                         value={editFormData.license_number}
-                        onChange={(e) => setEditFormData({...editFormData, license_number: e.target.value})}
+                        onChange={(e) => setEditFormData({ ...editFormData, license_number: e.target.value })}
                         required
                       />
                     </div>
@@ -1487,17 +1712,17 @@ export default function AdminsAndAuditsPage() {
               )}
             </div>
             <DialogFooter className="p-4 border-t bg-zinc-50/50 flex items-center justify-end gap-3">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" 
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200"
                 onClick={() => setIsEditModalOpen(false)}
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
-                className="h-10 bg-primary text-white hover:bg-primary/95 rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm" 
+                className="h-10 bg-primary text-white hover:bg-primary/95 rounded-lg font-black px-8 text-[11px] tracking-widest uppercase shadow-sm"
                 disabled={isSaving}
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

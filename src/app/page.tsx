@@ -18,6 +18,7 @@ import { Hero } from "@/components/Hero";
 import { HubMap } from "@/components/HubMap";
 import { useState, useEffect } from "react";
 import api from "@/lib/axios";
+import { API_ENDPOINTS } from "@/lib/apis";
 import { useSettings } from "@/components/providers/SettingsProvider";
 
 const categories = [
@@ -35,8 +36,8 @@ export default function Home() {
     const fetchCountries = async () => {
       try {
         const [destResponse, locResponse] = await Promise.all([
-          api.get("/shipping-destinations/active").catch(() => ({ data: [] })),
-          api.get("/locations/countries").catch(() => ({ data: [] }))
+          api.get(API_ENDPOINTS.shippingDestinations.active).catch(() => ({ data: [] })),
+          api.get(API_ENDPOINTS.locations.countries).catch(() => ({ data: [] }))
         ]);
         const activeDestinations = destResponse.data || [];
         const realLocations = locResponse.data || [];

@@ -71,11 +71,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const res = await api.get(API_ENDPOINTS.auth.user);
           setUser(res.data);
-          // Refresh/extend the cookie
+          // Refresh/extend the cookies
           setCookie("auth_token", token);
+          setCookie("user_role", res.data.role);
         } catch (err) {
           localStorage.removeItem("auth_token");
           deleteCookie("auth_token");
+          deleteCookie("user_role");
           delete api.defaults.headers.common["Authorization"];
         }
       } else {
@@ -88,9 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const res = await api.get(API_ENDPOINTS.auth.user);
             setUser(res.data);
+            setCookie("user_role", res.data.role);
           } catch (err) {
             localStorage.removeItem("auth_token");
             deleteCookie("auth_token");
+            deleteCookie("user_role");
             delete api.defaults.headers.common["Authorization"];
           }
         }
@@ -107,12 +111,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const days = credentials.remember ? 30 : 7;
     setCookie("auth_token", token, days);
+    setCookie("user_role", loginUser.role, days);
 
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     // Set from login response immediately (already contains total_spent from backend)
     setUser(loginUser);
     // Also fire a background re-fetch so total_spent is always live real-time
-    api.get(API_ENDPOINTS.auth.user).then(r => setUser(r.data)).catch(() => { });
+    api.get(API_ENDPOINTS.auth.user).then(r => { setUser(r.data); setCookie("user_role", r.data.role, days); }).catch(() => { });
 
     if (loginUser.must_change_password) {
       router.push("/change-password");
@@ -132,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { user: regUser, token } = res.data;
     localStorage.setItem("auth_token", token);
     setCookie("auth_token", token);
+    setCookie("user_role", regUser.role);
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     setUser(regUser);
     if (redirectUrl) {
@@ -146,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Refresh user to get updated must_change_password flag and total_spent
     const userRes = await api.get(API_ENDPOINTS.auth.user);
     setUser(userRes.data);
+    setCookie("user_role", userRes.data.role);
     return res.data;
   };
 
@@ -155,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       localStorage.removeItem("auth_token");
       deleteCookie("auth_token");
+      deleteCookie("user_role");
       delete api.defaults.headers.common["Authorization"];
       setUser(null);
       window.location.href = "/login";
@@ -176,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Trigger local logout first for instant UI response
         localStorage.removeItem("auth_token");
         deleteCookie("auth_token");
+        deleteCookie("user_role");
         delete api.defaults.headers.common["Authorization"];
         setUser(null);
         window.location.href = "/login?expired=1";

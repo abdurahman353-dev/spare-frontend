@@ -199,8 +199,8 @@ export function SearchableDropdown({
             />
           </div>
 
-          {/* List - max 3 items visible, scrollable */}
-          <div className="overflow-y-auto overflow-x-hidden custom-scrollbar w-full min-w-full block" style={{ maxHeight: "132px" }}>
+          {/* List - max 5 items visible, scrollable */}
+          <div className="overflow-y-auto overflow-x-hidden custom-scrollbar w-full min-w-full block" style={{ maxHeight: "200px" }}>
             {filtered.length === 0 ? (
               <div className="px-4 py-3 text-sm text-zinc-400 text-center">
                 No results found

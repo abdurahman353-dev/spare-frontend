@@ -345,7 +345,12 @@ export default function AdminLogisticsPage() {
       const matchesSearch = !q ||
         (order.tracking_number?.toLowerCase().includes(q)) ||
         (order.customer?.name?.toLowerCase().includes(q)) ||
+        (order.customer?.phone?.toLowerCase().includes(q)) ||
+        (order.customer?.email?.toLowerCase().includes(q)) ||
+        (order.shipping_address?.toLowerCase().includes(q)) ||
         (order.shipping_city?.toLowerCase().includes(q)) ||
+        (order.shipping_country?.toLowerCase().includes(q)) ||
+        (order.notes?.toLowerCase().includes(q)) ||
         matchesProducts;
 
       const matchesWarehouse = warehouseFilter === "all" || order.items?.[0]?.warehouse_id.toString() === warehouseFilter;

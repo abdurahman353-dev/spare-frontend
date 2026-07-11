@@ -131,7 +131,7 @@ export default function Dashboard() {
       border: "border-l-zinc-400",
     },
     {
-      title: "B2B Partners",
+      title: "Registered Customers",
       value: data.stats.customers.toString(),
       icon: Users,
       trend: "+2 new",

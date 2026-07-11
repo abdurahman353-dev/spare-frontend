@@ -85,6 +85,22 @@ function isOrderVoided(order: { status?: string; payment_status?: string }): boo
   return order.status === "Cancelled" || order.payment_status === "Refunded";
 }
 
+/** Parses recipient name, phone, and optional email from walk-in order notes field */
+function parseRecipientNotes(notes: string | null) {
+  if (!notes) return null;
+  const nameMatch = notes.match(/Recipient:\s*([^|]+)/);
+  const phoneMatch = notes.match(/Phone:\s*([^|]+)/);
+  const emailMatch = notes.match(/Email:\s*([^|]+)/);
+  
+  if (!nameMatch && !phoneMatch) return null;
+  
+  return {
+    name: nameMatch ? nameMatch[1].trim() : "",
+    phone: phoneMatch ? phoneMatch[1].trim() : "",
+    email: emailMatch ? emailMatch[1].trim() : ""
+  };
+}
+
 /** Compares warehouse origin city vs shipping destination city to tell a
  *  same-city "Local Shipment" route (e.g. Nairobi → Nairobi) apart from a
  *  cross-city "Shipment" route (e.g. Nairobi → Mombasa). */
@@ -313,6 +329,7 @@ function AdminOrdersPageInner() {
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [voidOrderTarget, setVoidOrderTarget] = useState<any>(null);
   const [selectedVoidItemIds, setSelectedVoidItemIds] = useState<number[]>([]);
+  const [voidQuantities, setVoidQuantities] = useState<Record<number, number>>({});
   const [isVoidDialogOpen, setIsVoidDialogOpen] = useState(false);
   const [isVoiding, setIsVoiding] = useState(false);
   const [voidReason, setVoidReason] = useState("");
@@ -334,6 +351,13 @@ function AdminOrdersPageInner() {
     shipping_address: "",
   });
   const [isSavingEditWalkIn, setIsSavingEditWalkIn] = useState(false);
+
+  // Mark-Paid Dialog
+  const [isMarkPaidDialogOpen, setIsMarkPaidDialogOpen] = useState(false);
+  const [markPaidTarget, setMarkPaidTarget] = useState<any>(null);
+  const [markPaidMethod, setMarkPaidMethod] = useState<string>("Cash");
+  const [markPaidRefCode, setMarkPaidRefCode] = useState<string>("");
+  const [isMarkingPaid, setIsMarkingPaid] = useState(false);
 
   // Cancellation and Refund Admin State
   const [isApproveCancelModalOpen, setIsApproveCancelModalOpen] = useState(false);
@@ -530,21 +554,46 @@ function AdminOrdersPageInner() {
     setRecipientEmail("");
   };
 
-  const handleMarkWalkInPaid = async (order: any) => {
+  // Open the payment-method selection dialog before confirming mark-paid
+  const handleMarkWalkInPaid = (order: any) => {
+    setMarkPaidTarget(order);
+    setMarkPaidMethod(order.payment_method || "Cash");
+    setMarkPaidRefCode(order.payment_ref_code || "");
+    setIsMarkPaidDialogOpen(true);
+  };
+
+  const handleConfirmMarkPaid = async () => {
+    if (!markPaidTarget) return;
+    const isDigital = ["M-Pesa", "Card", "Bank Transfer"].includes(markPaidMethod);
+    if (isDigital && !markPaidRefCode.trim()) {
+      toast.error("Please enter the transaction / reference code");
+      return;
+    }
+    setIsMarkingPaid(true);
     try {
-      await api.put(API_ENDPOINTS.orders.byId(order.id), { payment_status: "Paid", status: "Delivered" });
-      toast.success("Payment confirmed — marked as Paid");
-      fetchOrders();
+      // Only update payment fields — NEVER touch status (shipment flow is independent)
+      await api.put(API_ENDPOINTS.orders.byId(markPaidTarget.id), {
+        payment_status: "Paid",
+        payment_method: markPaidMethod,
+        ...(markPaidRefCode.trim() ? { payment_ref_code: markPaidRefCode.trim() } : {}),
+      });
+      toast.success(`Payment confirmed via ${markPaidMethod}`);
+      setIsMarkPaidDialogOpen(false);
+      setMarkPaidTarget(null);
+      fetchOrders(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Update failed");
+    } finally {
+      setIsMarkingPaid(false);
     }
   };
 
   const handleMarkWalkInPending = async (order: any) => {
     try {
-      await api.put(API_ENDPOINTS.orders.byId(order.id), { payment_status: "Pending", status: "Pending" });
-      toast.success("Marked as Pending");
-      fetchOrders();
+      // NOTE: Only update payment_status — NEVER touch status (shipment flow is independent)
+      await api.put(API_ENDPOINTS.orders.byId(order.id), { payment_status: "Pending" });
+      toast.success("Payment marked as Pending");
+      fetchOrders(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Update failed");
     }
@@ -554,10 +603,17 @@ function AdminOrdersPageInner() {
     setVoidOrderTarget(order);
     setVoidReason("");
     setVoidTransactionId("");
-    const activeItemIds = (order.items || [])
-      .filter((item: any) => item.cancellation_status !== "Cancelled")
-      .map((item: any) => item.id);
+    const activeItems = (order.items || [])
+      .filter((item: any) => item.cancellation_status !== "Cancelled");
+    const activeItemIds = activeItems.map((item: any) => item.id);
     setSelectedVoidItemIds(activeItemIds);
+
+    const initialQuantities: Record<number, number> = {};
+    activeItems.forEach((item: any) => {
+      initialQuantities[item.id] = item.quantity;
+    });
+    setVoidQuantities(initialQuantities);
+
     setIsVoidDialogOpen(true);
   };
 
@@ -581,6 +637,10 @@ function AdminOrdersPageInner() {
         reason: voidReason,
         refund_transaction_id: voidTransactionId,
         cancel_item_ids: selectedVoidItemIds,
+        cancel_items: selectedVoidItemIds.map(id => ({
+          id,
+          quantity: voidQuantities[id] || 1
+        })),
       });
       const refunded = parseFloat(res.data?.refunded_amount ?? voidOrderTarget.total_amount ?? 0);
       toast.success(
@@ -628,6 +688,11 @@ function AdminOrdersPageInner() {
         }
         if (!recipientPhone.trim()) {
           toast.error("Recipient phone is required for walk-in dispatch orders.");
+          return;
+        }
+        const phoneDigits = recipientPhone.replace(/\D/g, "");
+        if (!/^(?:254|0)?(7|1)\d{8}$/.test(phoneDigits)) {
+          toast.error("Please enter a valid Kenyan phone number (e.g., 0712345678 or 254712345678).");
           return;
         }
       }
@@ -747,8 +812,8 @@ function AdminOrdersPageInner() {
           price: item.price
         }))
       };
-      // Attach recipient info for walk-in guest dispatch orders
-      if (shippingMethod === "Local Delivery" && selectedCustomerId === "walkin") {
+      // Attach recipient / customer info for all walk-in guest orders (dispatch or pickup)
+      if (selectedCustomerId === "walkin" && (recipientName.trim() || recipientPhone.trim() || recipientEmail.trim())) {
         orderPayload.notes = `Recipient: ${recipientName.trim()}${recipientPhone.trim() ? ` | Phone: ${recipientPhone.trim()}` : ""}${recipientEmail.trim() ? ` | Email: ${recipientEmail.trim()}` : ""}`;
       }
 
@@ -1095,10 +1160,12 @@ function AdminOrdersPageInner() {
           (order.tracking_number || "").toLowerCase().includes(sq) ||
           (order.customer?.name || "").toLowerCase().includes(sq) ||
           (order.customer?.email || "").toLowerCase().includes(sq) ||
+          (order.customer?.phone || "").toLowerCase().includes(sq) ||
           (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
           getWalkInDestinationLabel(order).toLowerCase().includes(sq) ||
           (order.payment_method || "cash").toLowerCase().includes(sq) ||
           (order.payment_ref_code || "").toLowerCase().includes(sq) ||
+          (order.notes || "").toLowerCase().includes(sq) ||
           matchesProducts
         );
         const matchesPayStatus = walkInPayStatusFilter === "All" ||
@@ -1276,94 +1343,99 @@ function AdminOrdersPageInner() {
         )}
       </div>
 
-      {/* Filter Bar — Shipment Orders */}
-      {activeOrdersTab === "Shipment" && (
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
-          {/* Search */}
-          <div className="relative lg:col-span-2">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-            <Input placeholder="Search Ref, Customer, Route..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
+      {/* Filter Bar — Shipment / Local Shipment Orders */}
+      {(activeOrdersTab === "Shipment" || activeOrdersTab === "LocalShipment") && (
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-zinc-100 flex flex-wrap lg:flex-nowrap items-center gap-2">
+          {/* Search — full width on mobile/tablet, flexible on desktop */}
+          <div className="relative w-full sm:flex-1 sm:min-w-[180px] lg:min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+            <Input placeholder="Search Ref, Customer, Route..." className="pl-9 h-9 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
               value={shipmentSearchQuery} onChange={(e) => setShipmentSearchQuery(e.target.value)} />
           </div>
           {/* Origin Warehouse */}
-          <div className="flex flex-col justify-center">
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[150px] shrink-0">
             <SearchableDropdown
               items={warehouseOptions}
               value={warehouseFilter}
               onChange={(val) => { setWarehouseFilter(val); setCountryFilter("all"); setCityFilter("all"); }}
               placeholder="Origin Warehouse"
+              className="h-9 text-xs"
             />
           </div>
           {/* Destination Country */}
-          <div className="flex flex-col justify-center">
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[150px] shrink-0">
             <SearchableDropdown
               items={countryOptions}
               value={countryFilter}
               onChange={(val) => { setCountryFilter(val); setCityFilter("all"); }}
               placeholder="Destination Country"
+              className="h-9 text-xs"
             />
           </div>
-          {/* Destination City — cascades from Country */}
-          <div className="flex flex-col justify-center">
+          {/* Destination City */}
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[150px] shrink-0">
             <SearchableDropdown
               items={cityOptions}
               value={cityFilter}
               onChange={(val) => setCityFilter(val)}
               placeholder="Destination City"
+              className="h-9 text-xs"
             />
           </div>
           {/* Status */}
-          <div className="flex flex-col justify-center">
-            <select className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer"
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[130px] shrink-0">
+            <select className="h-9 px-2.5 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer"
               value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               {statuses.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
-          {/* Clear */}
-          <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearFilters}>
-            <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
-          </Button>
-          {/* Date Range */}
-          <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
-            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+          {/* Date Range — always side by side */}
+          <div className="flex gap-1.5 w-full sm:flex-1 lg:w-auto shrink-0 items-center">
+            <Input type="date" className="h-9 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1 lg:w-[115px]"
               value={shipmentDateFrom} onChange={(e) => setShipmentDateFrom(e.target.value)} />
-            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+            <Input type="date" className="h-9 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1 lg:w-[115px]"
               value={shipmentDateTo} onChange={(e) => setShipmentDateTo(e.target.value)} />
           </div>
+          {/* Clear */}
+          <Button variant="outline" className="rounded-lg h-9 border-zinc-200 font-bold text-xs w-full sm:w-auto shrink-0 px-3" onClick={handleClearFilters}>
+            <Filter className="h-3.5 w-3.5 text-zinc-500 mr-1.5" /> Clear
+          </Button>
         </div>
       )}
 
       {/* Filter Bar — Walk-In Orders */}
       {activeOrdersTab === "WalkIn" && (
-        <div className="bg-white p-5 rounded-xl shadow-sm border border-emerald-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Search */}
-          <div className="relative lg:col-span-2">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-            <Input placeholder="Search WK-Ref, Customer Name..." className="pl-9 h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
+        <div className="bg-white p-3 rounded-xl shadow-sm border border-emerald-100 flex flex-wrap lg:flex-nowrap items-center gap-2">
+          {/* Search — full width on mobile, flexible on sm+ */}
+          <div className="relative w-full sm:flex-1 sm:min-w-[180px] lg:min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+            <Input placeholder="Search WK-Ref, Customer Name..." className="pl-9 h-9 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold placeholder:text-zinc-400 shadow-none bg-zinc-50/50 w-full"
               value={walkInSearchQuery} onChange={(e) => setWalkInSearchQuery(e.target.value)} />
           </div>
           {/* Source Warehouse */}
-          <div className="flex flex-col justify-center">
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[150px] shrink-0">
             <SearchableDropdown
               items={walkInWarehouseOptions}
               value={walkInWarehouseFilter}
               onChange={(val) => { setWalkInWarehouseFilter(val); setWalkInDestFilter("all"); }}
               placeholder="Source Warehouse"
+              className="h-9 text-xs"
             />
           </div>
-          {/* Destination / Address (city) — cascades from warehouse */}
-          <div className="flex flex-col justify-center">
+          {/* Destination / Address */}
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[150px] shrink-0">
             <SearchableDropdown
               items={walkInDestOptions}
               value={walkInDestFilter}
               onChange={(val) => setWalkInDestFilter(val)}
               placeholder="Destination / Address"
+              className="h-9 text-xs"
             />
           </div>
           {/* Payment Status */}
-          <div className="flex flex-col justify-center">
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[150px] shrink-0">
             <select
-              className="h-11 px-3 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-emerald-200 w-full text-zinc-600 cursor-pointer"
+              className="h-9 px-2.5 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-emerald-200 w-full text-zinc-600 cursor-pointer"
               value={walkInPayStatusFilter}
               onChange={(e) => setWalkInPayStatusFilter(e.target.value)}
             >
@@ -1374,17 +1446,17 @@ function AdminOrdersPageInner() {
               <option value="Cancelled / Refunded">Cancelled / Refunded</option>
             </select>
           </div>
-          {/* Clear */}
-          <Button variant="outline" className="rounded-lg h-11 border-zinc-200 font-bold text-xs" onClick={handleClearWalkInFilters}>
-            <Filter className="h-4 w-4 text-zinc-500 mr-2" /> Clear
-          </Button>
-          {/* Date Range */}
-          <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
-            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+          {/* Date Range — always side by side */}
+          <div className="flex gap-1.5 w-full sm:w-[calc(50%-4px)] lg:w-auto shrink-0 items-center">
+            <Input type="date" className="h-9 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1 lg:w-[115px]"
               value={walkInDateFrom} onChange={(e) => setWalkInDateFrom(e.target.value)} />
-            <Input type="date" className="h-11 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1"
+            <Input type="date" className="h-9 border-zinc-200 focus-visible:ring-emerald-400 rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1 lg:w-[115px]"
               value={walkInDateTo} onChange={(e) => setWalkInDateTo(e.target.value)} />
           </div>
+          {/* Clear */}
+          <Button variant="outline" className="rounded-lg h-9 border-zinc-200 font-bold text-xs w-full sm:w-auto shrink-0 px-3" onClick={handleClearWalkInFilters}>
+            <Filter className="h-3.5 w-3.5 text-zinc-500 mr-1.5" /> Clear
+          </Button>
         </div>
       )}
 
@@ -1577,7 +1649,7 @@ function AdminOrdersPageInner() {
               <TableHeader className="bg-emerald-50/60">
                 <TableRow>
                   <TableHead className="px-4 font-semibold text-zinc-900">WK Reference</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Customer Profile</TableHead>
+                  <TableHead className="font-semibold text-zinc-900">Customer Profile / Recipient</TableHead>
                   <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
                   <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
                   <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
@@ -1603,22 +1675,37 @@ function AdminOrdersPageInner() {
                     const sourceWarehouse = order.items?.[0]?.warehouse?.name || "—";
                     return (
                       <TableRow key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
-                        <TableCell className="px-4 py-3">
-                          <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                            {order.tracking_number}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
-                            {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
-                            {isGuest ? (
-                              <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
-                            ) : (
-                              <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Registered</span>
-                            )}
-                          </div>
-                        </TableCell>
+                         <TableCell className="px-4 py-3">
+                           <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                             {order.tracking_number}
+                           </span>
+                         </TableCell>
+                         <TableCell>
+                           {(() => {
+                             const recipient = parseRecipientNotes(order.notes);
+                             if (recipient) {
+                               return (
+                                 <div className="space-y-1">
+                                   <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider text-[9px]">Recipient Info</p>
+                                   <p className="text-sm font-bold text-zinc-800 leading-tight">{recipient.name}</p>
+                                   <p className="text-[10px] text-indigo-700 font-bold bg-indigo-50 border border-indigo-150 px-1 py-0.5 rounded inline-block">{recipient.phone}</p>
+                                   {recipient.email && <p className="text-[10px] text-zinc-400 font-medium">{recipient.email}</p>}
+                                 </div>
+                               );
+                             }
+                             return (
+                               <div className="space-y-0.5">
+                                 <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
+                                 {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
+                                 {isGuest ? (
+                                   <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
+                                 ) : (
+                                   <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Registered</span>
+                                 )}
+                               </div>
+                             );
+                           })()}
+                         </TableCell>
                         <TableCell>
                           <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
                           <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
@@ -1705,6 +1792,10 @@ function AdminOrdersPageInner() {
                                     badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
                                     dotClass = "bg-blue-500";
                                     label = "Shipped";
+                                  } else if (order.status === "Arrived") {
+                                    badgeClass = "bg-purple-50 text-purple-700 border-purple-200";
+                                    dotClass = "bg-purple-500";
+                                    label = "Arrived";
                                   } else if (order.status === "Delivered") {
                                     badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
                                     dotClass = "bg-emerald-500";
@@ -1789,26 +1880,14 @@ function AdminOrdersPageInner() {
                                 <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
                                   <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
                                 </DropdownMenuItem>
-                                <DropdownMenuSeparator />
 
-                                {/* ── Delivery Status Progression (Local Delivery only) ── */}
-                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Delivered" && (
-                                  <>
-                                    <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
-                                    {order.status === "Pending" && (
-                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
-                                        <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
-                                      </DropdownMenuItem>
-                                    )}
-                                    {(order.status === "Pending" || order.status === "Processing") && (
-                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
-                                        <Truck className="mr-2 h-4 w-4" /> Mark Shipped
-                                      </DropdownMenuItem>
-                                    )}
-                                    {/* Walk-in dispatch: admin can only go up to Shipped.
-                                        The delivery driver marks it Delivered from their portal. */}
-                                    <DropdownMenuSeparator />
-                                  </>
+                                {!isOrderVoided(order) && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenEditWalkIn(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-zinc-650"
+                                  >
+                                    <Pencil className="mr-2 h-4 w-4 text-zinc-400" /> Edit Order
+                                  </DropdownMenuItem>
                                 )}
 
                                 {/* ── Payment Controls ── */}
@@ -1824,9 +1903,20 @@ function AdminOrdersPageInner() {
                                     onClick={() => handleMarkWalkInPending(order)}
                                     className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
                                   >
-                                    <RefreshCw className="mr-2 h-4 w-4" /> Mark as Pending
+                                    <RefreshCw className="mr-2 h-4 w-4" /> Mark Payment as Pending
                                   </DropdownMenuItem>
                                 ) : null}
+
+                                {/* ── Refund / Return ── */}
+                                {!isOrderVoided(order) && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenVoidDialog(order)}
+                                    className="cursor-pointer rounded-lg font-bold text-sm text-red-650"
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4 text-red-400" /> Refund/Return Order
+                                  </DropdownMenuItem>
+                                )}
+
                                 {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
                                   <>
                                     <DropdownMenuSeparator />
@@ -1836,21 +1926,33 @@ function AdminOrdersPageInner() {
                                     </DropdownMenuItem>
                                   </>
                                 )}
-                                {!isOrderVoided(order) && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenVoidDialog(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
-                                  </DropdownMenuItem>
-                                )}
-                                {!isOrderVoided(order) && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenEditWalkIn(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-zinc-600"
-                                  >
-                                    <Pencil className="mr-2 h-4 w-4" /> Edit Order
-                                  </DropdownMenuItem>
+
+                                {/* ── Delivery Status Progression (Local Delivery only) ── */}
+                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Delivered" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
+                                    {order.status === "Pending" && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
+                                      </DropdownMenuItem>
+                                    )}
+                                    {(order.status === "Pending" || order.status === "Processing") && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
+                                        <Truck className="mr-2 h-4 w-4" /> Mark Shipped
+                                      </DropdownMenuItem>
+                                    )}
+                                    {order.status === "Shipped" && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Arrived")} className="cursor-pointer rounded-lg font-bold text-sm text-purple-650">
+                                        <MapPin className="mr-2 h-4 w-4 text-purple-400" /> Mark Arrived
+                                      </DropdownMenuItem>
+                                    )}
+                                    {order.status === "Arrived" && (
+                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Delivered")} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-650">
+                                        <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-400" /> Mark Delivered
+                                      </DropdownMenuItem>
+                                    )}
+                                  </>
                                 )}
                               </DropdownMenuGroup>
                             </DropdownMenuContent>
@@ -2493,7 +2595,34 @@ function AdminOrdersPageInner() {
                   </div>
                 </div>
 
-
+                {selectedCustomerId === "walkin" && (
+                  <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-4 space-y-3">
+                    <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" /> Customer Info ({shippingMethod === "Local Delivery" ? "Required for Dispatch" : "Optional for Pickup"})
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-600">
+                          Customer Name {shippingMethod === "Local Delivery" && <span className="text-red-500">*</span>}
+                        </label>
+                        <Input placeholder="Full name" className="h-10 border-emerald-200 rounded-lg bg-white"
+                          value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-600">
+                          Phone Number {shippingMethod === "Local Delivery" && <span className="text-red-500">*</span>}
+                        </label>
+                        <Input placeholder="07XXXXXXXX" className="h-10 border-emerald-200 rounded-lg bg-white"
+                          value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value.replace(/\D/g, ""))} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-zinc-600">Email Address <span className="text-zinc-400 font-normal">(optional)</span></label>
+                        <Input type="email" placeholder="email@example.com" className="h-10 border-emerald-200 rounded-lg bg-white"
+                          value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {selectedCustomerId === "new" && (
                   <div className="space-y-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
@@ -2588,7 +2717,7 @@ function AdminOrdersPageInner() {
                   <div className="col-span-1 md:col-span-4 space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Source Warehouse</label>
                     <SearchableDropdown
-                      items={(selectedProductDetails?.inventories || []).map((inv: any) => ({ id: inv.warehouse_id.toString(), name: `from ${inv.warehouse?.name} (Stock: ${inv.quantity})` }))}
+                      items={(selectedProductDetails?.inventories || []).map((inv: any) => ({ id: inv.warehouse_id.toString(), name: `${inv.warehouse?.name} (Stock: ${inv.quantity})` }))}
                       value={selectedWarehouseId}
                       onChange={(val) => setSelectedWarehouseId(val)}
                       placeholder={selectedProductId ? "Choose hub..." : "Choose hub..."}
@@ -2767,39 +2896,29 @@ function AdminOrdersPageInner() {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Destination Country <span className="text-red-500">*</span></label>
-                        <select
-                          className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-200 text-zinc-700 font-medium"
+                        <SearchableDropdown
+                          items={countriesData.map((c: any) => ({ id: c.name, name: c.name }))}
                           value={shippingCountry}
-                          onChange={(e) => { setShippingCountry(e.target.value); setShippingCity(""); }}
-                        >
-                          <option value="">— Select Country —</option>
-                          {countriesData.map((c: any) => (
-                            <option key={c.id} value={c.name}>{c.name}</option>
-                          ))}
-                        </select>
+                          onChange={(val) => { setShippingCountry(val); setShippingCity(""); }}
+                          placeholder="Select Country"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Destination City <span className="text-red-500">*</span></label>
-                        {shippingCountry ? (
-                          <select
-                            className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-200 text-zinc-700 font-medium"
-                            value={shippingCity}
-                            onChange={(e) => setShippingCity(e.target.value)}
-                          >
-                            <option value="">— Select City —</option>
-                            {(() => {
-                              const found = countriesData.find((c: any) => c.name === shippingCountry);
-                              const cities: string[] = found?.cities?.length
-                                ? found.cities.map((ct: any) => ct.name)
-                                : (PREDEFINED_CITIES[shippingCountry] || []);
-                              return cities.sort((a, b) => a.localeCompare(b)).map(city => (
-                                <option key={city} value={city}>{city}</option>
-                              ));
-                            })()}
-                          </select>
-                        ) : (
-                          <Input disabled placeholder="Select country first" className="h-10 border-zinc-200 rounded-lg bg-zinc-50 opacity-60" />
-                        )}
+                        <SearchableDropdown
+                          disabled={!shippingCountry}
+                          items={(() => {
+                            if (!shippingCountry) return [];
+                            const found = countriesData.find((c: any) => c.name === shippingCountry);
+                            const cities: string[] = found?.cities?.length
+                              ? found.cities.map((ct: any) => ct.name)
+                              : (PREDEFINED_CITIES[shippingCountry] || []);
+                            return cities.sort((a, b) => a.localeCompare(b)).map(city => ({ id: city, name: city }));
+                          })()}
+                          value={shippingCity}
+                          onChange={(val) => setShippingCity(val)}
+                          placeholder="Select City"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Delivery Address <span className="text-red-500">*</span></label>
@@ -2808,39 +2927,34 @@ function AdminOrdersPageInner() {
                       </div>
                     </div>
 
-                    {/* Recipient info — required for walk-in guest dispatch */}
-                    {selectedCustomerId === "walkin" && (
-                      <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-4 space-y-3">
-                        <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5" /> Recipient Details (Required for Dispatch)
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-zinc-600">Recipient Name <span className="text-red-500">*</span></label>
-                            <Input placeholder="Full name" className="h-10 border-amber-200 rounded-lg bg-white"
-                              value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-zinc-600">Phone <span className="text-red-500">*</span></label>
-                            <Input placeholder="07XXXXXXXX" className="h-10 border-amber-200 rounded-lg bg-white"
-                              value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value)} />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-zinc-600">Email <span className="text-zinc-400 font-normal">(optional)</span></label>
-                            <Input type="email" placeholder="email@example.com" className="h-10 border-amber-200 rounded-lg bg-white"
-                              value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 flex justify-between items-center mt-3">
-                  <span className="font-bold text-zinc-500 text-xs uppercase">Grand Total (Tax Included)</span>
-                  <span className="text-xl font-black text-zinc-900">
-                    Ksh {(orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0) + Number(shippingFee)).toLocaleString()}
-                  </span>
+                {/* Price Breakdown */}
+                <div className="bg-zinc-50 rounded-xl border border-zinc-200 overflow-hidden mt-3">
+                  {(() => {
+                    const subtotal = orderItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+                    const fee = Number(shippingFee) || 0;
+                    const grandTotal = subtotal + fee;
+                    return (
+                      <div className="divide-y divide-zinc-100">
+                        <div className="flex justify-between items-center px-4 py-2.5">
+                          <span className="text-xs font-bold text-zinc-400 uppercase">Subtotal</span>
+                          <span className="text-sm font-black text-zinc-700">Ksh {subtotal.toLocaleString()}</span>
+                        </div>
+                        {fee > 0 && (
+                          <div className="flex justify-between items-center px-4 py-2.5">
+                            <span className="text-xs font-bold text-zinc-400 uppercase">Shipping Fee</span>
+                            <span className="text-sm font-black text-zinc-500">+ Ksh {fee.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center px-4 py-3 bg-zinc-100/60">
+                          <span className="font-bold text-zinc-600 text-xs uppercase">Grand Total</span>
+                          <span className="text-xl font-black text-zinc-900">Ksh {grandTotal.toLocaleString()}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -2868,7 +2982,7 @@ function AdminOrdersPageInner() {
       </Dialog>
 
       {/* Void / Refund Confirmation Dialog */}
-      <Dialog open={isVoidDialogOpen} onOpenChange={(open) => { if (!open) { setIsVoidDialogOpen(false); setVoidOrderTarget(null); setSelectedVoidItemIds([]); } }}>
+      <Dialog open={isVoidDialogOpen} onOpenChange={(open) => { if (!open) { setIsVoidDialogOpen(false); setVoidOrderTarget(null); setSelectedVoidItemIds([]); setVoidQuantities({}); } }}>
         <DialogContent className="max-w-[95vw] sm:max-w-[460px] w-full bg-white rounded-2xl border-none shadow-2xl p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-4">
             <div className="flex items-center gap-3 mb-2">
@@ -2904,39 +3018,59 @@ function AdminOrdersPageInner() {
                   {voidOrderTarget.items.map((item: any) => {
                     const isCancelled = item.cancellation_status === "Cancelled";
                     const isChecked = selectedVoidItemIds.includes(item.id);
+                    const qtyToCancel = voidQuantities[item.id] || item.quantity;
                     const totalUnits = Math.max(1, (voidOrderTarget.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
                     const shippingFee = Number(voidOrderTarget.shipping_fee || 0);
-                    const productCost = Number(item.price) * item.quantity;
-                    const shippingShare = (shippingFee / totalUnits) * item.quantity;
+                    const productCost = Number(item.price) * qtyToCancel;
+                    const shippingShare = (shippingFee / totalUnits) * qtyToCancel;
                     const itemRefundTotal = productCost + shippingShare;
                     return (
-                      <div key={item.id} className="flex items-start justify-between text-xs py-2 border-b last:border-0 border-zinc-100 gap-2">
-                        <label className={cn("flex items-start gap-2 cursor-pointer select-none flex-1 min-w-0", isCancelled && "opacity-50 cursor-not-allowed")}>
-                          <input
-                            type="checkbox"
-                            disabled={isCancelled}
-                            checked={isChecked && !isCancelled}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedVoidItemIds([...selectedVoidItemIds, item.id]);
-                              } else {
-                                setSelectedVoidItemIds(selectedVoidItemIds.filter(id => id !== item.id));
-                              }
-                            }}
-                            className="w-4 h-4 accent-red-600 rounded cursor-pointer mt-0.5 shrink-0"
-                          />
-                          <span className={cn("font-bold text-zinc-800 leading-snug", isCancelled && "line-through")}>
-                            {item.product?.name || "Genuine Spare Part"}
-                            {isCancelled && <span className="ml-1 text-[10px] text-red-500 font-bold">(Refunded)</span>}
+                      <div key={item.id} className="flex flex-col py-2 border-b last:border-0 border-zinc-100 gap-1">
+                        <div className="flex items-start justify-between text-xs gap-2">
+                          <label className={cn("flex items-start gap-2 cursor-pointer select-none flex-1 min-w-0", isCancelled && "opacity-50 cursor-not-allowed")}>
+                            <input
+                              type="checkbox"
+                              disabled={isCancelled}
+                              checked={isChecked && !isCancelled}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedVoidItemIds([...selectedVoidItemIds, item.id]);
+                                } else {
+                                  setSelectedVoidItemIds(selectedVoidItemIds.filter(id => id !== item.id));
+                                }
+                              }}
+                              className="w-4 h-4 accent-red-600 rounded cursor-pointer mt-0.5 shrink-0"
+                            />
+                            <span className={cn("font-bold text-zinc-800 leading-snug", isCancelled && "line-through")}>
+                              {item.product?.name || "Genuine Spare Part"}
+                              {isCancelled && <span className="ml-1 text-[10px] text-red-500 font-bold">(Refunded)</span>}
+                            </span>
+                          </label>
+                          <span className="shrink-0 text-right flex flex-col items-end leading-snug">
+                            <span className="text-zinc-500">{qtyToCancel} × Ksh {Number(item.price).toLocaleString()}</span>
+                            {shippingShare > 0 && (
+                              <span className="text-[10px] text-zinc-400">+ Ksh {Math.round(shippingShare).toLocaleString()} shipping</span>
+                            )}
+                            <span className="text-[11px] font-black text-zinc-700">= Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
                           </span>
-                        </label>
-                        <span className="shrink-0 text-right flex flex-col items-end leading-snug">
-                          <span className="text-zinc-500">{item.quantity} × Ksh {Number(item.price).toLocaleString()}</span>
-                          {shippingShare > 0 && (
-                            <span className="text-[10px] text-zinc-400">+ Ksh {Math.round(shippingShare).toLocaleString()} shipping</span>
-                          )}
-                          <span className="text-[11px] font-black text-zinc-700">= Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
-                        </span>
+                        </div>
+                        {isChecked && !isCancelled && item.quantity > 1 && (
+                          <div className="flex items-center gap-2 pl-6 mt-1 text-xs">
+                            <span className="text-[11px] font-medium text-zinc-500">Qty to Refund:</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={item.quantity}
+                              value={voidQuantities[item.id] || item.quantity}
+                              onChange={(e) => {
+                                const val = Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1));
+                                setVoidQuantities({ ...voidQuantities, [item.id]: val });
+                              }}
+                              className="w-16 px-1.5 py-0.5 rounded border border-zinc-300 text-xs text-center font-bold focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
+                            />
+                            <span className="text-[10px] text-zinc-400">of {item.quantity} max</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2949,8 +3083,9 @@ function AdminOrdersPageInner() {
                   const total = allItems
                     .filter((i: any) => selectedVoidItemIds.includes(i.id) && i.cancellation_status !== "Cancelled")
                     .reduce((sum: number, i: any) => {
-                      const productCost = Number(i.price) * i.quantity;
-                      const shippingShare = (shippingFee / totalUnits) * i.quantity;
+                      const qty = voidQuantities[i.id] || i.quantity;
+                      const productCost = Number(i.price) * qty;
+                      const shippingShare = (shippingFee / totalUnits) * qty;
                       return sum + productCost + shippingShare;
                     }, 0);
                   return (
@@ -2989,7 +3124,7 @@ function AdminOrdersPageInner() {
           </div>
           <DialogFooter className="px-6 pb-6 flex gap-3 m-0 shrink-0">
             <Button variant="outline" className="flex-1 rounded-xl font-bold border-zinc-200 h-10 text-xs"
-              onClick={() => { setIsVoidDialogOpen(false); setVoidOrderTarget(null); setSelectedVoidItemIds([]); }}>
+              onClick={() => { setIsVoidDialogOpen(false); setVoidOrderTarget(null); setSelectedVoidItemIds([]); setVoidQuantities({}); }}>
               Cancel
             </Button>
             <Button
@@ -3100,48 +3235,31 @@ function AdminOrdersPageInner() {
                 {/* Destination Country */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination Country</label>
-                  <select
+                  <SearchableDropdown
                     disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
-                    className={cn(
-                      "h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700",
-                      (editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") && "bg-zinc-100 cursor-not-allowed opacity-75"
-                    )}
+                    items={countriesData.map((c: any) => ({ id: c.name, name: c.name }))}
                     value={editWalkInForm.shipping_country}
-                    onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_country: e.target.value, shipping_city: "" })}
-                  >
-                    <option value="">— Select Country —</option>
-                    {countriesData.map((c: any) => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setEditWalkInForm({ ...editWalkInForm, shipping_country: val, shipping_city: "" })}
+                    placeholder="Select Country"
+                  />
                 </div>
                 {/* Destination City */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
-                  {editWalkInForm.shipping_country ? (
-                    <select
-                      disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
-                      className={cn(
-                        "h-10 w-full px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 text-zinc-700",
-                        (editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered") && "bg-zinc-100 cursor-not-allowed opacity-75"
-                      )}
-                      value={editWalkInForm.shipping_city}
-                      onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_city: e.target.value })}
-                    >
-                      <option value="">— Select City —</option>
-                      {(() => {
-                        const found = countriesData.find((c: any) => c.name === editWalkInForm.shipping_country);
-                        const cities: string[] = found?.cities?.length
-                          ? found.cities.map((ct: any) => ct.name)
-                          : (PREDEFINED_CITIES[editWalkInForm.shipping_country] || []);
-                        return cities.sort((a, b) => a.localeCompare(b)).map(city => (
-                          <option key={city} value={city}>{city}</option>
-                        ));
-                      })()}
-                    </select>
-                  ) : (
-                    <Input disabled placeholder="Select country first" className="h-10 border-zinc-200 rounded-lg bg-zinc-100 text-sm font-semibold opacity-60" />
-                  )}
+                  <SearchableDropdown
+                    disabled={!editWalkInForm.shipping_country || editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                    items={(() => {
+                      if (!editWalkInForm.shipping_country) return [];
+                      const found = countriesData.find((c: any) => c.name === editWalkInForm.shipping_country);
+                      const cities: string[] = found?.cities?.length
+                        ? found.cities.map((ct: any) => ct.name)
+                        : (PREDEFINED_CITIES[editWalkInForm.shipping_country] || []);
+                      return cities.sort((a, b) => a.localeCompare(b)).map(city => ({ id: city, name: city }));
+                    })()}
+                    value={editWalkInForm.shipping_city}
+                    onChange={(val) => setEditWalkInForm({ ...editWalkInForm, shipping_city: val })}
+                    placeholder="Select City"
+                  />
                 </div>
                 {/* Delivery Address */}
                 <div className="space-y-1.5">
@@ -3298,6 +3416,70 @@ function AdminOrdersPageInner() {
             >
               {isAssigningDriver ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
               {selectedDriverId ? "Assign Driver" : "Remove Assignment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Mark-Paid Dialog ─────────────────────────────────────────────── */}
+      <Dialog open={isMarkPaidDialogOpen} onOpenChange={(v) => { if (!v) { setIsMarkPaidDialogOpen(false); setMarkPaidTarget(null); } }}>
+        <DialogContent className="max-w-sm rounded-2xl p-0 overflow-hidden border-0 shadow-2xl">
+          <DialogHeader className="px-6 pt-6 pb-4 bg-gradient-to-br from-emerald-50 to-teal-50 border-b border-emerald-100">
+            <DialogTitle className="text-lg font-black text-emerald-900 flex items-center gap-2">
+              <span className="h-8 w-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600 text-base">✓</span>
+              Confirm Payment
+            </DialogTitle>
+            {markPaidTarget && (
+              <p className="text-xs text-emerald-700 font-semibold mt-1">Order: <span className="font-black">{markPaidTarget.tracking_number}</span></p>
+            )}
+          </DialogHeader>
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">Payment Method</label>
+              <select
+                value={markPaidMethod}
+                onChange={(e) => { setMarkPaidMethod(e.target.value); setMarkPaidRefCode(""); }}
+                className="w-full h-11 px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-emerald-300"
+              >
+                {["Cash", "M-Pesa", "Card", "Bank Transfer", "Credit", "Other"].map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            {["M-Pesa", "Card", "Bank Transfer"].includes(markPaidMethod) && (
+              <div>
+                <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-1.5">
+                  Transaction / Reference Code <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={markPaidRefCode}
+                  onChange={(e) => setMarkPaidRefCode(e.target.value)}
+                  placeholder="e.g. MPESA123456"
+                  className="w-full h-11 px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-white outline-none focus:ring-2 focus:ring-emerald-300"
+                />
+              </div>
+            )}
+            {markPaidTarget && (
+              <div className="bg-zinc-50 rounded-xl p-3 border border-zinc-100">
+                <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-1">Order Total</p>
+                <p className="text-2xl font-black text-zinc-900">
+                  {(settings?.currency_symbol || "KES")} {parseFloat(markPaidTarget.total_amount || 0).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="px-6 pb-6 pt-0 flex gap-2">
+            <Button variant="outline" className="flex-1 font-bold" onClick={() => { setIsMarkPaidDialogOpen(false); setMarkPaidTarget(null); }}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              onClick={handleConfirmMarkPaid}
+              disabled={isMarkingPaid}
+            >
+              {isMarkingPaid ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {isMarkingPaid ? "Saving…" : "Confirm Paid"}
             </Button>
           </DialogFooter>
         </DialogContent>

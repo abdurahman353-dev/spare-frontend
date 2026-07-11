@@ -48,6 +48,7 @@ interface Order {
   delivery_signature_url?: string;
   delivery_photo_url?: string;
   driver?: { name: string; phone?: string; vehicle_plate?: string };
+  notes?: string;
 }
 
 interface DeliveryNotification {
@@ -67,20 +68,49 @@ interface Stats {
   total_delivered: number;
 }
 
+// ── Notes Parser helper ──────────────────────────────────────────────────────
+/** Parses recipient name, phone, and optional email from walk-in order notes field */
+function parseRecipientNotes(notes: string | null) {
+  if (!notes) return null;
+  const nameMatch = notes.match(/Recipient:\s*([^|]+)/);
+  const phoneMatch = notes.match(/Phone:\s*([^|]+)/);
+  const emailMatch = notes.match(/Email:\s*([^|]+)/);
+  
+  if (!nameMatch && !phoneMatch) return null;
+  
+  return {
+    name: nameMatch ? nameMatch[1].trim() : "",
+    phone: phoneMatch ? phoneMatch[1].trim() : "",
+    email: emailMatch ? emailMatch[1].trim() : ""
+  };
+}
+
 // ── Route type helper ────────────────────────────────────────────────────────
-/** Returns true if the order is a same-city (local) delivery.
- *  Local = warehouse city matches destination city, or it's a Pickup order.
- *  Cross-city = Nairobi → Mombasa etc. (regular Shipment orders). */
+/**
+ * Returns true when the order should enter the delivery pool at "Shipped" status:
+ *   • Walk-in orders (WK- prefix) with Local Delivery method
+ *   • Local shipment orders where warehouse city == destination city
+ * Returns false for cross-city shipment orders — those only enter the pool at "Arrived"
+ * (they must physically reach the destination hub first).
+ */
 function isLocalDelivery(order: Order): boolean {
+  // Walk-in orders are always handled as local dispatch
+  if ((order.tracking_number ?? "").startsWith("WK-")) return true;
+
+  // Pickup = in-store, treat as local
   if (order.shipping_method === "Pickup") return true;
-  const whCity = (
-    order.items?.[0]?.warehouse?.location ||
-    order.items?.[0]?.warehouse?.name ||
-    ""
-  ).trim().toLowerCase();
-  const destCity = (order.shipping_city || "").trim().toLowerCase();
-  if (!whCity || !destCity) return true; // assume local if unknown
-  return whCity.includes(destCity) || destCity.includes(whCity);
+
+  // Compare warehouse origin city to destination city (same logic as admin orders page)
+  const warehouseLocation = (order.items?.[0]?.warehouse?.location ?? "").trim().toLowerCase();
+  const warehouseName     = (order.items?.[0]?.warehouse?.name     ?? "").trim().toLowerCase();
+  const destination       = (order.shipping_city ?? "").trim().toLowerCase();
+
+  if (!destination) return false;
+
+  return warehouseLocation.includes(destination) ||
+         destination.includes(warehouseLocation) ||
+         warehouseName.includes(destination)     ||
+         destination.includes(warehouseName);
 }
 
 function getStatusBadge(order: Order, myId: number) {
@@ -323,14 +353,7 @@ export default function DeliveryPortal() {
       .filter(o => {
         if (o.delivered_by_user_id !== null) return false;
         if (countryFilter !== "all" && o.shipping_country?.toLowerCase() !== countryFilter.toLowerCase()) return false;
-        const isLocal = (() => {
-          if (o.shipping_method === "Pickup") return true;
-          const location = o.items?.[0]?.warehouse?.location || "";
-          const whName = o.items?.[0]?.warehouse?.name || "";
-          const destCity = (o.shipping_city || "").trim().toLowerCase();
-          if (!destCity) return true;
-          return location.toLowerCase().includes(destCity) || whName.toLowerCase().includes(destCity);
-        })();
+        const isLocal = isLocalDelivery(o);
         return isLocal ? (o.status === "Shipped" || o.status === "Arrived") : o.status === "Arrived";
       })
       .map(o => o.shipping_city)
@@ -376,7 +399,8 @@ export default function DeliveryPortal() {
       list = list.filter(o =>
         o.tracking_number.toLowerCase().includes(q) ||
         (o.customer?.name ?? "").toLowerCase().includes(q) ||
-        o.shipping_city.toLowerCase().includes(q)
+        o.shipping_city.toLowerCase().includes(q) ||
+        (o.notes ?? "").toLowerCase().includes(q)
       );
     }
     return list.sort((a, b) =>
@@ -390,18 +414,7 @@ export default function DeliveryPortal() {
     let list = orders.filter(o => {
       if (o.delivered_by_user_id !== null) return false;
 
-      // Extract city names to check if local or containerized
-      const isLocal = (() => {
-        if (o.shipping_method === "Pickup") return true;
-        const location = o.items?.[0]?.warehouse?.location || "";
-        const whName = o.items?.[0]?.warehouse?.name || "";
-        const destCity = (o.shipping_city || "").trim().toLowerCase();
-        if (!destCity) return true;
-
-        const locLower = location.toLowerCase();
-        const nameLower = whName.toLowerCase();
-        return locLower.includes(destCity) || nameLower.includes(destCity);
-      })();
+      const isLocal = isLocalDelivery(o);
 
       if (isLocal) {
         // Direct local delivery: show in pool when Shipped (out of warehouse) or Arrived
@@ -418,7 +431,8 @@ export default function DeliveryPortal() {
       list = list.filter(o =>
         o.tracking_number.toLowerCase().includes(q) ||
         (o.customer?.name ?? "").toLowerCase().includes(q) ||
-        o.shipping_city.toLowerCase().includes(q)
+        o.shipping_city.toLowerCase().includes(q) ||
+        (o.notes ?? "").toLowerCase().includes(q)
       );
     }
     return list.sort((a, b) =>
@@ -435,7 +449,8 @@ export default function DeliveryPortal() {
       list = list.filter(o =>
         o.tracking_number.toLowerCase().includes(q) ||
         (o.customer?.name ?? "").toLowerCase().includes(q) ||
-        o.shipping_city.toLowerCase().includes(q)
+        o.shipping_city.toLowerCase().includes(q) ||
+        (o.notes ?? "").toLowerCase().includes(q)
       );
     }
     return list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
@@ -464,10 +479,6 @@ export default function DeliveryPortal() {
     const order = confirmClaimOrder;
     if (!order) return;
     setConfirmClaimOrder(null);
-    // ─────────────────────────────────────────────────────────────────────────
-    if (!window.confirm(`Are you sure you want to secure/claim order ${order.tracking_number}?`)) {
-      return;
-    }
     setClaimingId(order.id);
     try {
       await api.post(`/delivery/orders/${order.id}/claim`);
@@ -895,7 +906,7 @@ export default function DeliveryPortal() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
             <Input
-              placeholder="Search waybill, customer, city..."
+              placeholder="Search order reference, customer, city..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="pl-9 h-10 bg-white border-zinc-200 text-sm rounded-xl shadow-sm"
@@ -1135,7 +1146,7 @@ export default function DeliveryPortal() {
                 <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                   <Key className="h-4 w-4 text-amber-500" /> PIN Verification
                 </h2>
-                <p className="text-[10px] font-bold text-[#64748b] mt-0.5">Waybill: {pinOrder.tracking_number}</p>
+                <p className="text-[10px] font-bold text-[#64748b] mt-0.5">Order Reference: {pinOrder.tracking_number}</p>
               </div>
               <button onClick={() => { setShowPinDialog(false); setPinOrder(null); }} className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-600">
                 <X className="h-4 w-4" />
@@ -1208,7 +1219,7 @@ export default function DeliveryPortal() {
             <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
               <div className="text-left">
                 <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">Proof of Delivery</h2>
-                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Waybill: {signatureOrder.tracking_number}</p>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Reference: {signatureOrder.tracking_number}</p>
                 <p className="text-[10px] text-zinc-400">Recipient: {signatureOrder.customer?.name}</p>
               </div>
               <button
@@ -1304,7 +1315,7 @@ export default function DeliveryPortal() {
                 <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-rose-500" /> Log Delivery Failure
                 </h2>
-                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Waybill: {failedAttemptOrder.tracking_number}</p>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Reference: {failedAttemptOrder.tracking_number}</p>
               </div>
               <button
                 onClick={() => { setShowFailedModal(false); setFailedAttemptOrder(null); }}
@@ -1373,7 +1384,7 @@ export default function DeliveryPortal() {
                 <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
                   <ArrowRightLeft className="h-4 w-4 text-zinc-600" /> Release Claimed Order
                 </h2>
-                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Waybill: {releaseModalOrder.tracking_number}</p>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Reference: {releaseModalOrder.tracking_number}</p>
               </div>
               <button
                 onClick={() => setReleaseModalOrder(null)}
@@ -1729,9 +1740,9 @@ function OrderCard({
         {/* Header */}
         <CardHeader className="p-4 bg-zinc-50/80 border-b border-zinc-100 flex flex-row items-start justify-between gap-2">
           <div className="text-left">
-            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Waybill</span>
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Order Reference</span>
             <CardTitle className="text-base font-black text-slate-800 tracking-wider leading-tight">{order.tracking_number}</CardTitle>
-            <p className="text-[10px] text-zinc-400 mt-0.5">
+            <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">
               {new Date(order.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
             </p>
           </div>
@@ -1751,49 +1762,63 @@ function OrderCard({
           )}
 
           {/* Customer info */}
-          <div className="space-y-2.5 text-left">
-            <div className="flex items-start gap-3">
-              <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center shrink-0">
-                <User className="h-4 w-4 text-zinc-400" />
-              </div>
-              <div>
-                <p className="font-black text-slate-800 text-[13px]">{order.customer?.name ?? "Retail Customer"}</p>
-                {order.customer?.email && <p className="text-[10px] text-zinc-400">{order.customer.email}</p>}
-              </div>
-            </div>
+          {(() => {
+            const recipient = parseRecipientNotes(order.notes ?? null);
+            const isWalkIn = !!recipient;
+            const displayName   = isWalkIn ? recipient!.name  : (order.customer?.name  ?? "Retail Customer");
+            const displayPhone  = isWalkIn ? recipient!.phone : (order.customer?.phone ?? "");
+            const displayEmail  = isWalkIn ? recipient!.email : (order.customer?.email ?? "");
 
-            {order.customer?.phone && (
-              <div className="flex gap-2">
-                <a href={`tel:${order.customer.phone}`}
-                  className="flex items-center gap-2.5 p-2.5 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors group flex-1">
-                  <div className="h-7 w-7 rounded-full bg-[#0052cc] flex items-center justify-center shrink-0">
-                    <Phone className="h-3.5 w-3.5 text-white" />
+            return (
+              <div className="space-y-2.5 text-left">
+                <div className="flex items-start gap-3">
+                  <div className="h-8 w-8 rounded-full bg-zinc-100 flex items-center justify-center shrink-0">
+                    <User className="h-4 w-4 text-zinc-400" />
                   </div>
-                  <span className="font-black text-[#0052cc] text-xs group-hover:underline truncate">{order.customer.phone}</span>
-                </a>
-                <a href={`https://wa.me/${formatWhatsAppNumber(order.customer.phone)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors group px-3.5">
-                  <div className="h-7 w-7 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
-                    <span className="text-white font-extrabold text-xs">WA</span>
+                  <div>
+                    <p className="font-black text-slate-800 text-[13px]">{displayName}</p>
+                    {displayEmail && <p className="text-[10px] text-zinc-400">{displayEmail}</p>}
+                    {isWalkIn && (
+                      <span className="inline-block mt-0.5 text-[9px] font-bold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-200">WALK-IN</span>
+                    )}
                   </div>
-                  <span className="font-black text-emerald-600 text-xs group-hover:underline">Chat</span>
-                </a>
-              </div>
-            )}
+                </div>
 
-            <div className="flex items-start gap-3">
-              <div className="h-7 w-7 rounded-full bg-rose-50 flex items-center justify-center shrink-0 mt-0.5">
-                <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                {displayPhone && (
+                  <div className="flex gap-2">
+                    <a href={`tel:${displayPhone}`}
+                      className="flex items-center gap-2.5 p-2.5 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors group flex-1">
+                      <div className="h-7 w-7 rounded-full bg-[#0052cc] flex items-center justify-center shrink-0">
+                        <Phone className="h-3.5 w-3.5 text-white" />
+                      </div>
+                      <span className="font-black text-[#0052cc] text-xs group-hover:underline truncate">{displayPhone}</span>
+                    </a>
+                    <a href={`https://wa.me/${formatWhatsAppNumber(displayPhone)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 p-2.5 bg-emerald-50 rounded-xl hover:bg-emerald-100 transition-colors group px-3.5">
+                      <div className="h-7 w-7 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
+                        <span className="text-white font-extrabold text-xs">WA</span>
+                      </div>
+                      <span className="font-black text-emerald-600 text-xs group-hover:underline">Chat</span>
+                    </a>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-3">
+                  <div className="h-7 w-7 rounded-full bg-rose-50 flex items-center justify-center shrink-0 mt-0.5">
+                    <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                  </div>
+                  <div>
+                    <p className="font-black text-slate-800 text-sm">{order.shipping_city}{order.shipping_country ? `, ${order.shipping_country}` : ""}</p>
+                    {order.shipping_address && (
+                      <p className="font-bold text-slate-700 text-xs leading-snug mt-0.5">{order.shipping_address}</p>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="font-bold text-slate-700 text-xs leading-snug">{order.shipping_address}</p>
-                <p className="font-black text-slate-800 text-sm">{order.shipping_city}</p>
-                <span className="inline-block mt-1 text-[9px] font-bold bg-zinc-100 text-zinc-500 px-2 py-0.5 rounded uppercase">{order.shipping_method}</span>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Manifest */}
           <div className="border-t border-zinc-100 pt-3 text-left">
@@ -1824,10 +1849,10 @@ function OrderCard({
             </div>
           )}
 
-          {/* Order value */}
-          <div className="flex items-center justify-between bg-zinc-50 rounded-xl px-3 py-2 border border-zinc-100">
-            <span className="text-[10px] font-bold text-zinc-400 uppercase">Order Value</span>
-            <span className="font-black text-slate-800 text-sm">{currency} {Number(order.total_amount).toLocaleString()}</span>
+          {/* Grand Total */}
+          <div className="flex items-center justify-between bg-[#0052cc]/5 rounded-xl px-3 py-2.5 border border-[#0052cc]/10">
+            <span className="text-[10px] font-bold text-[#0052cc] uppercase tracking-widest">Grand Total</span>
+            <span className="font-black text-[#0052cc] text-base">{currency} {Number(order.total_amount).toLocaleString()}</span>
           </div>
 
           {/* Action buttons */}

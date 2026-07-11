@@ -710,16 +710,14 @@ function AdminOrdersPageInner() {
         toast.error("Customer Name is required.");
         return;
       }
-      if (registerAccount && !newCustomerData.email) {
-        toast.error("Email is required when registering a login account.");
+      if (!newCustomerData.email) {
+        toast.error("Email is required for the customer login account.");
         return;
       }
-      if (newCustomerData.email) {
-        const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRx.test(newCustomerData.email)) {
-          toast.error("Please enter a valid email address.");
-          return;
-        }
+      const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRx.test(newCustomerData.email)) {
+        toast.error("Please enter a valid email address.");
+        return;
       }
       if (newCustomerData.phone) {
         const cleanedPhone = newCustomerData.phone.replace(/[\s\-\(\)]/g, "");
@@ -729,19 +727,17 @@ function AdminOrdersPageInner() {
           return;
         }
       }
-      if (registerAccount) {
-        if (!newCustomerData.password) {
-          toast.error("Password is required when registering a login account.");
-          return;
-        }
-        if (newCustomerData.password !== newCustomerData.confirmPassword) {
-          toast.error("Passwords do not match.");
-          return;
-        }
-        if (newCustomerData.password.length < 8) {
-          toast.error("Password must be at least 8 characters.");
-          return;
-        }
+      if (!newCustomerData.password) {
+        toast.error("Password is required so the customer can log in.");
+        return;
+      }
+      if (newCustomerData.password.length < 8) {
+        toast.error("Password must be at least 8 characters.");
+        return;
+      }
+      if (newCustomerData.password !== newCustomerData.confirmPassword) {
+        toast.error("Passwords do not match.");
+        return;
       }
     }
 
@@ -770,12 +766,10 @@ function AdminOrdersPageInner() {
           phone: newCustomerData.phone,
           address: newCustomerData.address,
           company_name: newCustomerData.company_name,
-          type: newCustomerData.type
+          type: newCustomerData.type,
+          password: newCustomerData.password,
+          password_confirmation: newCustomerData.confirmPassword,
         };
-        if (registerAccount && newCustomerData.password) {
-          customerPayload.password = newCustomerData.password;
-          customerPayload.password_confirmation = newCustomerData.confirmPassword;
-        }
         const res = await api.post(API_ENDPOINTS.customers.base, customerPayload);
         targetCustomerId = res.data.id;
       } else {
@@ -1203,6 +1197,7 @@ function AdminOrdersPageInner() {
         (order.tracking_number || "").toLowerCase().includes(sq) ||
         (order.customer?.name || "").toLowerCase().includes(sq) ||
         (order.customer?.email || "").toLowerCase().includes(sq) ||
+        (order.customer?.phone || "").toLowerCase().includes(sq) ||
         (order.items?.[0]?.warehouse?.name || "").toLowerCase().includes(sq) ||
         (order.shipping_city || "").toLowerCase().includes(sq) ||
         (order.shipping_address || "").toLowerCase().includes(sq) ||
@@ -1499,37 +1494,8 @@ function AdminOrdersPageInner() {
                   "Mark Shipped"
                 )}
               </Button>
-              {/* Mark Arrived & Delivered are ONLY available in Walk-In bulk ops.
-                  Shipment → Arrived is triggered by waybill in Logistics.
-                  Delivered → done by delivery guy after PIN confirmation. */}
-              {activeOrdersTab === "WalkIn" && (
-                <>
-                  <Button
-                    size="sm"
-                    disabled={isBulkProcessing}
-                    onClick={() => handleBulkStatusChange('Arrived')}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
-                  >
-                    {isBulkProcessing ? (
-                      <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
-                    ) : (
-                      "Mark Arrived"
-                    )}
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={isBulkProcessing}
-                    onClick={() => handleBulkStatusChange('Delivered')}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
-                  >
-                    {isBulkProcessing ? (
-                      <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
-                    ) : (
-                      "Mark Delivered"
-                    )}
-                  </Button>
-                </>
-              )}
+              {/* Mark Arrived & Delivered are DELIVERY GUY ONLY — removed from admin.
+                  Delivery portal handles Arrived → Delivered via PIN confirmation. */}
               <Button
                 size="sm"
                 variant="ghost"
@@ -1697,6 +1663,9 @@ function AdminOrdersPageInner() {
                                <div className="space-y-0.5">
                                  <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
                                  {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
+                                 {!isGuest && order.customer?.phone && (
+                                   <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded inline-block">{order.customer.phone}</p>
+                                 )}
                                  {isGuest ? (
                                    <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
                                  ) : (
@@ -1907,8 +1876,8 @@ function AdminOrdersPageInner() {
                                   </DropdownMenuItem>
                                 ) : null}
 
-                                {/* ── Refund / Return ── */}
-                                {!isOrderVoided(order) && (
+                                {/* ── Refund / Return — only visible when Pending, Processing, or Delivered ── */}
+                                {!isOrderVoided(order) && (order.status === "Pending" || order.status === "Processing" || order.status === "Delivered") && (
                                   <DropdownMenuItem
                                     onClick={() => handleOpenVoidDialog(order)}
                                     className="cursor-pointer rounded-lg font-bold text-sm text-red-650"
@@ -1927,8 +1896,8 @@ function AdminOrdersPageInner() {
                                   </>
                                 )}
 
-                                {/* ── Delivery Status Progression (Local Delivery only) ── */}
-                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Delivered" && (
+                                {/* ── Delivery Status Progression (Local Delivery only, admin caps at Shipped) ── */}
+                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Shipped" && order.status !== "Arrived" && order.status !== "Delivered" && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
@@ -1942,16 +1911,17 @@ function AdminOrdersPageInner() {
                                         <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                       </DropdownMenuItem>
                                     )}
-                                    {order.status === "Shipped" && (
-                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Arrived")} className="cursor-pointer rounded-lg font-bold text-sm text-purple-650">
-                                        <MapPin className="mr-2 h-4 w-4 text-purple-400" /> Mark Arrived
-                                      </DropdownMenuItem>
-                                    )}
-                                    {order.status === "Arrived" && (
-                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Delivered")} className="cursor-pointer rounded-lg font-bold text-sm text-emerald-650">
-                                        <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-400" /> Mark Delivered
-                                      </DropdownMenuItem>
-                                    )}
+                                    {/* Arrived & Delivered are delivery-guy only — not shown to admin */}
+                                  </>
+                                )}
+                                {/* Show read-only label when already with delivery guy */}
+                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && (order.status === "Arrived" || order.status === "Shipped") && order.status !== "Delivered" && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Delivery Status</DropdownMenuLabel>
+                                    <DropdownMenuItem disabled className="cursor-not-allowed rounded-lg font-bold text-sm text-zinc-400 opacity-60">
+                                      <Truck className="mr-2 h-4 w-4" /> With Delivery Guy
+                                    </DropdownMenuItem>
                                   </>
                                 )}
                               </DropdownMenuGroup>
@@ -2016,7 +1986,15 @@ function AdminOrdersPageInner() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell><div className="space-y-0.5"><p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p><p className="text-[11px] text-zinc-500 font-medium">{order.customer?.email}</p></div></TableCell>
+                      <TableCell>
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p>
+                          {order.customer?.email && <p className="text-[10px] text-zinc-400 font-medium">{order.customer.email}</p>}
+                          {order.customer?.phone && (
+                            <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded inline-block">{order.customer.phone}</p>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name || "Origin"}</div>
@@ -2167,7 +2145,8 @@ function AdminOrdersPageInner() {
                                 </>
                               )}
 
-                              {!isOrderVoided(order) && order.status !== "Cancellation Requested" && (
+                              {/* ── Refund / Return — only visible when Pending, Processing, or Delivered ── */}
+                              {!isOrderVoided(order) && (order.status === "Pending" || order.status === "Processing" || order.status === "Delivered") && (
                                 <>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
@@ -2284,6 +2263,11 @@ function AdminOrdersPageInner() {
                 {currentSelectedOrder?.customer?.name?.toLowerCase() !== "walk-in customer" && (
                   <p className="text-sm text-zinc-500 font-medium">{currentSelectedOrder?.customer?.email}</p>
                 )}
+                {currentSelectedOrder?.customer?.phone && (
+                  <p className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded inline-block mt-1">
+                    📞 {currentSelectedOrder.customer.phone}
+                  </p>
+                )}
                 <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
               </div>
             </div>
@@ -2331,7 +2315,11 @@ function AdminOrdersPageInner() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-bold text-zinc-800 truncate">{currentSelectedOrder.driver.name}</p>
-                        {currentSelectedOrder.driver.phone && <p className="text-xs text-zinc-500 truncate">{currentSelectedOrder.driver.phone}</p>}
+                        {currentSelectedOrder.driver.phone && (
+                          <p className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded inline-block mt-0.5">
+                            📞 {currentSelectedOrder.driver.phone}
+                          </p>
+                        )}
                         <div className="flex flex-wrap gap-1 mt-1">
                           {(currentSelectedOrder.driver.city || currentSelectedOrder.driver.country) && (
                             <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded truncate">
@@ -2400,7 +2388,14 @@ function AdminOrdersPageInner() {
                         </span>
                       </div>
                       {attempt.driver && (
-                        <p className="text-[11px] text-zinc-600 font-semibold">Driver: {attempt.driver.name}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-[11px] text-zinc-600 font-semibold">Driver: {attempt.driver.name}</p>
+                          {attempt.driver.phone && (
+                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
+                              📞 {attempt.driver.phone}
+                            </span>
+                          )}
+                        </div>
                       )}
                       {attempt.notes && (
                         <p className="text-[11px] text-zinc-500 italic">"{attempt.notes}"</p>
@@ -2626,15 +2621,23 @@ function AdminOrdersPageInner() {
 
                 {selectedCustomerId === "new" && (
                   <div className="space-y-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    {/* Info banner */}
+                    <div className="flex items-start gap-2 bg-blue-100/70 border border-blue-200 rounded-lg px-3 py-2.5">
+                      <span className="text-blue-600 mt-0.5">ℹ️</span>
+                      <p className="text-[11px] text-blue-700 font-medium leading-snug">
+                        Set an initial password for this customer. They can log in using their email and this password, then reset it from their portal.
+                      </p>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-500">Full Name *</label>
+                        <label className="text-xs font-semibold text-zinc-500">Full Name <span className="text-red-500">*</span></label>
                         <Input placeholder="Customer Name" className="h-10 border-zinc-200 rounded-lg bg-white"
                           value={newCustomerData.name} onChange={(e) => setNewCustomerData({ ...newCustomerData, name: e.target.value })} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-500">Gmail Address{registerAccount ? " *" : ""} <span className="text-zinc-400">(name@gmail.com)</span></label>
-                        <Input type="email" placeholder="name@gmail.com" className="h-10 border-zinc-200 rounded-lg bg-white"
+                        <label className="text-xs font-semibold text-zinc-500">Email Address <span className="text-red-500">*</span> <span className="text-zinc-400 font-normal">(used for login)</span></label>
+                        <Input type="email" placeholder="name@example.com" className="h-10 border-zinc-200 rounded-lg bg-white"
                           value={newCustomerData.email} onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })} />
                       </div>
                       <div className="space-y-1.5">
@@ -2649,23 +2652,12 @@ function AdminOrdersPageInner() {
                       </div>
                     </div>
 
-                    {/* Register Login Account Toggle */}
+                    {/* Password fields — always required */}
                     <div className="pt-2 border-t border-blue-100">
-                      <label className="flex items-center gap-2.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={registerAccount}
-                          onChange={(e) => { setRegisterAccount(e.target.checked); if (!e.target.checked) setNewCustomerData(p => ({ ...p, password: "", confirmPassword: "" })); }}
-                          className="w-4 h-4 accent-blue-600 rounded"
-                        />
-                        <span className="text-xs font-bold text-zinc-700">Register Login Account for this Customer</span>
-                      </label>
-                    </div>
-
-                    {registerAccount && (
+                      <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-3">🔐 Login Credentials</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-500">Password *</label>
+                          <label className="text-xs font-semibold text-zinc-500">Initial Password <span className="text-red-500">*</span></label>
                           <div className="relative">
                             <Input
                               type={showNewPass ? "text" : "password"}
@@ -2680,7 +2672,7 @@ function AdminOrdersPageInner() {
                           </div>
                         </div>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-500">Confirm Password *</label>
+                          <label className="text-xs font-semibold text-zinc-500">Confirm Password <span className="text-red-500">*</span></label>
                           <div className="relative">
                             <Input
                               type={showConfirmPass ? "text" : "password"}
@@ -2695,7 +2687,7 @@ function AdminOrdersPageInner() {
                           </div>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>

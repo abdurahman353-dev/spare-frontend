@@ -35,6 +35,7 @@ interface Order {
   tracking_number: string;
   created_at: string;
   updated_at: string;
+  assigned_at?: string;
   status: string;
   shipping_city: string;
   shipping_country: string;
@@ -506,8 +507,8 @@ export default function DeliveryPortal() {
 
   const handleReleaseSubmit = async () => {
     if (!releaseModalOrder) return;
-    if (releaseType === "failure" && !releaseReason) {
-      toast.error("Please select a failure reason");
+    if (!releaseReason) {
+      toast.error(releaseType === "failure" ? "Please select a failure reason" : "Please select an operational reason");
       return;
     }
 
@@ -515,7 +516,7 @@ export default function DeliveryPortal() {
     try {
       const res = await api.post(`/delivery/orders/${releaseModalOrder.id}/release`, {
         release_type: releaseType,
-        reason: releaseType === "failure" ? releaseReason : null,
+        reason: releaseReason,
         notes: releaseNotes || null,
       });
 
@@ -1423,6 +1424,25 @@ export default function DeliveryPortal() {
                 </div>
               </div>
 
+              {/* Dropdown if releaseType is operational */}
+              {releaseType === "operational" && (
+                <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Operational Reason *</label>
+                  <select
+                    value={releaseReason}
+                    onChange={e => setReleaseReason(e.target.value)}
+                    className="w-full h-11 border border-zinc-200 rounded-xl px-3 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc]"
+                  >
+                    <option value="">-- Select an Operational Reason --</option>
+                    <option value="Vehicle Breakdown">Vehicle Breakdown (Flat tire, engine fail)</option>
+                    <option value="End of Shift">Ran Out of Time / End of Shift</option>
+                    <option value="Severe Weather">Severe Weather / Road Blocked</option>
+                    <option value="Emergency">Personal / Medical Emergency</option>
+                    <option value="Other">Other (Specify in notes)</option>
+                  </select>
+                </div>
+              )}
+
               {/* Dropdown if releaseType is failure */}
               {releaseType === "failure" && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -1596,25 +1616,31 @@ function EmptyState({ icon: Icon, title, message, action }: {
 
 function SlaTimer({ order }: { order: Order }) {
   const [timeLeft, setTimeLeft] = useState("");
-  const [color, setColor] = useState("text-zinc-500");
+  const [isBreached, setIsBreached] = useState(false);
+  const [isCritical, setIsCritical] = useState(false);
+  const [isDelivered, setIsDelivered] = useState(false);
+  const [isArrived, setIsArrived] = useState(false);
 
   useEffect(() => {
-    // If the driver has arrived at the customer's doorstep (local) or is out for delivery (shipment), stop the timer
-    if (order.status === "Arrived") {
-      const local = isLocalDelivery(order);
-      setTimeLeft(local ? "At Customer Doorstep 📍" : "At Destination Hub 📦");
-      setColor("text-emerald-600 font-black");
+    // SLA only stops at Delivered — Arrived does NOT stop the timer
+    if (order.status === "Delivered") {
+      setIsDelivered(true);
+      setTimeLeft("✅ Delivered");
       return;
     }
+    setIsDelivered(false);
 
     const updateTimer = () => {
-      const claimTime = new Date(order.updated_at).getTime();
+      const startTimestamp = order.assigned_at || order.updated_at;
+      const claimTime = new Date(startTimestamp).getTime();
       const breachTime = claimTime + 4 * 60 * 60 * 1000;
       const diff = breachTime - Date.now();
 
       if (diff <= 0) {
-        setTimeLeft("SLA BREACHED ⚠️ (Auto-released + Strike Marked)");
-        setColor("text-red-600 font-black animate-pulse");
+        setIsBreached(true);
+        setIsCritical(false);
+        setIsArrived(false);
+        setTimeLeft("SLA BREACHED ⚠️");
         return;
       }
 
@@ -1622,20 +1648,58 @@ function SlaTimer({ order }: { order: Order }) {
       const mins = Math.floor((diff % 3600000) / 60000);
       const secs = Math.floor((diff % 60000) / 1000);
 
+      setIsBreached(false);
+      setIsArrived(order.status === "Arrived");
+      setIsCritical(diff < 1800000); // under 30 min = critical
       setTimeLeft(`${hrs}h ${mins}m ${secs}s left`);
-      if (diff < 1800000) {
-        setColor("text-rose-500 font-black animate-pulse");
-      } else {
-        setColor("text-amber-500 font-bold");
-      }
     };
 
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [order.status, order.updated_at]);
+  }, [order.status, order.updated_at, order.assigned_at]);
 
-  return <span className={`text-xs font-bold ${color}`}>{timeLeft}</span>;
+  if (isDelivered) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center justify-between">
+        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">SLA Release Timer</span>
+        <span className="text-sm font-black text-emerald-600">✅ Delivered</span>
+      </div>
+    );
+  }
+
+  if (isBreached) {
+    return (
+      <div className="bg-red-600 border-2 border-red-700 rounded-xl px-4 py-3 flex items-center justify-between animate-pulse">
+        <span className="text-[10px] font-black text-red-100 uppercase tracking-widest">SLA Release Timer</span>
+        <span className="text-sm font-black text-white">⚠️ SLA BREACHED</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`rounded-xl px-4 py-3 border-2 ${
+      isCritical
+        ? "bg-red-600 border-red-700 animate-pulse"
+        : isArrived
+          ? "bg-purple-50 border-purple-300"
+          : "bg-red-50 border-red-400"
+    }`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <span className={`text-[10px] font-black uppercase tracking-widest ${
+            isCritical ? "text-red-100" : isArrived ? "text-purple-600" : "text-red-600"
+          }`}>SLA Release Timer</span>
+          {isArrived && (
+            <span className="text-[9px] font-bold text-purple-500 uppercase tracking-wide">📍 At Doorstep — Complete delivery!</span>
+          )}
+        </div>
+        <span className={`text-base font-black tabular-nums tracking-tight ${
+          isCritical ? "text-white" : isArrived ? "text-purple-700" : "text-red-600"
+        }`}>{timeLeft}</span>
+      </div>
+    </div>
+  );
 }
 
 function formatWhatsAppNumber(phone: string): string {
@@ -1755,10 +1819,7 @@ function OrderCard({
         <CardContent className="p-4 space-y-4">
           {/* SLA countdown timer inside task detail if assigned */}
           {order.delivered_by_user_id === myId && (
-            <div className="bg-zinc-50 border border-zinc-100 rounded-xl px-3 py-2 flex items-center justify-between">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">SLA Release Timer</span>
-              <SlaTimer order={order} />
-            </div>
+            <SlaTimer order={order} />
           )}
 
           {/* Customer info */}

@@ -28,7 +28,7 @@ const DELIVERY_PATHS = ['/delivery'];
 const ACCOUNT_PATHS  = ['/account'];
 const AUTH_PATHS     = ['/login', '/register'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get('auth_token')?.value
     ?? request.headers.get('authorization')?.replace('Bearer ', '');

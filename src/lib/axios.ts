@@ -19,9 +19,14 @@ api.interceptors.response.use(
         window.location.href = "/login";
       }
     }
-    // If a non-admin hits an admin route (403), redirect them to their customer portal
+    // Only redirect on 403s from the admin dashboard routes.
+    // Delivery, checkout, and other API 403s (e.g. 24-hour block) must surface
+    // as normal rejected promises so the caller can handle them with a toast.
     if (error.response?.status === 403) {
-      if (typeof window !== "undefined" && !window.location.pathname.includes('/account')) {
+      if (
+        typeof window !== "undefined" &&
+        window.location.pathname.startsWith("/dashboard")
+      ) {
         window.location.href = "/account";
       }
     }

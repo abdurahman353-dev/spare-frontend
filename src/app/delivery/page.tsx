@@ -12,7 +12,7 @@ import {
   User, Check, X, Bell, Search, RefreshCw,
   Truck, TrendingUp, Shield, Navigation,
   ChevronRight, Filter, BarChart3,
-  WifiOff, Key, Lock, AlertTriangle, SortDesc, SortAsc, ArrowRightLeft,
+  WifiOff, Key, Lock, AlertTriangle, SortDesc, SortAsc, ArrowRightLeft, AlertOctagon,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { API_ENDPOINTS } from "@/lib/apis";
@@ -43,13 +43,34 @@ interface Order {
   shipping_method: string;
   total_amount: number;
   delivered_by_user_id: number | null;
+  reserved_by_user_id?: number | null;
+  reserved_at?: string;
+  last_released_by_user_id?: number | null;
+  last_release_reason?: string | null;
+  last_release_notes?: string | null;
+  last_released_at?: string | null;
   delivery_pin?: string;
+  pin_locked?: boolean;
+  pin_attempts?: number;
   customer?: { name: string; phone?: string; email?: string };
   items?: OrderItem[];
   delivery_signature_url?: string;
   delivery_photo_url?: string;
   driver?: { name: string; phone?: string; vehicle_plate?: string };
+  reserved_by_driver?: { name: string; phone?: string; vehicle_plate?: string } | null;
+  last_released_by_driver?: { name: string; phone?: string; vehicle_plate?: string } | null;
   notes?: string;
+  delivery_attempts?: DeliveryAttempt[];
+  my_handover_pin?: string | null;
+}
+
+interface DeliveryAttempt {
+  id: number;
+  driver_id: number;
+  reason: string;
+  notes?: string;
+  attempted_at: string;
+  driver?: { name: string };
 }
 
 interface DeliveryNotification {
@@ -159,9 +180,11 @@ function playNotificationSound() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DeliveryPortal() {
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, loading: authLoading, logout, refreshUser } = useAuth();
   const { settings } = useSettings();
   const router = useRouter();
+
+  const [acknowledgingSla, setAcknowledgingSla] = useState(false);
 
   // Core data
   const [orders, setOrders] = useState<Order[]>([]);
@@ -171,6 +194,7 @@ export default function DeliveryPortal() {
   // Loading states
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false); // only for the small refresh button spinner
   const [isOnline, setIsOnline] = useState(true);
 
   // Tabs: "pool" | "mine" | "completed"
@@ -190,9 +214,15 @@ export default function DeliveryPortal() {
 
   // Order actions
   const [claimingId, setClaimingId]     = useState<number | null>(null);
+  const [reservingId, setReservingId]   = useState<number | null>(null);
+  const [confirmReceiptOrder, setConfirmReceiptOrder] = useState<Order | null>(null);
+  const [confirmingReceiptId, setConfirmingReceiptId] = useState<number | null>(null);
+  const [confirmingHandoverId, setConfirmingHandoverId] = useState<number | null>(null);
   const [releasingId, setReleasingId]   = useState<number | null>(null);
   const [markingId, setMarkingId]       = useState<number | null>(null);
   const [confirmClaimOrder, setConfirmClaimOrder] = useState<Order | null>(null); // custom claim confirm dialog
+  const [confirmReserveOrder, setConfirmReserveOrder] = useState<Order | null>(null); // custom reserve confirm dialog
+
 
   // PIN verification
   const [pinOrder, setPinOrder] = useState<Order | null>(null);
@@ -201,6 +231,11 @@ export default function DeliveryPortal() {
   const [pinVerified, setPinVerified] = useState(false);
   const [pinError, setPinError] = useState("");
   const [showPinDialog, setShowPinDialog] = useState(false);
+
+  // Handover PIN verification
+  const [handoverPinOrder, setHandoverPinOrder] = useState<Order | null>(null);
+  const [handoverPinInput, setHandoverPinInput] = useState("");
+  const [handoverPinError, setHandoverPinError] = useState("");
 
   // Signature capture
   const [signatureOrder, setSignatureOrder] = useState<Order | null>(null);
@@ -233,6 +268,7 @@ export default function DeliveryPortal() {
   const knownAssignmentsRef = useRef<Map<number, number | null>>(new Map());
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const secondsRef = useRef<NodeJS.Timeout | null>(null);
+  const hasInitialLoadedRef = useRef(false);
   const [secondsSinceSync, setSecondsSinceSync] = useState(0);
 
   const currency = settings?.currency ?? "Ksh";
@@ -269,7 +305,9 @@ export default function DeliveryPortal() {
   // ── Data Fetching ─────────────────────────────────────────────────────────
   const fetchOrders = useCallback(async (silent = false) => {
     if (!user) return;
-    if (!silent) setLoading(true); else setIsSyncing(true);
+    // SILENT background syncs: never touch the loading state at all.
+    // Only the initial load (silent=false) and manual refresh show the spinner.
+    if (!silent) setLoading(true);
     try {
       const res = await api.get(API_ENDPOINTS.delivery.orders);
       const incoming: Order[] = res.data as Order[];
@@ -307,8 +345,8 @@ export default function DeliveryPortal() {
     } catch {
       if (!silent) toast.error("Failed to load delivery manifests");
     } finally {
-      setLoading(false);
-      setIsSyncing(false);
+      // Only turn off the loading spinner if we turned it on (non-silent calls only)
+      if (!silent) setLoading(false);
     }
   }, [user]);
 
@@ -329,14 +367,50 @@ export default function DeliveryPortal() {
   // Initial load
   useEffect(() => {
     if (user && (user.role === "delivery" || user.role === "admin" || user.role === "superadmin")) {
-      fetchOrders(false);
-      fetchStats();
-      fetchNotifications();
+      if (!hasInitialLoadedRef.current) {
+        hasInitialLoadedRef.current = true;
+        fetchOrders(false);
+        fetchStats();
+        fetchNotifications();
+      }
     }
-  }, [user, fetchOrders, fetchStats, fetchNotifications]);
+  }, [user?.id, fetchOrders, fetchStats, fetchNotifications]);
 
   // ── Filtered lists ─────────────────────────────────────────────────────────
   const myId = user?.id ?? 0;
+
+  // ── myTasks MUST be declared before any useEffect that reads myTasks ────────
+  // (JavaScript temporal dead zone: useMemo is a const, so hoisting a useEffect
+  //  dependency on it before declaration causes a ReferenceError at runtime.)
+  const myTasks = useMemo(() => {
+    let list = orders.filter(o =>
+      (o.status === "Shipped" || o.status === "Arrived") &&
+      o.delivered_by_user_id === myId
+    );
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(o =>
+        o.tracking_number.toLowerCase().includes(q) ||
+        (o.customer?.name ?? "").toLowerCase().includes(q) ||
+        o.shipping_city.toLowerCase().includes(q) ||
+        (o.notes ?? "").toLowerCase().includes(q)
+      );
+    }
+    return list.sort((a, b) =>
+      sortOrder === "newest"
+        ? new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
+    );
+  }, [orders, myId, searchQuery, sortOrder]);
+
+  const pendingHandovers = useMemo(() => {
+    return orders.filter(o =>
+      o.last_released_by_user_id === myId &&
+      o.delivered_by_user_id === null &&
+      o.reserved_by_user_id !== null &&
+      o.reserved_by_user_id !== undefined
+    );
+  }, [orders, myId]);
 
   // Unique countries & cities for filter selectors.
   // IMPORTANT: These must be declared BEFORE the polling useEffect (line ~300)
@@ -381,35 +455,24 @@ export default function DeliveryPortal() {
   useEffect(() => {
     if (!user) return;
     pollingRef.current = setInterval(() => {
-      if (isOnline) { fetchOrders(true); fetchStats(); fetchNotifications(); }
+      if (isOnline) {
+        fetchOrders(true);
+        fetchStats();
+        fetchNotifications();
+        refreshUser();
+      }
     }, 30000);
     secondsRef.current = setInterval(() => setSecondsSinceSync(s => s + 1), 1000);
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
       if (secondsRef.current) clearInterval(secondsRef.current);
     };
-  }, [user, isOnline, fetchOrders, fetchStats, fetchNotifications]);
+  }, [user, isOnline, fetchOrders, fetchStats, fetchNotifications, refreshUser]);
 
-  const myTasks = useMemo(() => {
-    let list = orders.filter(o =>
-      (o.status === "Shipped" || o.status === "Arrived") &&
-      o.delivered_by_user_id === myId
-    );
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(o =>
-        o.tracking_number.toLowerCase().includes(q) ||
-        (o.customer?.name ?? "").toLowerCase().includes(q) ||
-        o.shipping_city.toLowerCase().includes(q) ||
-        (o.notes ?? "").toLowerCase().includes(q)
-      );
-    }
-    return list.sort((a, b) =>
-      sortOrder === "newest"
-        ? new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-    );
-  }, [orders, myId, searchQuery, sortOrder]);
+  // NOTE: SLA breaches do NOT auto-logout. Drivers may finish their active orders
+  // after an SLA breach. The SLA Breach Warning Modal (below in JSX) handles
+  // notifying the driver and requiring them to acknowledge. Claiming new orders
+  // is blocked server-side when sla_breaches >= 3.
 
   const openPool = useMemo(() => {
     let list = orders.filter(o => {
@@ -451,6 +514,7 @@ export default function DeliveryPortal() {
         o.tracking_number.toLowerCase().includes(q) ||
         (o.customer?.name ?? "").toLowerCase().includes(q) ||
         o.shipping_city.toLowerCase().includes(q) ||
+        (o.shipping_address ?? "").toLowerCase().includes(q) ||
         (o.notes ?? "").toLowerCase().includes(q)
       );
     }
@@ -458,7 +522,161 @@ export default function DeliveryPortal() {
   }, [orders, myId, searchQuery]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
+  const handleReserve = (order: Order) => {
+    if ((user?.sla_breaches ?? 0) >= 3) {
+      toast.error(
+        "Your account is temporarily suspended due to 3 SLA breaches. Please complete your active deliveries. Contact the admin to reactivate your account.",
+        {
+          duration: 8000,
+          icon: "🚫",
+          style: { background: "#dc2626", color: "#fff", fontWeight: "bold", fontSize: "12px", borderRadius: "10px", maxWidth: "420px" }
+        }
+      );
+      return;
+    }
+    const reservedCount = orders.filter(o => o.reserved_by_user_id === user?.id && o.delivered_by_user_id === null).length;
+    if (myTasks.length + reservedCount >= 5) {
+      toast.error(
+        "You already have 5 active/reserved orders. Complete or release one before reserving another.",
+        {
+          duration: 6000,
+          icon: "⚠️",
+          style: { background: "#d97706", color: "#fff", fontWeight: "bold", fontSize: "12px", borderRadius: "10px", maxWidth: "400px" }
+        }
+      );
+      return;
+    }
+    if (order.shipping_city && user?.city &&
+      order.shipping_city.toLowerCase() !== (user.city ?? "").toLowerCase()) {
+      toast.error(
+        `Location Mismatch: This order is destined for ${order.shipping_city}, but your profile is registered to ${user.city}. You cannot reserve orders outside your registered hub.`,
+        {
+          duration: 5000,
+          icon: "🚫",
+          style: { background: "#ef4444", color: "#fff", fontWeight: "bold", fontSize: "12px", borderRadius: "10px", maxWidth: "400px" }
+        }
+      );
+      return;
+    }
+    setConfirmReserveOrder(order);
+  };
+
+  const handleReserveConfirmed = async () => {
+    const order = confirmReserveOrder;
+    if (!order) return;
+    setConfirmReserveOrder(null);
+    setReservingId(order.id);
+    try {
+      const response = await api.post(`/delivery/orders/${order.id}/reserve`);
+      const handoverPin = response.data?.handover_pin;
+      const prevDriverName = order.last_released_by_driver?.name;
+      const prevDriverPhone = order.last_released_by_driver?.phone;
+      
+      let msg = `Order reserved successfully!`;
+      if (handoverPin) {
+        msg += ` Your Handover PIN is: ${handoverPin}.`;
+      }
+      if (prevDriverName && prevDriverPhone) {
+        msg += ` Please contact previous driver ${prevDriverName} at ${prevDriverPhone} to collect the package.`;
+      }
+      
+      toast.success(msg, {
+        duration: 12000,
+        icon: "📌",
+      });
+      fetchOrders(true);
+      fetchStats();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to reserve order";
+      toast.error(msg);
+    } finally {
+      setReservingId(null);
+    }
+  };
+
+  const handleConfirmReceipt = async () => {
+    const order = confirmReceiptOrder;
+    if (!order) return;
+    setConfirmReceiptOrder(null);
+    setConfirmingReceiptId(order.id);
+    try {
+      await api.post(`/delivery/orders/${order.id}/confirm-receipt`);
+      toast.success(`Receipt confirmed! Order ${order.tracking_number} is now assigned to you.`, {
+        icon: "✅",
+        style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
+      });
+      setActiveTab("mine");
+      fetchOrders(true);
+      fetchStats();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to confirm receipt";
+      toast.error(msg);
+    } finally {
+      setConfirmingReceiptId(null);
+    }
+  };
+
+  const handleConfirmHandover = (order: Order) => {
+    setHandoverPinOrder(order);
+    setHandoverPinInput("");
+    setHandoverPinError("");
+  };
+
+  const handleHandoverSubmit = async () => {
+    if (!handoverPinOrder) return;
+    if (handoverPinInput.length !== 4) {
+      setHandoverPinError("Please enter a valid 4-digit PIN.");
+      return;
+    }
+    const order = handoverPinOrder;
+    const nextDriverName = order.reserved_by_driver?.name ?? `Driver #${order.reserved_by_user_id}`;
+    setConfirmingHandoverId(order.id);
+    setHandoverPinError("");
+    try {
+      await api.post(`/delivery/orders/${order.id}/confirm-handover`, { pin: handoverPinInput });
+      toast.success(`Handover confirmed! Order ${order.tracking_number} is now assigned to ${nextDriverName}.`, {
+        icon: "🤝",
+        style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
+      });
+      setHandoverPinOrder(null);
+      setHandoverPinInput("");
+      fetchOrders(true);
+      fetchStats();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to confirm handover";
+      setHandoverPinError(msg);
+    } finally {
+      setConfirmingHandoverId(null);
+    }
+  };
+
   const handleClaim = async (order: Order) => {
+    // ── SLA Suspension Guard ─────────────────────────────────────────────────
+    // If the driver has 3+ SLA breaches their account is suspended.
+    // They can still DELIVER existing orders, but cannot claim new ones.
+    if ((user?.sla_breaches ?? 0) >= 3) {
+      toast.error(
+        "Your account is temporarily suspended due to 3 SLA breaches. Please complete your active deliveries. Contact the admin to reactivate your account.",
+        {
+          duration: 8000,
+          icon: "🚫",
+          style: { background: "#dc2626", color: "#fff", fontWeight: "bold", fontSize: "12px", borderRadius: "10px", maxWidth: "420px" }
+        }
+      );
+      return;
+    }
+    // ── Max Active Orders Cap (5) ────────────────────────────────────────────
+    if (myTasks.length >= 5) {
+      toast.error(
+        "You have reached the maximum of 5 active orders. Deliver an existing order before claiming a new one.",
+        {
+          duration: 6000,
+          icon: "⚠️",
+          style: { background: "#d97706", color: "#fff", fontWeight: "bold", fontSize: "12px", borderRadius: "10px", maxWidth: "400px" }
+        }
+      );
+      return;
+    }
     // ── Location Mismatch Guard ──────────────────────────────────────────────
     if (order.shipping_city && user?.city &&
       order.shipping_city.toLowerCase() !== (user.city ?? "").toLowerCase()) {
@@ -487,9 +705,9 @@ export default function DeliveryPortal() {
         icon: "🔒",
         style: { background: "#0052cc", color: "#fff", fontWeight: "bold" },
       });
-      await fetchOrders(true);
-      await fetchStats();
       setActiveTab("mine");
+      fetchOrders(true);
+      fetchStats();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to secure order";
       toast.error(msg);
@@ -522,8 +740,8 @@ export default function DeliveryPortal() {
 
       toast.success(res.data.message || `Order ${releaseModalOrder.tracking_number} released back to the pool.`);
       setReleaseModalOrder(null);
-      await fetchOrders(true);
-      await fetchStats();
+      fetchOrders(true);
+      fetchStats();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to release order";
       toast.error(msg);
@@ -540,8 +758,8 @@ export default function DeliveryPortal() {
         icon: "📍",
         style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
       });
-      await fetchOrders(true);
-      await fetchStats();
+      fetchOrders(true);
+      fetchStats();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to mark as arrived";
       toast.error(msg);
@@ -726,9 +944,10 @@ export default function DeliveryPortal() {
       setShowSignatureModal(false);
       setSignatureOrder(null);
       setPhotoBase64(null);
-      await fetchOrders(true);
-      await fetchStats();
       setActiveTab("completed");
+      fetchOrders(true);
+      fetchStats();
+      refreshUser();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to complete delivery";
       toast.error(msg);
@@ -764,12 +983,26 @@ export default function DeliveryPortal() {
       setFailedAttemptOrder(null);
       setFailedReason("");
       setFailedNotes("");
-      await fetchOrders(true);
+      fetchOrders(true);
     } catch (err: any) {
       const msg = err.response?.data?.message ?? "Failed to log attempt";
       toast.error(msg);
     } finally {
       setFailedLoading(false);
+    }
+  };
+
+  // Acknowledge SLA breaches handler
+  const handleAcknowledgeSla = async () => {
+    setAcknowledgingSla(true);
+    try {
+      await api.post("/delivery/acknowledge-sla-breaches");
+      toast.success("SLA warning acknowledged.", { icon: "📝" });
+      await refreshUser();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? "Failed to acknowledge warning.");
+    } finally {
+      setAcknowledgingSla(false);
     }
   };
 
@@ -812,17 +1045,15 @@ export default function DeliveryPortal() {
           </button>
 
           <div className="flex items-center gap-2">
-            {/* Sync indicator */}
+            {/* Sync indicator — always quiet green dot during background sync */}
             <div className="hidden sm:flex items-center gap-1.5 bg-white/10 rounded-lg px-2 py-1.5">
-              {isSyncing ? (
-                <RefreshCw className="h-3 w-3 text-blue-200 animate-spin" />
-              ) : isOnline ? (
+              {isOnline ? (
                 <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               ) : (
                 <WifiOff className="h-3 w-3 text-red-300" />
               )}
               <span className="text-[9px] font-bold text-blue-200 uppercase tracking-wide">
-                {isSyncing ? "Syncing..." : `${secondsSinceSync}s ago`}
+                {secondsSinceSync}s ago
               </span>
             </div>
 
@@ -928,11 +1159,15 @@ export default function DeliveryPortal() {
             </button>
           )}
           <button
-            onClick={() => { fetchOrders(false); fetchStats(); fetchNotifications(); }}
-            disabled={isSyncing}
+            onClick={async () => {
+              setIsManualRefreshing(true);
+              await Promise.all([fetchOrders(false), fetchStats(), fetchNotifications()]);
+              setIsManualRefreshing(false);
+            }}
+            disabled={isManualRefreshing}
             className="h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-zinc-200 text-zinc-600 shadow-sm shrink-0"
           >
-            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin text-[#0052cc]" : ""}`} />
+            <RefreshCw className={`h-4 w-4 ${isManualRefreshing ? "animate-spin text-[#0052cc]" : ""}`} />
           </button>
         </div>
 
@@ -964,17 +1199,21 @@ export default function DeliveryPortal() {
                     myId={myId}
                     tab="pool"
                     currency={currency}
-                    isClaimLoading={claimingId === order.id}
-                    isReleaseLoading={false}
+                    isClaimLoading={confirmingReceiptId === order.id || claimingId === order.id}
+                    isReserveLoading={reservingId === order.id}
+                    isReleaseLoading={releasingId === order.id}
                     isMarkLoading={false}
                     allOrders={orders}
                     manifestChecked={manifestChecked}
                     onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
                     onClaim={() => handleClaim(order)}
-                    onRelease={() => { }}
+                    onReserve={() => handleReserve(order)}
+                    onConfirmReceipt={() => setConfirmReceiptOrder(order)}
+                    onRelease={() => openReleaseModal(order)}
                     onMarkArrived={() => { }}
                     onDeliver={() => openPinDialog(order)}
                     onLogFailedAttempt={() => { }}
+                    onHandoverExpired={() => fetchOrders(true)}
                   />
                 ))
               )
@@ -982,35 +1221,85 @@ export default function DeliveryPortal() {
 
             {/* ── MY TASKS TAB ──────────────────────────────────────────── */}
             {activeTab === "mine" && (
-              myTasks.length === 0 ? (
-                <EmptyState
-                  icon={Truck}
-                  title="No Active Tasks"
-                  message="You have no claimed orders. Go to Open Pool to secure a delivery."
-                  action={{ label: "View Open Pool", onClick: () => setActiveTab("pool") }}
-                />
-              ) : (
-                myTasks.map(order => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    myId={myId}
-                    tab="mine"
-                    currency={currency}
-                    isClaimLoading={false}
-                    isReleaseLoading={releasingId === order.id}
-                    isMarkLoading={markingId === order.id}
-                    allOrders={orders}
-                    manifestChecked={manifestChecked}
-                    onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
-                    onClaim={() => { }}
-                    onRelease={() => openReleaseModal(order)}
-                    onMarkArrived={() => handleMarkArrived(order)}
-                    onDeliver={() => openPinDialog(order)}
-                    onLogFailedAttempt={() => openFailedAttemptModal(order)}
+              <div className="space-y-4">
+                {/* Pending Handovers Section */}
+                {pendingHandovers.length > 0 && (
+                  <div className="bg-blue-50/75 border border-blue-100 rounded-2xl p-4 text-left space-y-3 shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <ArrowRightLeft className="h-4 w-4 text-[#0052cc] animate-pulse shrink-0" />
+                      <h3 className="font-black text-slate-800 text-[11px] uppercase tracking-wider">Pending Handovers (Action Required)</h3>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-500 leading-snug">
+                      The following orders you released have been reserved by other drivers. Confirm physical handover below once they collect the package to start their SLA:
+                    </p>
+                    <div className="space-y-2">
+                      {pendingHandovers.map(handover => (
+                        <div key={handover.id} className="bg-white p-3 rounded-xl border border-blue-100/80 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <p className="font-extrabold text-slate-800 text-xs flex items-center flex-wrap gap-2">
+                              <span>Waybill:</span>
+                              <span className="text-[#0052cc] tracking-wide font-black">{handover.tracking_number}</span>
+                              {handover.reserved_at && (
+                                <HandoverCountdown reservedAt={handover.reserved_at} onExpired={() => fetchOrders(true)} />
+                              )}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 font-extrabold uppercase">
+                              Reserved By: <span className="text-zinc-700 font-black">{handover.reserved_by_driver?.name ?? `Driver #${handover.reserved_by_user_id}`}</span> 
+                              {handover.reserved_by_driver?.vehicle_plate && ` (${handover.reserved_by_driver.vehicle_plate})`}
+                            </p>
+                          </div>
+                          <Button
+                            onClick={() => handleConfirmHandover(handover)}
+                            disabled={confirmingHandoverId === handover.id}
+                            className="bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[10px] tracking-wider h-8 px-4 rounded-xl shrink-0 border-none"
+                          >
+                            {confirmingHandoverId === handover.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5 mr-1.5" />
+                            )}
+                            Confirm Handover
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {myTasks.length === 0 ? (
+                  <EmptyState
+                    icon={Truck}
+                    title="No Active Tasks"
+                    message="You have no claimed orders. Go to Open Pool to secure a delivery."
+                    action={{ label: "View Open Pool", onClick: () => setActiveTab("pool") }}
                   />
-                ))
-              )
+                ) : (
+                  myTasks.map(order => (
+                    <OrderCard
+                      key={order.id}
+                      order={order}
+                      myId={myId}
+                      tab="mine"
+                      currency={currency}
+                      isClaimLoading={false}
+                      isReserveLoading={false}
+                      isReleaseLoading={releasingId === order.id}
+                      isMarkLoading={markingId === order.id}
+                      allOrders={orders}
+                      manifestChecked={manifestChecked}
+                      onManifestCheckToggle={(orderId, checked) => setManifestChecked(prev => ({ ...prev, [orderId]: checked }))}
+                      onClaim={() => { }}
+                      onReserve={() => { }}
+                      onConfirmReceipt={() => { }}
+                      onRelease={() => openReleaseModal(order)}
+                      onMarkArrived={() => handleMarkArrived(order)}
+                      onDeliver={() => openPinDialog(order)}
+                      onLogFailedAttempt={() => openFailedAttemptModal(order)}
+                      onHandoverExpired={() => fetchOrders(true)}
+                    />
+                  ))
+                )}
+              </div>
             )}
 
             {/* ── COMPLETED TAB ─────────────────────────────────────────── */}
@@ -1344,11 +1633,11 @@ export default function DeliveryPortal() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Additional Notes / Context</label>
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">Additional Notes / Context *</label>
                 <textarea
                   value={failedNotes}
                   onChange={e => setFailedNotes(e.target.value)}
-                  placeholder="Provide any helpful instructions or explanation..."
+                  placeholder="Please write down the detailed reason you chose above..."
                   className="w-full h-24 border border-zinc-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] resize-none"
                 />
               </div>
@@ -1364,7 +1653,7 @@ export default function DeliveryPortal() {
                 </Button>
                 <Button
                   onClick={handleFailedAttempt}
-                  disabled={failedLoading || !failedReason}
+                  disabled={failedLoading || !failedReason || !failedNotes.trim()}
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
                 >
                   {failedLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
@@ -1466,12 +1755,12 @@ export default function DeliveryPortal() {
               {/* Notes */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
-                  {releaseType === "failure" ? "Failure Notes & Release Explanation *" : "Operational Notes / Reason"}
+                  {releaseType === "failure" ? "Failure Notes & Release Explanation *" : "Operational Notes / Reason Explanation *"}
                 </label>
                 <textarea
                   value={releaseNotes}
                   onChange={e => setReleaseNotes(e.target.value)}
-                  placeholder={releaseType === "failure" ? "Please detail why the delivery failed before releasing..." : "Flat tire, ran out of time, end of shift..."}
+                  placeholder={releaseType === "failure" ? "Please detail why the delivery failed before releasing..." : "Please write down the detailed operational reason you chose above..."}
                   className="w-full h-24 border border-zinc-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0052cc] resize-none"
                 />
               </div>
@@ -1486,11 +1775,72 @@ export default function DeliveryPortal() {
                 </Button>
                 <Button
                   onClick={handleReleaseSubmit}
-                  disabled={releasingId !== null || (releaseType === "failure" && (!releaseReason || !releaseNotes))}
+                  disabled={releasingId !== null || !releaseReason || !releaseNotes.trim()}
                   className="flex-1 bg-zinc-950 hover:bg-zinc-800 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
                 >
                   {releasingId !== null && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                   Confirm Release
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ── CONFIRM PHYSICAL PACKAGE RECEIPT DIALOG ── */}
+      <AnimatePresence>
+        {confirmReceiptOrder && (
+          <Modal onClose={() => setConfirmReceiptOrder(null)}>
+            <div className="p-5 border-b border-zinc-150 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <Check className="h-5 w-5 text-emerald-600" /> Confirm Package Receipt
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Ref: {confirmReceiptOrder.tracking_number}</p>
+              </div>
+              <button
+                onClick={() => setConfirmReceiptOrder(null)}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-650 hover:bg-zinc-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-left">
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+                <p className="text-[11px] font-bold text-amber-700 flex items-start gap-2 leading-relaxed">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                  <span>
+                    WARNING: Only confirm if you have the physical package in your hands right now. The 4-hour SLA delivery clock will start immediately.
+                  </span>
+                </p>
+              </div>
+
+              {confirmReceiptOrder.last_released_by_driver && (
+                <div className="bg-zinc-50 border border-zinc-150 rounded-xl p-3 text-xs space-y-1.5">
+                  <p className="font-extrabold text-slate-700">Handover details:</p>
+                  <p className="font-medium">Previous Driver: <span className="font-bold">{confirmReceiptOrder.last_released_by_driver.name}</span></p>
+                  {confirmReceiptOrder.last_released_by_driver.phone && (
+                    <p className="font-medium">Phone: <a href={`tel:${confirmReceiptOrder.last_released_by_driver.phone}`} className="text-blue-600 underline font-bold">{confirmReceiptOrder.last_released_by_driver.phone}</a></p>
+                  )}
+                  {confirmReceiptOrder.last_release_reason && (
+                    <p className="font-medium">Release Reason: <span className="text-red-500 font-bold">{confirmReceiptOrder.last_release_reason}</span></p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmReceiptOrder(null)}
+                  className="flex-1 font-bold rounded-xl h-11 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmReceipt}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  Yes, I Have Package
                 </Button>
               </div>
             </div>
@@ -1533,6 +1883,223 @@ export default function DeliveryPortal() {
                   className="flex-1 bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
                 >
                   Yes, Secure Order
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ── CUSTOM RESERVE ORDER CONFIRMATION DIALOG ── */}
+      <AnimatePresence>
+        {confirmReserveOrder && (
+          <Modal onClose={() => setConfirmReserveOrder(null)}>
+            <div className="p-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-[#0052cc]" /> Confirm Reservation
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Ref: {confirmReserveOrder.tracking_number}</p>
+              </div>
+              <button
+                onClick={() => setConfirmReserveOrder(null)}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-650 hover:bg-zinc-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-left">
+              <p className="text-xs font-bold text-zinc-600 leading-relaxed">
+                By reserving this order, you are claiming responsibility to collect the physical package from the previous driver (or the warehouse hub) and proceed with the delivery.
+              </p>
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] font-bold text-amber-800 leading-snug space-y-1.5">
+                <p>⚠️ Note: The SLA timer has not started yet. The SLA clock will begin only after you confirm the physical package receipt.</p>
+                <p>⏱️ Handover Window: You have exactly 15 minutes to coordinate with the other driver to confirm the order handover. If the handover is not confirmed within this 15-minute window, the reservation will automatically expire, the order will go back to the open pool, and it can be secured by another driver.</p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmReserveOrder(null)}
+                  className="flex-1 font-bold rounded-xl h-11 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleReserveConfirmed}
+                  className="flex-1 bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  Yes, Reserve Order
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ── HANDOVER PIN MODAL ── */}
+      <AnimatePresence>
+        {handoverPinOrder && (
+          <Modal onClose={() => {
+            setHandoverPinOrder(null);
+            setHandoverPinInput("");
+            setHandoverPinError("");
+          }}>
+            <div className="p-5 border-b border-zinc-150 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <ArrowRightLeft className="h-5 w-5 text-[#0052cc]" /> Verify Handover PIN
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Ref: {handoverPinOrder.tracking_number}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setHandoverPinOrder(null);
+                  setHandoverPinInput("");
+                  setHandoverPinError("");
+                }}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-650 hover:bg-zinc-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-left">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3">
+                <p className="text-[11px] font-bold text-blue-800 leading-relaxed">
+                  Enter the unique 4-digit Handover PIN displayed on the claiming driver's screen (<strong>{handoverPinOrder.reserved_by_driver?.name ?? `Driver #${handoverPinOrder.reserved_by_user_id}`}</strong>). This confirms face-to-face handover.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">4-Digit Handover PIN</label>
+                <Input
+                  type="text"
+                  maxLength={4}
+                  placeholder="Enter 4-digit PIN"
+                  value={handoverPinInput}
+                  onChange={e => {
+                    const val = e.target.value.replace(/\D/g, "");
+                    setHandoverPinInput(val);
+                    setHandoverPinError("");
+                  }}
+                  className="h-12 bg-zinc-50 border-zinc-200 text-center text-lg font-black tracking-widest rounded-xl focus-visible:ring-[#0052cc]"
+                />
+                {handoverPinError && (
+                  <p className="text-[10px] font-extrabold text-red-650 mt-1">⚠️ {handoverPinError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setHandoverPinOrder(null);
+                    setHandoverPinInput("");
+                    setHandoverPinError("");
+                  }}
+                  className="flex-1 font-bold rounded-xl h-11 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleHandoverSubmit}
+                  disabled={confirmingHandoverId !== null || handoverPinInput.length !== 4}
+                  className="flex-1 bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  {confirmingHandoverId !== null && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Verify &amp; Handover
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ── SLA BREACH WARNING MODAL ── */}
+      <AnimatePresence>
+        {user && (user.sla_breaches ?? 0) > (user.sla_breaches_acknowledged ?? 0) && (
+          <Modal onClose={() => {}}>
+            <div className="p-6 text-center space-y-4">
+              <div className={`h-14 w-14 rounded-full flex items-center justify-center mx-auto border-2 animate-pulse ${
+                (user.sla_breaches ?? 0) >= 3
+                  ? "bg-red-100 border-red-400"
+                  : "bg-amber-50 border-amber-300"
+              }`}>
+                <AlertOctagon className={`h-7 w-7 shrink-0 ${(user.sla_breaches ?? 0) >= 3 ? "text-red-600" : "text-amber-500"}`} />
+              </div>
+              <div className="space-y-2">
+                <h2 className={`text-lg font-black uppercase tracking-tight ${(user.sla_breaches ?? 0) >= 3 ? "text-red-700" : "text-amber-700"}`}>
+                  {(user.sla_breaches ?? 0) >= 3 ? "⛔ Account Suspended" : "⚠️ SLA Breach Strike"}
+                </h2>
+                <p className="text-xs font-bold text-zinc-600 leading-relaxed">
+                  You failed to deliver an order within the <span className="font-black text-red-600">4-hour SLA window</span>. You have received a strike against your account.
+                </p>
+
+                {/* Strike progress bar */}
+                <div className="flex gap-1.5 justify-center pt-1">
+                  {[1, 2, 3].map(i => (
+                    <div
+                      key={i}
+                      className={`h-3 flex-1 rounded-full border transition-all ${
+                        i <= (user.sla_breaches ?? 0)
+                          ? i === 3
+                            ? "bg-red-600 border-red-700"
+                            : "bg-amber-500 border-amber-600"
+                          : "bg-zinc-100 border-zinc-200"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                  Strike {user.sla_breaches} of 3
+                </p>
+
+                <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl space-y-2 text-left">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-500 font-bold">Account Status:</span>
+                    <span className={`font-black uppercase text-[10px] ${(user.sla_breaches ?? 0) >= 3 ? "text-red-600" : "text-amber-600"}`}>
+                      {(user.sla_breaches ?? 0) >= 3 ? "Suspended — Cannot Claim" : (user.sla_breaches ?? 0) === 2 ? "Final Warning" : "Warning Strike"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-zinc-500 font-bold">Active Orders:</span>
+                    <span className="font-black text-emerald-600">You may still deliver these</span>
+                  </div>
+                </div>
+
+                <div className={`text-[11px] font-semibold leading-normal pt-1 p-3 rounded-xl border ${
+                  (user.sla_breaches ?? 0) >= 3
+                    ? "bg-red-50 border-red-200 text-red-700"
+                    : "bg-amber-50 border-amber-200 text-amber-800"
+                }`}>
+                  {(user.sla_breaches ?? 0) >= 3 ? (
+                    <>
+                      <span className="font-extrabold block mb-1">Account Temporarily Closed</span>
+                      You have reached 3 SLA breaches. You can still complete your currently assigned orders peacefully, but you <span className="font-extrabold underline">cannot claim new orders</span> until an administrator reactivates your account.
+                    </>
+                  ) : (user.sla_breaches ?? 0) === 2 ? (
+                    <>
+                      <span className="font-extrabold block mb-1">⚠️ Final Warning — 1 Strike Remaining</span>
+                      One more SLA breach will temporarily close your account. You will still be able to deliver your active orders, but will be unable to claim new ones until an admin reactivates you.
+                    </>
+                  ) : (
+                    <>
+                      You have <span className="font-extrabold text-red-600">{3 - (user.sla_breaches ?? 0)} more strike(s)</span> remaining before your account is temporarily suspended. Deliver orders on time to avoid further penalties.
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="pt-2">
+                <Button
+                  onClick={handleAcknowledgeSla}
+                  disabled={acknowledgingSla}
+                  className={`w-full text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl shadow-md border-none ${
+                    (user.sla_breaches ?? 0) >= 3
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-amber-500 hover:bg-amber-600"
+                  }`}
+                >
+                  {acknowledgingSla ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  I Understand &amp; Mark as Read
                 </Button>
               </div>
             </div>
@@ -1616,10 +2183,23 @@ function EmptyState({ icon: Icon, title, message, action }: {
 
 function SlaTimer({ order }: { order: Order }) {
   const [timeLeft, setTimeLeft] = useState("");
+  // isBreached is a one-way latch: once true it never goes back to false
   const [isBreached, setIsBreached] = useState(false);
   const [isCritical, setIsCritical] = useState(false);
   const [isDelivered, setIsDelivered] = useState(false);
   const [isArrived, setIsArrived] = useState(false);
+
+  // Compute the SLA start time once and keep it stable.
+  // We ONLY use assigned_at — never updated_at — so that wrong-PIN
+  // DB updates or admin unlocks cannot accidentally restart the countdown.
+  const slaStartTime = useMemo(() => {
+    if (!order.assigned_at) return null;
+    let dateStr = order.assigned_at;
+    if (typeof dateStr === "string" && !dateStr.includes("T") && !dateStr.includes("Z") && !dateStr.includes("+")) {
+      dateStr = dateStr.replace(" ", "T") + "Z";
+    }
+    return new Date(dateStr).getTime();
+  }, [order.assigned_at]);
 
   useEffect(() => {
     // SLA only stops at Delivered — Arrived does NOT stop the timer
@@ -1630,13 +2210,24 @@ function SlaTimer({ order }: { order: Order }) {
     }
     setIsDelivered(false);
 
+    // If we have no assigned_at, we cannot compute a meaningful SLA
+    if (!slaStartTime) {
+      setTimeLeft("—");
+      return;
+    }
+
     const updateTimer = () => {
-      const startTimestamp = order.assigned_at || order.updated_at;
-      const claimTime = new Date(startTimestamp).getTime();
-      const breachTime = claimTime + 4 * 60 * 60 * 1000;
+      // Already latched as breached — do not recalculate; just keep displaying breached
+      if (isBreached) {
+        setTimeLeft("SLA BREACHED ⚠️");
+        return;
+      }
+
+      const breachTime = slaStartTime + 4 * 60 * 60 * 1000;
       const diff = breachTime - Date.now();
 
       if (diff <= 0) {
+        // Latch permanently — never reset from this state
         setIsBreached(true);
         setIsCritical(false);
         setIsArrived(false);
@@ -1648,7 +2239,6 @@ function SlaTimer({ order }: { order: Order }) {
       const mins = Math.floor((diff % 3600000) / 60000);
       const secs = Math.floor((diff % 60000) / 1000);
 
-      setIsBreached(false);
       setIsArrived(order.status === "Arrived");
       setIsCritical(diff < 1800000); // under 30 min = critical
       setTimeLeft(`${hrs}h ${mins}m ${secs}s left`);
@@ -1657,7 +2247,10 @@ function SlaTimer({ order }: { order: Order }) {
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [order.status, order.updated_at, order.assigned_at]);
+  // NOTE: isBreached intentionally NOT in deps — it's a one-way latch
+  // NOTE: order.updated_at intentionally excluded — it must not trigger SLA restart
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.status, slaStartTime]);
 
   if (isDelivered) {
     return (
@@ -1719,40 +2312,152 @@ function formatWhatsAppNumber(phone: string): string {
   return clean;
 }
 
+interface ReleaseCooldownProps {
+  lastReleasedAt: string;
+  onTimeout: () => void;
+}
+
+function ReleaseCooldown({ lastReleasedAt, onTimeout }: ReleaseCooldownProps) {
+  const [timeLeftStr, setTimeLeftStr] = useState("");
+
+  useEffect(() => {
+    let releasedStr = lastReleasedAt;
+    if (!releasedStr.includes("T") && !releasedStr.includes("Z") && !releasedStr.includes("+")) {
+      releasedStr = releasedStr.replace(" ", "T") + "Z";
+    }
+    const releaseTime = new Date(releasedStr).getTime();
+    const endTime = releaseTime + 24 * 60 * 60 * 1000;
+
+    const updateTimer = () => {
+      const diff = endTime - Date.now();
+      if (diff <= 0) {
+        setTimeLeftStr("00 hrs 00 min 00 sec");
+        onTimeout();
+        return;
+      }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      const pad = (n: number) => String(n).padStart(2, "0");
+      setTimeLeftStr(`${pad(hours)} hrs ${pad(minutes)} min ${pad(seconds)} sec`);
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [lastReleasedAt, onTimeout]);
+
+  return <span className="font-black text-red-800">({timeLeftStr} remaining)</span>;
+}
+
+interface HandoverCountdownProps {
+  reservedAt: string;
+  onExpired?: () => void;
+}
+
+function HandoverCountdown({ reservedAt, onExpired }: HandoverCountdownProps) {
+  const [timeLeftStr, setTimeLeftStr] = useState("");
+  const [isCritical, setIsCritical] = useState(false);
+
+  useEffect(() => {
+    let dateStr = reservedAt;
+    if (typeof dateStr === "string" && !dateStr.includes("T") && !dateStr.includes("Z") && !dateStr.includes("+")) {
+      dateStr = dateStr.replace(" ", "T") + "Z";
+    }
+    const startTime = new Date(dateStr).getTime();
+    const endTime = startTime + 15 * 60 * 1000; // 15 minutes
+
+    const updateTimer = () => {
+      const diff = endTime - Date.now();
+      if (diff <= 0) {
+        setTimeLeftStr("00:00 (Expired)");
+        setIsCritical(true);
+        if (onExpired) onExpired();
+        return;
+      }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+
+      const pad = (n: number) => String(n).padStart(2, "0");
+      setTimeLeftStr(`${pad(minutes)}:${pad(seconds)}`);
+
+      if (minutes < 3) {
+        setIsCritical(true);
+      } else {
+        setIsCritical(false);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [reservedAt, onExpired]);
+
+  return (
+    <span className={cn(
+      "font-black tracking-wider text-[10px] uppercase px-2 py-0.5 rounded-md shrink-0 inline-flex items-center gap-1",
+      isCritical 
+        ? "bg-rose-100 text-rose-700 animate-pulse border border-rose-200" 
+        : "bg-amber-100 text-amber-700 border border-amber-250"
+    )}>
+      ⏱️ {timeLeftStr}
+    </span>
+  );
+}
+
 function OrderCard({
   order,
   myId,
   tab,
   currency,
   isClaimLoading,
+  isReserveLoading = false,
   isReleaseLoading,
   isMarkLoading,
   allOrders,
   manifestChecked,
   onManifestCheckToggle,
   onClaim,
+  onReserve = () => {},
+  onConfirmReceipt = () => {},
   onRelease,
   onMarkArrived,
   onDeliver,
-  onLogFailedAttempt
+  onLogFailedAttempt,
+  onHandoverExpired
 }: {
   order: Order;
   myId: number;
   tab: "pool" | "mine";
   currency: string;
   isClaimLoading: boolean;
+  isReserveLoading?: boolean;
   isReleaseLoading: boolean;
   isMarkLoading: boolean;
   allOrders: Order[];
   manifestChecked: { [orderId: number]: boolean };
   onManifestCheckToggle: (orderId: number, checked: boolean) => void;
   onClaim: () => void;
+  onReserve?: () => void;
+  onConfirmReceipt?: () => void;
   onRelease: () => void;
   onMarkArrived: () => void;
   onDeliver: () => void;
   onLogFailedAttempt: () => void;
+  onHandoverExpired?: () => void;
 }) {
   const badge = getStatusBadge(order, myId);
+
+  const [cooldownExpired, setCooldownExpired] = useState(false);
+
+  useEffect(() => {
+    setCooldownExpired(false);
+  }, [order.id, order.last_released_at]);
 
   // Check duplicate destinations locally (non-blocking warning banner with driver details)
   const duplicateOrders = useMemo(() => {
@@ -1797,6 +2502,50 @@ function OrderCard({
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Released by previous driver banner */}
+        {order.last_released_by_driver && (
+          <div className="bg-rose-50 border-b border-rose-100 px-4 py-3 text-left space-y-1.5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-[10px] font-black text-rose-800 flex items-center gap-1.5 leading-snug uppercase tracking-wider">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 animate-pulse" />
+                <span>Released Order Info</span>
+              </p>
+              {order.reserved_by_user_id === myId && order.reserved_at && (
+                <HandoverCountdown reservedAt={order.reserved_at} onExpired={onHandoverExpired} />
+              )}
+            </div>
+            <p className="text-[11px] font-bold text-rose-700 leading-tight">
+              Previously released by <span className="font-extrabold">{order.last_released_by_driver.name}</span>. You must collect the physical package from them!
+            </p>
+            <div className="flex flex-col gap-1.5 mt-1 bg-white p-2.5 rounded-xl border border-rose-100 shadow-sm text-xs text-zinc-700">
+              {order.reserved_by_user_id === myId && order.my_handover_pin && (
+                <div className="flex items-center justify-between bg-blue-50/75 p-2 rounded-lg border border-blue-100 mb-1">
+                  <span className="font-extrabold text-[#0052cc] text-[10px] uppercase tracking-wider">Your Handover PIN:</span>
+                  <span className="font-black bg-[#0052cc] text-white px-2 py-0.5 rounded text-[13px] tracking-wider">{order.my_handover_pin}</span>
+                </div>
+              )}
+              {order.last_released_by_driver.phone && (
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">Contact Driver:</span>
+                  <a href={`tel:${order.last_released_by_driver.phone}`} className="text-[#0052cc] hover:underline font-extrabold flex items-center gap-1">
+                    📞 {order.last_released_by_driver.phone}
+                  </a>
+                </div>
+              )}
+              {order.last_release_reason && (
+                <div>
+                  <span className="font-bold">Reason for Release:</span> <span className="font-medium text-rose-600">{order.last_release_reason}</span>
+                </div>
+              )}
+              {order.last_release_notes && (
+                <div className="italic text-zinc-500 font-medium">
+                  "{order.last_release_notes}"
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1894,6 +2643,38 @@ function OrderCard({
             </div>
           </div>
 
+          {/* Previous attempts / Failure reasons */}
+          {order.delivery_attempts && order.delivery_attempts.length > 0 && (
+            <div className="border-t border-zinc-100 pt-3 text-left">
+              <p className="text-[9px] font-bold text-[#64748b] uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 animate-pulse" />
+                <span>Previous Attempts / Failure Logs</span>
+              </p>
+              <div className="space-y-2">
+                {order.delivery_attempts.map((attempt) => (
+                  <div key={attempt.id} className="bg-amber-50/40 border border-amber-100 rounded-xl p-2.5 space-y-1 text-xs">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="text-amber-800 uppercase text-[10px] tracking-wide">
+                        ⚠️ {attempt.reason}
+                      </span>
+                      <span className="text-zinc-400 text-[10px]">
+                        {new Date(attempt.attempted_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                    {attempt.notes && (
+                      <p className="text-slate-600 font-medium italic leading-relaxed py-0.5">
+                        "{attempt.notes}"
+                      </p>
+                    )}
+                    <p className="text-[9px] font-bold text-zinc-400 text-right">
+                      Logged by: <span className="text-slate-500">{attempt.driver?.name ?? `Driver #${attempt.driver_id}`}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Package Count Verification acknowledgement (Required) */}
           {tab === "mine" && (
             <div className="flex items-center gap-2.5 p-2.5 bg-zinc-50 border border-zinc-150 rounded-xl text-left">
@@ -1919,20 +2700,144 @@ function OrderCard({
           {/* Action buttons */}
           <div className="space-y-2 pt-1">
             {tab === "pool" && (
-              <Button
-                onClick={onClaim}
-                disabled={isClaimLoading}
-                className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
-              >
-                {isClaimLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
-                Secure This Order
-              </Button>
+              <>
+                {(() => {
+                  const isReserved = !!order.reserved_by_user_id;
+                  const isReservedByMe = order.reserved_by_user_id === myId;
+                  const reservedByName = order.reserved_by_driver?.name ?? "Another Driver";
+                  const isTouched = !!order.last_released_by_user_id;
+
+                  if (isReservedByMe) {
+                    return (
+                      <div className="space-y-2">
+                        {order.my_handover_pin && (
+                          <div className="flex flex-col gap-1.5 bg-[#0052cc]/5 border border-[#0052cc]/20 rounded-xl p-3 text-left mb-1.5">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-bold text-[#0052cc] uppercase tracking-wider flex items-center gap-1">
+                                <Key className="h-3.5 w-3.5" /> Handover Verification PIN
+                              </span>
+                              <span className="bg-[#0052cc] text-white text-base font-black px-2.5 py-1 rounded-lg tracking-widest">{order.my_handover_pin}</span>
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-500 leading-tight">
+                              Show this PIN to the releasing driver. They must enter it on their screen to confirm the handover.
+                            </p>
+                          </div>
+                        )}
+                        {order.reserved_at && (
+                          <div className="flex items-center justify-between bg-zinc-50 border border-zinc-150 rounded-xl px-3 py-2 text-left mb-1.5">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">⏰ Handover Deadline</span>
+                            <HandoverCountdown reservedAt={order.reserved_at} onExpired={onHandoverExpired} />
+                          </div>
+                        )}
+                        <Button
+                          onClick={onConfirmReceipt}
+                          disabled={isClaimLoading}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl border-none shadow-md"
+                        >
+                          {isClaimLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                          Confirm Physical Package Receipt
+                        </Button>
+                        <Button
+                          onClick={onRelease}
+                          disabled={isReleaseLoading}
+                          variant="outline"
+                          className="w-full border-red-200 text-red-500 hover:bg-red-50 font-bold text-[10px] h-9 rounded-xl uppercase tracking-wider"
+                        >
+                          Cancel Reservation
+                        </Button>
+                      </div>
+                    );
+                  }
+
+                  if (isReserved) {
+                    return (
+                      <Button
+                        disabled
+                        className="w-full bg-zinc-100 text-zinc-400 font-black uppercase text-[11px] tracking-wider h-11 rounded-xl cursor-not-allowed border border-zinc-200"
+                      >
+                        <Lock className="h-4 w-4 mr-2" /> Reserved by {reservedByName}
+                      </Button>
+                    );
+                  }
+
+                  if (isTouched) {
+                    // Check if the current driver is blocked (released this order < 24 hrs ago)
+                    const didIRelease = order.last_released_by_user_id === myId;
+                    let hoursRemaining = 0;
+                    if (didIRelease && order.last_released_at) {
+                      let releasedStr = order.last_released_at;
+                      if (!releasedStr.includes("T") && !releasedStr.includes("Z") && !releasedStr.includes("+")) {
+                        releasedStr = releasedStr.replace(" ", "T") + "Z";
+                      }
+                      const elapsed = (Date.now() - new Date(releasedStr).getTime()) / 3600000;
+                      hoursRemaining = Math.max(0, Math.ceil(24 - elapsed));
+                    }
+
+                    if (didIRelease && !cooldownExpired && order.last_released_at) {
+                      let releasedStr = order.last_released_at;
+                      if (!releasedStr.includes("T") && !releasedStr.includes("Z") && !releasedStr.includes("+")) {
+                        releasedStr = releasedStr.replace(" ", "T") + "Z";
+                      }
+                      const elapsedMs = Date.now() - new Date(releasedStr).getTime();
+                      const isCooldownActive = elapsedMs < 24 * 60 * 60 * 1000;
+
+                      if (isCooldownActive) {
+                        // Self-blocked: show a clear, non-clickable message
+                        return (
+                          <div className="w-full bg-red-50 border border-red-200 rounded-xl px-3 py-3 flex items-start gap-2.5 text-left">
+                            <span className="text-red-500 text-base shrink-0 mt-0.5">❌</span>
+                            <p className="text-[11px] font-bold text-red-700 leading-snug">
+                              You released or logged a failure on this order recently. You cannot secure/reserve it again for the next 24 hours.{" "}
+                              <ReleaseCooldown lastReleasedAt={order.last_released_at} onTimeout={() => setCooldownExpired(true)} />
+                            </p>
+                          </div>
+                        );
+                      }
+                    }
+
+                    return (
+                      <Button
+                        onClick={onReserve}
+                        disabled={isReserveLoading}
+                        className="w-full bg-[#0052cc] hover:bg-[#003d99] text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl border-none shadow-md"
+                      >
+                        {isReserveLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapPin className="h-4 w-4 mr-2" />}
+                        Reserve This Order
+                      </Button>
+                    );
+                  }
+
+                  // Untouched orders: claim directly in 1 click
+                  return (
+                    <Button
+                      onClick={onClaim}
+                      disabled={isClaimLoading}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl border-none shadow-md"
+                    >
+                      {isClaimLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
+                      Secure Order (SLA Starts)
+                    </Button>
+                  );
+                })()}
+              </>
             )}
 
             {tab === "mine" && (
               <>
+                {/* PIN Locked Banner */}
+                {!!order.pin_locked && (
+                  <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                    <Lock className="h-4 w-4 text-red-600 shrink-0" />
+                    <div className="text-left min-w-0">
+                      <p className="text-[10px] font-black text-red-700 uppercase tracking-wider">Order Locked</p>
+                      <p className="text-[11px] font-bold text-red-600 leading-snug">3 wrong PIN attempts. Contact supervisor to unlock.</p>
+                    </div>
+                  </div>
+                )}
+
                 {(() => {
                   const isLocal = isLocalDelivery(order);
+                  const isPinLocked = !!order.pin_locked;
                   // Local shipment: Shipped → Mark Arrived → Verify PIN & Deliver
                   // Cross-city shipment: already Arrived (admin did it) → Verify PIN & Deliver directly
                   if (isLocal && order.status === "Shipped") {
@@ -1951,10 +2856,13 @@ function OrderCard({
                   return (
                     <Button
                       onClick={onDeliver}
-                      disabled={isMarkLoading || !manifestChecked[order.id]}
+                      disabled={isMarkLoading || !manifestChecked[order.id] || isPinLocked}
                       className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl disabled:opacity-40 disabled:pointer-events-none"
                     >
-                      <Key className="h-4 w-4 mr-2" /> Verify PIN & Deliver
+                      {isPinLocked
+                        ? <><Lock className="h-4 w-4 mr-2" /> PIN Locked — Contact Supervisor</>
+                        : <><Key className="h-4 w-4 mr-2" /> Verify PIN &amp; Deliver</>
+                      }
                     </Button>
                   );
                 })()}
@@ -2005,7 +2913,15 @@ function CompletedCard({ order, currency }: { order: Order; currency: string }) 
         </CardHeader>
         <CardContent className="p-4 space-y-2.5 text-xs">
           <div className="flex justify-between"><span className="text-zinc-400 font-bold">Recipient</span><span className="font-black text-slate-800">{order.customer?.name ?? "—"}</span></div>
-          <div className="flex justify-between"><span className="text-zinc-400 font-bold">Destination</span><span className="font-bold text-slate-700">{order.shipping_city}</span></div>
+          <div className="flex justify-between items-start">
+            <span className="text-zinc-400 font-bold">Destination</span>
+            <div className="text-right">
+              <span className="font-bold text-slate-700">{order.shipping_city}</span>
+              {order.shipping_address && (
+                <p className="text-[10px] text-zinc-650 font-extrabold mt-0.5 max-w-[200px] leading-snug">{order.shipping_address}</p>
+              )}
+            </div>
+          </div>
           <div className="flex justify-between"><span className="text-zinc-400 font-bold">Order Value</span><span className="font-black text-slate-800">{currency} {Number(order.total_amount).toLocaleString()}</span></div>
           {order.delivery_signature_url && (
             <div className="flex items-center justify-between pt-2 border-t border-emerald-100">

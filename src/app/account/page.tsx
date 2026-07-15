@@ -53,6 +53,31 @@ function getOrderRefundedTotal(order: any): number {
     }, 0);
 }
 
+function isWithinReturnPeriod(order: any): boolean {
+  if (!order) return false;
+  if (order.status === "Delivered") {
+    const deliveryDate = new Date(order.updated_at).getTime();
+    const fourteenDaysInMs = 14 * 24 * 60 * 60 * 1000;
+    return (Date.now() - deliveryDate) <= fourteenDaysInMs;
+  }
+  return ["Pending", "Processing"].includes(order.status);
+}
+
+
+/**
+ * Determines if an order is a same-city (local) shipment by comparing
+ * the warehouse origin city against the customer's shipping city.
+ * Local → PIN visible from "Shipped"
+ * Cross-city → PIN visible only from "Arrived" (driver is in your city)
+ */
+function isLocalShipmentOrder(order: any): boolean {
+  const origin = (order?.items?.[0]?.warehouse?.city || order?.items?.[0]?.warehouse?.name || "")
+    .trim().toLowerCase();
+  const destination = (order?.shipping_city || "").trim().toLowerCase();
+  if (!origin || !destination) return false;
+  return origin.includes(destination) || destination.includes(origin);
+}
+
 function AccountPortalInner() {
   const { user, logout, refreshUser } = useAuth();
   const { settings } = useSettings();
@@ -1415,7 +1440,13 @@ function AccountPortalInner() {
             )}
 
 
-            {(selectedOrder?.status === "Shipped" || selectedOrder?.status === "Arrived") && selectedOrder?.delivery_pin && (
+            {/* Delivery PIN — Local: visible from Shipped only | Cross-city: visible from Arrived only */}
+            {selectedOrder?.delivery_pin && (
+              (isLocalShipmentOrder(selectedOrder)
+                ? selectedOrder.status === "Shipped"
+                : selectedOrder.status === "Arrived"
+              )
+            ) && (
               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-center shadow-inner">
                 <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1 flex items-center justify-center gap-1.5">
                   <Lock className="h-3.5 w-3.5" /> Delivery Verification PIN
@@ -1434,7 +1465,10 @@ function AccountPortalInner() {
                   ))}
                 </div>
                 <p className="text-[10px] text-amber-700 font-bold leading-snug max-w-[280px] mx-auto">
-                  🔐 Share this PIN <strong>only</strong> with the driver when they arrive at your door to confirm delivery. Never share it before arrival.
+                  {isLocalShipmentOrder(selectedOrder)
+                    ? "🔐 Share this PIN only with the driver when they arrive at your door. Never share it before arrival."
+                    : "🔐 Your order has arrived in your city. Share this PIN with the driver when they deliver to your door."
+                  }
                 </p>
               </div>
             )}
@@ -1569,15 +1603,23 @@ function AccountPortalInner() {
                 </div>
               )}
 
-            {/* Verification PIN Section (only shows when order is Shipped/Arrived) */}
-            {selectedOrder && (selectedOrder.status === "Shipped" || selectedOrder.status === "Arrived") && selectedOrder.delivery_pin && (
+            {/* Verification PIN Section — Local: Shipped only | Cross-city: Arrived only */}
+            {selectedOrder && selectedOrder.delivery_pin && (
+              (isLocalShipmentOrder(selectedOrder)
+                ? selectedOrder.status === "Shipped"
+                : selectedOrder.status === "Arrived"
+              )
+            ) && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left my-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-2 text-amber-800">
                   <ShieldCheck className="h-4.5 w-4.5 text-amber-600" />
                   <h5 className="text-[12px] font-bold uppercase tracking-wider">Delivery Verification PIN</h5>
                 </div>
                 <p className="text-[11px] text-amber-700 leading-relaxed mb-3">
-                  Please quote this secure PIN to the delivery driver upon collection. The driver will verify it to authorize your handover.
+                  {isLocalShipmentOrder(selectedOrder)
+                    ? "Please quote this secure PIN to the delivery driver upon collection. The driver will verify it to authorize your handover."
+                    : "Your order has arrived in your city and is out for delivery. Quote this PIN to the driver at your door to confirm receipt."
+                  }
                 </p>
                 <div className="inline-flex items-center bg-white border border-amber-300 rounded-lg px-4 py-2 font-mono text-lg font-black tracking-widest text-[#0052cc] shadow-sm select-all">
                   {selectedOrder.delivery_pin}
@@ -1615,7 +1657,7 @@ function AccountPortalInner() {
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2 flex-wrap">
-              {selectedOrder && ["Pending", "Processing", "Delivered"].includes(selectedOrder.status) && !myReturns.some((r: any) => r.order_id === selectedOrder.id && (r.status === "Pending" || r.status === "Approved" || r.status === "Rejected")) && (
+              {selectedOrder && isWithinReturnPeriod(selectedOrder) && !myReturns.some((r: any) => r.order_id === selectedOrder.id && (r.status === "Pending" || r.status === "Approved" || r.status === "Rejected")) && (
                 <Button
                   variant="outline"
                   className="text-[12px] font-bold h-9 border-purple-200 text-purple-700 hover:bg-purple-50"

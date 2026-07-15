@@ -18,6 +18,10 @@ interface User {
   total_spent?: number;
   vehicle_plate?: string | null;
   license_number?: string | null;
+  sla_breaches?: number;
+  sla_breaches_acknowledged?: number;
+  delivery_flagged?: boolean;
+  is_active?: boolean;
 }
 
 interface AuthContextType {

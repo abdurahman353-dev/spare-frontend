@@ -659,31 +659,35 @@ export default function AdminLogisticsPage() {
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    // Get the first order's route for form initialization
     const firstOrigin = selectedOrderObjects[0]?.items?.[0]?.warehouse?.name || selectedOrderObjects[0]?.origin;
     const firstDest = `${selectedOrderObjects[0]?.shipping_city}, ${selectedOrderObjects[0]?.shipping_country}`;
 
-    const firstOriginClean = (firstOrigin || "").trim().toLowerCase();
-    const firstDestClean = (firstDest || "").trim().toLowerCase();
+    // Only validate route consistency when multiple orders are selected
+    if (selectedOrderObjects.length > 1) {
+      const firstOriginClean = (firstOrigin || "").trim().toLowerCase();
+      const firstDestClean = (firstDest || "").trim().toLowerCase();
 
-    const allMatch = selectedOrderObjects.every(o => {
-      const currentOrigin = (o.items?.[0]?.warehouse?.name || o.origin || "").trim().toLowerCase();
-      const currentDest = `${o.shipping_city || ""}, ${o.shipping_country || ""}`.trim().toLowerCase();
-      return currentOrigin === firstOriginClean && currentDest === firstDestClean;
-    });
-
-    if (!allMatch) {
-      return toast.error("Logistics Violation: All selected orders must share the same Origin and Destination to be containerized together.", {
-        duration: 5000,
-        icon: '⚠️',
-        style: {
-          background: '#e11d48',
-          color: '#fff',
-          fontWeight: 'bold',
-          fontSize: '12px',
-          borderRadius: '10px',
-          border: '1px solid #9f1239'
-        }
+      const allMatch = selectedOrderObjects.every(o => {
+        const currentOrigin = (o.items?.[0]?.warehouse?.name || o.origin || "").trim().toLowerCase();
+        const currentDest = `${o.shipping_city || ""}, ${o.shipping_country || ""}`.trim().toLowerCase();
+        return currentOrigin === firstOriginClean && currentDest === firstDestClean;
       });
+
+      if (!allMatch) {
+        return toast.error("Logistics Violation: All selected orders must share the same Origin and Destination to be containerized together.", {
+          duration: 5000,
+          icon: '⚠️',
+          style: {
+            background: '#e11d48',
+            color: '#fff',
+            fontWeight: 'bold',
+            fontSize: '12px',
+            borderRadius: '10px',
+            border: '1px solid #9f1239'
+          }
+        });
+      }
     }
 
     setEditingShipmentId(null);
@@ -915,15 +919,14 @@ export default function AdminLogisticsPage() {
       return toast.error("Please fill in at least one Standard Fee before saving.");
     }
     setIsSavingBulk(true);
-    let saved = 0;
-    let failed = 0;
     const prod = products.find(p => p.id.toString() === bulkZoneProductId);
     const weight = prod ? parseFloat(prod.weight || 0) : 0;
-    for (const route of routesToSave) {
-      try {
-        await api.post(API_ENDPOINTS.shippingDestinations.base, {
-          product_id: bulkZoneProductId || null,
-          warehouse_id: route.warehouse_id || null,
+    
+    try {
+      await api.post(API_ENDPOINTS.shippingDestinations.base + "/bulk", {
+        destinations: routesToSave.map(route => ({
+          product_id: bulkZoneProductId ? parseInt(bulkZoneProductId) : null,
+          warehouse_id: route.warehouse_id ? parseInt(route.warehouse_id) : null,
           country: route.country,
           city: route.city,
           weight,
@@ -933,19 +936,19 @@ export default function AdminLogisticsPage() {
           weight_rate: 0,
           distance_rate: 0,
           is_active: true,
-        });
-        saved++;
-      } catch {
-        failed++;
-      }
+        }))
+      });
+      toast.success(`${routesToSave.length} shipping routes saved successfully in bulk!`);
+      
+      // Do not close the modal, just clear the current product selection so they can continue to next product
+      setBulkZoneProductId("");
+      setBulkZoneRoutes([]);
+      fetchDestinations();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to save shipping routes in bulk.");
+    } finally {
+      setIsSavingBulk(false);
     }
-    setIsSavingBulk(false);
-    if (saved > 0) toast.success(`${saved} shipping zone${saved > 1 ? 's' : ''} saved successfully!`);
-    if (failed > 0) toast.error(`${failed} route${failed > 1 ? 's' : ''} failed to save.`);
-    setIsBulkZoneModalOpen(false);
-    setBulkZoneProductId("");
-    setBulkZoneRoutes([]);
-    fetchDestinations();
   };
   // ────────────────────────────────────────────────────────────────────────
 
@@ -2288,6 +2291,11 @@ export default function AdminLogisticsPage() {
                   items={products.map(p => ({ id: p.id.toString(), name: `${p.name} (${p.sku}) — ${parseFloat(p.weight || 0)} KG` }))}
                   value={bulkZoneProductId}
                   onChange={(val) => {
+                    const hasUnsaved = bulkZoneRoutes.some(r => r.standard_fee > 0);
+                    if (hasUnsaved) {
+                      alert("Please save the routes for the current product first before selecting another product, to avoid losing your changes.");
+                      return;
+                    }
                     setBulkZoneProductId(val);
                     generateBulkRoutes(val);
                   }}

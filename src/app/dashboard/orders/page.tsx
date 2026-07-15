@@ -167,6 +167,8 @@ function AdminOrdersPageInner() {
   // Incident state and quick action handlers
   const [previousIncidentIds, setPreviousIncidentIds] = useState<number[]>([]);
   const [isIncidentActionLoading, setIsIncidentActionLoading] = useState<Record<number, boolean>>({});
+  const [incidentSearch, setIncidentSearch] = useState("");
+  const [incidentFilter, setIncidentFilter] = useState<"all" | "locked" | "failed">("all");
 
   const activeIncidents = useMemo(() => {
     return orders.filter(o =>
@@ -176,6 +178,23 @@ function AdminOrdersPageInner() {
       o.status !== "Returned"
     );
   }, [orders]);
+
+  const filteredIncidents = useMemo(() => {
+    let list = activeIncidents;
+    // Filter by type
+    if (incidentFilter === "locked") list = list.filter(o => !!o.pin_locked);
+    else if (incidentFilter === "failed") list = list.filter(o => !o.pin_locked && o.failed_attempts_count > 0);
+    // Filter by search query
+    if (incidentSearch.trim()) {
+      const q = incidentSearch.toLowerCase().trim();
+      list = list.filter(o =>
+        o.tracking_number?.toLowerCase().includes(q) ||
+        o.customer?.name?.toLowerCase().includes(q) ||
+        o.driver?.name?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [activeIncidents, incidentFilter, incidentSearch]);
 
   // Audio alert chime using web audio api when a new incident arrives
   useEffect(() => {
@@ -284,6 +303,29 @@ function AdminOrdersPageInner() {
   }, [orders, selectedOrder]);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
+  // Handover History / Timeline state
+  const [handoverHistory, setHandoverHistory] = useState<any[]>([]);
+  const [loadingHandoverHistory, setLoadingHandoverHistory] = useState(false);
+
+  useEffect(() => {
+    if (isOrderModalOpen && currentSelectedOrder?.id) {
+      setLoadingHandoverHistory(true);
+      setHandoverHistory([]);
+      api.get(`/orders/${currentSelectedOrder.id}/handover-history`)
+        .then(res => {
+          setHandoverHistory(res.data || []);
+        })
+        .catch(err => {
+          console.error("Failed to load handover history", err);
+        })
+        .finally(() => {
+          setLoadingHandoverHistory(false);
+        });
+    } else {
+      setHandoverHistory([]);
+    }
+  }, [isOrderModalOpen, currentSelectedOrder?.id]);
+
   // POS / Walk-in Order State
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -337,6 +379,11 @@ function AdminOrdersPageInner() {
   const [walkInPayStatusFilter, setWalkInPayStatusFilter] = useState("All");
   // PIN reveal toggle in order details modal
   const [showDeliveryPin, setShowDeliveryPin] = useState(false);
+
+  // Mark Payment as Pending Confirmation Dialog states
+  const [isPendingConfirmOpen, setIsPendingConfirmOpen] = useState(false);
+  const [pendingOrderTarget, setPendingOrderTarget] = useState<any>(null);
+  const [isMarkingPending, setIsMarkingPending] = useState(false);
 
   // Edit Walk-In Order
   const [isEditWalkInModalOpen, setIsEditWalkInModalOpen] = useState(false);
@@ -588,14 +635,25 @@ function AdminOrdersPageInner() {
     }
   };
 
-  const handleMarkWalkInPending = async (order: any) => {
+  const handleMarkWalkInPending = (order: any) => {
+    setPendingOrderTarget(order);
+    setIsPendingConfirmOpen(true);
+  };
+
+  const confirmMarkWalkInPending = async () => {
+    if (!pendingOrderTarget) return;
+    setIsMarkingPending(true);
     try {
       // NOTE: Only update payment_status — NEVER touch status (shipment flow is independent)
-      await api.put(API_ENDPOINTS.orders.byId(order.id), { payment_status: "Pending" });
+      await api.put(API_ENDPOINTS.orders.byId(pendingOrderTarget.id), { payment_status: "Pending" });
       toast.success("Payment marked as Pending");
+      setIsPendingConfirmOpen(false);
+      setPendingOrderTarget(null);
       fetchOrders(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Update failed");
+    } finally {
+      setIsMarkingPending(false);
     }
   };
 
@@ -1513,6 +1571,7 @@ function AdminOrdersPageInner() {
       {/* ── SECURITY ALERTS TAB CONTENT ── */}
       {activeOrdersTab === "Security" ? (
         <div className="bg-white border border-zinc-200 rounded-xl p-6 shadow-sm space-y-5">
+          {/* Header */}
           <div className="flex items-center gap-3">
             <div className="h-3 w-3 rounded-full bg-red-600 animate-ping shrink-0" />
             <h2 className="text-base font-bold tracking-tight text-zinc-900 flex items-center gap-2">
@@ -1524,8 +1583,89 @@ function AdminOrdersPageInner() {
           <p className="text-xs text-zinc-400 font-semibold -mt-2">
             Incidents are automatically resolved and removed from this list once an order is Delivered, Cancelled, or Returned. PIN-locked orders can be unlocked below.
           </p>
+
+          {/* ── Search + Filter Bar ── */}
+          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            {/* Search input */}
+            <div className="relative flex-1 w-full">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <input
+                id="incident-search"
+                type="text"
+                value={incidentSearch}
+                onChange={e => setIncidentSearch(e.target.value)}
+                placeholder="Search by tracking #, customer, or driver…"
+                className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-800 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 transition"
+              />
+              {incidentSearch && (
+                <button
+                  onClick={() => setIncidentSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition"
+                  aria-label="Clear search"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Filter pills */}
+            <div className="flex gap-2 shrink-0">
+              {([
+                { key: "all",    label: "All",            count: activeIncidents.length },
+                { key: "locked", label: "🔒 Locked",      count: activeIncidents.filter(o => !!o.pin_locked).length },
+                { key: "failed", label: "⚠️ Failed Attempts", count: activeIncidents.filter(o => !o.pin_locked && o.failed_attempts_count > 0).length },
+              ] as { key: "all" | "locked" | "failed"; label: string; count: number }[]).map(f => (
+                <button
+                  key={f.key}
+                  id={`incident-filter-${f.key}`}
+                  onClick={() => setIncidentFilter(f.key)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-150",
+                    incidentFilter === f.key
+                      ? f.key === "locked"
+                        ? "bg-red-600 text-white border-red-600 shadow"
+                        : f.key === "failed"
+                          ? "bg-amber-500 text-white border-amber-500 shadow"
+                          : "bg-zinc-800 text-white border-zinc-800 shadow"
+                      : "bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50"
+                  )}
+                >
+                  {f.label}
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0 text-[10px] font-black",
+                    incidentFilter === f.key ? "bg-white/20" : "bg-zinc-100 text-zinc-500"
+                  )}>{f.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Results count feedback */}
+          {(incidentSearch || incidentFilter !== "all") && (
+            <p className="text-xs text-zinc-500 font-semibold">
+              Showing <span className="text-zinc-800 font-black">{filteredIncidents.length}</span> of <span className="text-zinc-800 font-black">{activeIncidents.length}</span> incidents
+            </p>
+          )}
+
+          {/* Incident Cards */}
+          {filteredIncidents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
+              <svg className="h-10 w-10 text-zinc-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.172 16.172a4 4 0 0 1 5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+              </svg>
+              <p className="text-sm font-bold text-zinc-400">No incidents match your search or filter.</p>
+              <button
+                onClick={() => { setIncidentSearch(""); setIncidentFilter("all"); }}
+                className="text-xs font-bold text-red-600 hover:underline"
+              >Clear filters</button>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeIncidents.map((inc: any) => (
+            {filteredIncidents.map((inc: any) => (
               <div
                 key={inc.id}
                 className={cn(
@@ -1582,7 +1722,7 @@ function AdminOrdersPageInner() {
                   >
                     Inspect Logs
                   </Button>
-                  {inc.pin_locked && (
+                  {!!inc.pin_locked && (
                     <div className="flex gap-1.5 flex-1">
                       <Button
                         size="sm"
@@ -1606,6 +1746,7 @@ function AdminOrdersPageInner() {
               </div>
             ))}
           </div>
+          )}
         </div>
       ) : (
       <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
@@ -2092,7 +2233,33 @@ function AdminOrdersPageInner() {
                           </Badge>
                           {/* Driver badge for Shipped/Arrived/Delivered orders */}
                           {(order.status === "Shipped" || order.status === "Arrived" || order.status === "Delivered") && (() => {
-                             const assignedDriver = drivers.find((d: any) => d.id === order.delivered_by_user_id);
+                             const assignedDriver = order.driver ?? (order.delivered_by_user_id ? drivers.find((d: any) => d.id === order.delivered_by_user_id) : null);
+                             const reservingDriver = order.reserved_by_driver ?? (order.reserved_by_user_id ? drivers.find((d: any) => d.id === order.reserved_by_user_id) : null);
+                             const releasingDriver = order.last_released_by_driver ?? (order.last_released_by_user_id ? drivers.find((d: any) => d.id === order.last_released_by_user_id) : null);
+
+                             if (reservingDriver && !assignedDriver) {
+                               return (
+                                 <div className="flex flex-col gap-0.5 items-center">
+                                   <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                                     <Truck className="h-2.5 w-2.5 shrink-0 animate-pulse text-amber-500" />
+                                     <span>Has Package: {releasingDriver ? releasingDriver.name.split(" ")[0] : "Warehouse"}</span>
+                                   </span>
+                                   <span className="text-[8px] font-bold text-zinc-400 shrink-0">
+                                     (Reserved: {reservingDriver.name.split(" ")[0]})
+                                   </span>
+                                 </div>
+                               );
+                             }
+
+                             if (releasingDriver && !assignedDriver && !reservingDriver) {
+                               return (
+                                 <span className="inline-flex items-center gap-1 text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full shrink-0">
+                                   <Truck className="h-2.5 w-2.5 shrink-0 text-rose-500" />
+                                   <span>Has Package: {releasingDriver.name.split(" ")[0]} (Released)</span>
+                                 </span>
+                               );
+                             }
+
                              return assignedDriver ? (
                                <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
                                  <Truck className="h-2.5 w-2.5 shrink-0" />
@@ -2103,11 +2270,11 @@ function AdminOrdersPageInner() {
                                    </span>
                                  )}
                                </span>
-                            ) : (order.status === "Shipped" || order.status === "Arrived") ? (
-                              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
-                                No Driver
-                              </span>
-                            ) : null;
+                             ) : (order.status === "Shipped" || order.status === "Arrived") ? (
+                               <span className="inline-flex items-center gap-1 text-[9px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
+                                 No Driver
+                               </span>
+                             ) : null;
                           })()}
                         </div>
                       </TableCell>
@@ -2257,18 +2424,36 @@ function AdminOrdersPageInner() {
 
             <div className="mb-6">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Customer Information</h4>
-              <div className="bg-white p-4 rounded-xl border border-zinc-200">
-                <p className="font-bold text-zinc-900">{currentSelectedOrder?.customer?.name || "Guest"}</p>
-                {/* Hide auto-generated walk-in emails */}
-                {currentSelectedOrder?.customer?.name?.toLowerCase() !== "walk-in customer" && (
-                  <p className="text-sm text-zinc-500 font-medium">{currentSelectedOrder?.customer?.email}</p>
-                )}
-                {currentSelectedOrder?.customer?.phone && (
-                  <p className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded inline-block mt-1">
-                    📞 {currentSelectedOrder.customer.phone}
-                  </p>
-                )}
-                <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
+              <div className="bg-white p-4 rounded-xl border border-zinc-200 text-left">
+                {(() => {
+                  const recipient = parseRecipientNotes(currentSelectedOrder?.notes ?? null);
+                  const displayName = recipient?.name || currentSelectedOrder?.customer?.name || "Guest";
+                  const displayPhone = recipient?.phone || currentSelectedOrder?.customer?.phone;
+                  const displayEmail = recipient?.email || currentSelectedOrder?.customer?.email;
+                  const isWalkIn = !!recipient || currentSelectedOrder?.customer?.name?.toLowerCase() === "walk-in customer";
+
+                  return (
+                    <>
+                      <p className="font-bold text-zinc-900 flex items-center gap-2">
+                        {displayName}
+                        {isWalkIn && (
+                          <span className="text-[9px] font-bold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-200">
+                            WALK-IN
+                          </span>
+                        )}
+                      </p>
+                      {displayEmail && !isWalkIn && (
+                        <p className="text-sm text-zinc-500 font-medium mt-0.5">{displayEmail}</p>
+                      )}
+                      {displayPhone && (
+                        <p className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded inline-block mt-1">
+                          📞 {displayPhone}
+                        </p>
+                      )}
+                      <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
@@ -2369,54 +2554,136 @@ function AdminOrdersPageInner() {
               </div>
             )}
 
-            {/* ── Failed Delivery Attempts — visible to admin only ── */}
-            {currentSelectedOrder?.delivery_attempts && currentSelectedOrder.delivery_attempts.length > 0 && (
+            {/* Pending Handover Details */}
+            {currentSelectedOrder?.reserved_by_user_id && !currentSelectedOrder?.delivered_by_user_id && (
               <div className="mb-6">
-                <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                  <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                  Failed Delivery Attempts ({currentSelectedOrder.delivery_attempts.length})
-                </h4>
-                <div className="space-y-2">
-                  {currentSelectedOrder.delivery_attempts.map((attempt: any, i: number) => (
-                    <div key={attempt.id} className="bg-red-50 border border-red-100 rounded-xl p-3 space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black text-red-700 uppercase bg-red-100 px-2 py-0.5 rounded-full">
-                          Attempt #{i + 1} — {attempt.reason}
-                        </span>
-                        <span className="text-[10px] text-zinc-400 font-medium shrink-0">
-                          {new Date(attempt.attempted_at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                      {attempt.driver && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[11px] text-zinc-600 font-semibold">Driver: {attempt.driver.name}</p>
-                          {attempt.driver.phone && (
-                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded">
-                              📞 {attempt.driver.phone}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      {attempt.notes && (
-                        <p className="text-[11px] text-zinc-500 italic">"{attempt.notes}"</p>
-                      )}
-                      {(attempt.lat && attempt.lng) ? (
-                        <a
-                          href={`https://maps.google.com/?q=${attempt.lat},${attempt.lng}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
-                        >
-                          📍 View GPS Location ({Number(attempt.lat).toFixed(5)}, {Number(attempt.lng).toFixed(5)})
-                        </a>
-                      ) : (
-                        <p className="text-[10px] text-zinc-400 font-medium">📍 No GPS coordinates captured</p>
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Pending Handover Details</h4>
+                <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-200/60 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 bg-amber-100 rounded-lg flex items-center justify-center text-amber-800 font-black text-xs border border-amber-200">
+                      {(currentSelectedOrder.last_released_by_driver?.name ?? "WH").substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-[10px] font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1">
+                        <Truck className="h-3.5 w-3.5 animate-pulse text-amber-500" /> Physical Possession (Releasing)
+                      </p>
+                      <p className="text-sm font-bold text-zinc-800 truncate mt-0.5">
+                        {currentSelectedOrder.last_released_by_driver?.name ?? "Warehouse Hub"}
+                      </p>
+                      {currentSelectedOrder.last_released_by_driver?.phone && (
+                        <p className="text-[11px] font-bold text-amber-850 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded inline-block mt-0.5">
+                          📞 {currentSelectedOrder.last_released_by_driver.phone}
+                        </p>
                       )}
                     </div>
-                  ))}
+                  </div>
+                  <div className="border-t border-amber-200/50 pt-2 flex items-center gap-3">
+                    <div className="h-9 w-9 bg-blue-50 rounded-lg flex items-center justify-center text-blue-700 font-black text-xs border border-blue-200">
+                      {(currentSelectedOrder.reserved_by_driver?.name ?? "DR").substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Reserved By (Claiming Driver)</p>
+                      <p className="text-sm font-bold text-zinc-800 truncate mt-0.5">
+                        {currentSelectedOrder.reserved_by_driver?.name ?? `Driver #${currentSelectedOrder.reserved_by_user_id}`}
+                      </p>
+                      {currentSelectedOrder.reserved_by_driver?.phone && (
+                        <p className="text-[11px] font-bold text-blue-800 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded inline-block mt-0.5">
+                          📞 {currentSelectedOrder.reserved_by_driver.phone}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
+
+            {/* Released and unclaimed possession */}
+            {currentSelectedOrder?.last_released_by_user_id && !currentSelectedOrder?.delivered_by_user_id && !currentSelectedOrder?.reserved_by_user_id && (
+              <div className="mb-6">
+                <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-3 flex items-center gap-1">
+                  <Truck className="h-3.5 w-3.5 text-rose-500" /> Physical Possession (Released Order)
+                </h4>
+                <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-200/60 text-left">
+                  <p className="text-[10px] font-bold text-rose-800 uppercase tracking-wider">Releasing Driver possessing package</p>
+                  <p className="text-sm font-bold text-zinc-800 mt-0.5">{currentSelectedOrder.last_released_by_driver?.name ?? `Driver #${currentSelectedOrder.last_released_by_user_id}`}</p>
+                  {currentSelectedOrder.last_released_by_driver?.phone && (
+                    <p className="text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded inline-block mt-1">
+                      📞 {currentSelectedOrder.last_released_by_driver.phone}
+                    </p>
+                  )}
+                  <p className="text-[10px] text-zinc-500 font-semibold mt-2 leading-relaxed">
+                    This order was released back to the pool but has not been secured by another driver yet. The physical package is still in this driver's possession.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Handover Flow / Timeline */}
+            <div className="mb-6">
+              <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <ArrowRightLeft className="h-3.5 w-3.5 text-indigo-500" />
+                Handover Flow Timeline
+              </h4>
+              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-4 text-left">
+                {loadingHandoverHistory ? (
+                  <div className="flex items-center justify-center py-4 gap-2 text-zinc-400 text-xs font-bold uppercase tracking-wider">
+                    <Loader2 className="h-4 w-4 animate-spin text-indigo-500" /> Loading Timeline...
+                  </div>
+                ) : handoverHistory.length === 0 ? (
+                  <p className="text-xs text-zinc-450 font-medium text-center py-2">No handover history logged for this order yet.</p>
+                ) : (
+                  <div className="relative border-l border-zinc-250 pl-4 ml-1 space-y-4">
+                    {handoverHistory.map((log: any, idx: number) => {
+                      let iconBg = "bg-zinc-200 text-zinc-700";
+                      let actionText = log.action;
+                      
+                      if (log.action.includes("RESERVED")) {
+                        iconBg = "bg-amber-100 text-amber-700 border border-amber-250";
+                      } else if (log.action.includes("SECURED")) {
+                        iconBg = "bg-indigo-105 text-indigo-700 border border-indigo-250";
+                      } else if (log.action.includes("HANDOVER")) {
+                        iconBg = "bg-blue-100 text-blue-700 border border-blue-250";
+                      } else if (log.action.includes("FAILURE") || log.action.includes("WRONG")) {
+                        iconBg = "bg-rose-100 text-rose-700 border border-rose-250";
+                      } else if (log.action.includes("DELIVERED")) {
+                        iconBg = "bg-emerald-100 text-emerald-700 border border-emerald-250";
+                      } else if (log.action.includes("RELEASED")) {
+                        iconBg = "bg-orange-100 text-orange-700 border border-orange-250";
+                      }
+
+                      return (
+                        <div key={log.id || idx} className="relative">
+                          {/* Dot/Icon */}
+                          <span className={cn(
+                            "absolute -left-[25px] top-0 h-4.5 w-4.5 rounded-full flex items-center justify-center text-[8px] font-bold shadow-xs",
+                            iconBg
+                          )}>
+                            {idx + 1}
+                          </span>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-slate-800">
+                                {actionText.replace(/_/g, " ")}
+                              </span>
+                              <span className="text-[9px] text-zinc-400 font-medium shrink-0">
+                                {new Date(log.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                            <p className="text-xs text-zinc-650 font-medium leading-relaxed">{log.description}</p>
+                            {log.user && (
+                              <p className="text-[9px] font-bold text-zinc-400 mt-0.5">
+                                Action by: <span className="text-zinc-500 font-black">{log.user.name}</span> ({log.user.role})
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
 
             <div className="space-y-4">
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
@@ -2970,6 +3237,41 @@ function AdminOrdersPageInner() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Pending Confirmation Modal */}
+      <Dialog open={isPendingConfirmOpen} onOpenChange={(open) => { setIsPendingConfirmOpen(open); if (!open) setPendingOrderTarget(null); }}>
+        <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden bg-white rounded-2xl shadow-2xl border border-zinc-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto border-2 border-amber-100">
+              <RefreshCw className="h-7 w-7 text-amber-600 animate-spin-slow" />
+            </div>
+            <div className="space-y-1.5">
+              <DialogTitle className="text-lg font-bold text-zinc-900 text-center block">Mark Payment as Pending?</DialogTitle>
+              <p className="text-xs text-zinc-500 leading-relaxed text-center">
+                Are you sure you want to mark the payment for order <span className="font-extrabold text-zinc-700">{pendingOrderTarget?.tracking_number}</span> back to <span className="font-bold text-amber-600">Pending</span>? This will reset the payment confirmation details.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="p-4 bg-zinc-50/50 flex items-center justify-center gap-3 border-t m-0 shrink-0">
+            <Button
+              variant="outline"
+              className="flex-1 h-11 rounded-xl font-bold text-xs"
+              onClick={() => setIsPendingConfirmOpen(false)}
+              disabled={isMarkingPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 h-11 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs"
+              onClick={confirmMarkWalkInPending}
+              disabled={isMarkingPending}
+            >
+              {isMarkingPending ? <Loader2 className="h-4 w-4 animate-spin mr-2 inline" /> : null}
+              Confirm Pending
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

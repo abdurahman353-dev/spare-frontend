@@ -48,6 +48,8 @@ export const API_ENDPOINTS = {
     orders: "/delivery/orders",
     stats: "/delivery/stats",
     assignDriver: (orderId: ApiId) => `/delivery/orders/${orderId}/assign-driver`,
+    acceptPendingAssignment: (orderId: ApiId) => `/delivery/orders/${orderId}/accept-pending-assignment`,
+    declinePendingAssignment: (orderId: ApiId) => `/delivery/orders/${orderId}/decline-pending-assignment`,
     deliver: (orderId: ApiId) => `/delivery/orders/${orderId}/deliver`,
     markArrived: (orderId: ApiId) => `/delivery/orders/${orderId}/mark-arrived`,
   },

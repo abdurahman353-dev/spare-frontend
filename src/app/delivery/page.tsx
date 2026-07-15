@@ -49,6 +49,9 @@ interface Order {
   last_release_reason?: string | null;
   last_release_notes?: string | null;
   last_released_at?: string | null;
+  pending_assignment_driver_id?: number | null;
+  pending_assignment_at?: string | null;
+  pending_assignment_expires_at?: string | null;
   delivery_pin?: string;
   pin_locked?: boolean;
   pin_attempts?: number;
@@ -59,6 +62,7 @@ interface Order {
   driver?: { name: string; phone?: string; vehicle_plate?: string };
   reserved_by_driver?: { name: string; phone?: string; vehicle_plate?: string } | null;
   last_released_by_driver?: { name: string; phone?: string; vehicle_plate?: string } | null;
+  pending_assignment_driver?: { name: string; phone?: string; vehicle_plate?: string } | null;
   notes?: string;
   delivery_attempts?: DeliveryAttempt[];
   my_handover_pin?: string | null;
@@ -222,6 +226,7 @@ export default function DeliveryPortal() {
   const [markingId, setMarkingId]       = useState<number | null>(null);
   const [confirmClaimOrder, setConfirmClaimOrder] = useState<Order | null>(null); // custom claim confirm dialog
   const [confirmReserveOrder, setConfirmReserveOrder] = useState<Order | null>(null); // custom reserve confirm dialog
+  const [pendingAssignmentDialog, setPendingAssignmentDialog] = useState<Order | null>(null); // pending assignment confirmation dialog
 
 
   // PIN verification
@@ -477,6 +482,8 @@ export default function DeliveryPortal() {
   const openPool = useMemo(() => {
     let list = orders.filter(o => {
       if (o.delivered_by_user_id !== null) return false;
+      // Exclude orders with pending assignments (they're locked to another driver)
+      if (o.pending_assignment_driver_id !== null) return false;
 
       const isLocal = isLocalDelivery(o);
 
@@ -505,6 +512,31 @@ export default function DeliveryPortal() {
         : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
     );
   }, [orders, countryFilter, cityFilter, searchQuery, sortOrder]);
+
+  // Pending assignments from admin - awaiting driver confirmation
+  const pendingAssignments = useMemo(() => {
+    return orders.filter(o => o.pending_assignment_driver_id === myId);
+  }, [orders, myId]);
+
+  // Countdown timer for pending assignments
+  const [timeRemaining, setTimeRemaining] = useState<{ [orderId: number]: number }>({});
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newTimeRemaining: { [orderId: number]: number } = {};
+      pendingAssignments.forEach(order => {
+        if (order.pending_assignment_expires_at) {
+          const expiresAt = new Date(order.pending_assignment_expires_at).getTime();
+          const now = Date.now();
+          const remaining = Math.max(0, Math.floor((expiresAt - now) / 1000));
+          newTimeRemaining[order.id] = remaining;
+        }
+      });
+      setTimeRemaining(newTimeRemaining);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [pendingAssignments]);
 
   const completedOrders = useMemo(() => {
     let list = orders.filter(o => o.status === "Delivered" && o.delivered_by_user_id === myId);
@@ -571,7 +603,7 @@ export default function DeliveryPortal() {
       const handoverPin = response.data?.handover_pin;
       const prevDriverName = order.last_released_by_driver?.name;
       const prevDriverPhone = order.last_released_by_driver?.phone;
-      
+
       let msg = `Order reserved successfully!`;
       if (handoverPin) {
         msg += ` Your Handover PIN is: ${handoverPin}.`;
@@ -579,7 +611,7 @@ export default function DeliveryPortal() {
       if (prevDriverName && prevDriverPhone) {
         msg += ` Please contact previous driver ${prevDriverName} at ${prevDriverPhone} to collect the package.`;
       }
-      
+
       toast.success(msg, {
         duration: 12000,
         icon: "📌",
@@ -591,6 +623,48 @@ export default function DeliveryPortal() {
       toast.error(msg);
     } finally {
       setReservingId(null);
+    }
+  };
+
+  const handleAcceptPendingAssignment = async () => {
+    const order = pendingAssignmentDialog;
+    if (!order) return;
+    setPendingAssignmentDialog(null);
+    setClaimingId(order.id);
+    try {
+      await api.post(API_ENDPOINTS.delivery.acceptPendingAssignment(order.id));
+      toast.success(`Assignment accepted! Your SLA timer has started for order ${order.tracking_number}.`, {
+        icon: "✅",
+        style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
+      });
+      setActiveTab("mine");
+      fetchOrders(true);
+      fetchStats();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to accept assignment";
+      toast.error(msg);
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
+  const handleDeclinePendingAssignment = async () => {
+    const order = pendingAssignmentDialog;
+    if (!order) return;
+    setPendingAssignmentDialog(null);
+    setReleasingId(order.id);
+    try {
+      await api.post(API_ENDPOINTS.delivery.declinePendingAssignment(order.id));
+      toast.success(`Assignment declined. Order ${order.tracking_number} has been returned to the pool.`, {
+        icon: "🔄",
+      });
+      fetchOrders(true);
+      fetchStats();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? "Failed to decline assignment";
+      toast.error(msg);
+    } finally {
+      setReleasingId(null);
     }
   };
 
@@ -1107,6 +1181,58 @@ export default function DeliveryPortal() {
 
       {/* ── MAIN ───────────────────────────────────────────────────────────── */}
       <main className="flex-1 container mx-auto px-4 max-w-xl pt-4 pb-20">
+
+        {/* Pending Assignments Banner */}
+        {pendingAssignments.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 shadow-sm animate-pulse">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-amber-600" />
+                <h3 className="text-sm font-black text-amber-900 uppercase tracking-wider">
+                  Pending Assignments ({pendingAssignments.length})
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold text-amber-700 bg-white border border-amber-300 px-2 py-1 rounded-full">
+                Action Required
+              </span>
+            </div>
+            <div className="space-y-2">
+              {pendingAssignments.slice(0, 3).map(order => (
+                <div
+                  key={order.id}
+                  onClick={() => setPendingAssignmentDialog(order)}
+                  className="bg-white border border-amber-200 rounded-lg p-3 cursor-pointer hover:bg-amber-100 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black text-slate-800">{order.tracking_number}</span>
+                    <span className="text-[10px] font-bold text-amber-700">
+                      {(() => {
+                        const seconds = timeRemaining[order.id] || 0;
+                        const minutes = Math.floor(seconds / 60);
+                        const secs = seconds % 60;
+                        const pad = (n: number) => String(n).padStart(2, "0");
+                        return `${pad(minutes)}:${pad(secs)}`;
+                      })()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-600">
+                    <MapPin className="h-3 w-3" />
+                    <span>{order.shipping_city}, {order.shipping_country}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-600 mt-1">
+                    <User className="h-3 w-3" />
+                    <span>{order.customer?.name}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {pendingAssignments.length > 3 && (
+              <p className="text-[10px] font-bold text-amber-700 mt-2 text-center">
+                +{pendingAssignments.length - 3} more pending assignments
+              </p>
+            )}
+          </div>
+        )}
 
         {/* 3-Tab Navigation */}
         <div className="bg-white p-1 rounded-xl border border-zinc-200 shadow-sm flex mb-4">
@@ -2007,6 +2133,82 @@ export default function DeliveryPortal() {
                 >
                   {confirmingHandoverId !== null && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                   Verify &amp; Handover
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ── PENDING ASSIGNMENT CONFIRMATION DIALOG ── */}
+      <AnimatePresence>
+        {pendingAssignmentDialog && (
+          <Modal onClose={() => setPendingAssignmentDialog(null)}>
+            <div className="p-5 border-b border-zinc-150 flex items-center justify-between bg-zinc-50">
+              <div className="text-left">
+                <h2 className="text-base font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-amber-500" /> Pending Assignment
+                </h2>
+                <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Ref: {pendingAssignmentDialog.tracking_number}</p>
+              </div>
+              <button
+                onClick={() => setPendingAssignmentDialog(null)}
+                className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-zinc-650 hover:bg-zinc-300 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4 text-left">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                <p className="text-[11px] font-bold text-amber-900 leading-relaxed">
+                  Admin has assigned this order to you. You have <strong>15 minutes</strong> to accept or decline this assignment.
+                </p>
+                <div className="flex items-center justify-center bg-white border border-amber-300 rounded-lg px-4 py-3">
+                  <div className="text-center">
+                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-1">Time Remaining</p>
+                    <p className="text-2xl font-black text-amber-900 tracking-wider">
+                      {(() => {
+                        const seconds = timeRemaining[pendingAssignmentDialog.id] || 0;
+                        const minutes = Math.floor(seconds / 60);
+                        const secs = seconds % 60;
+                        const pad = (n: number) => String(n).padStart(2, "0");
+                        return `${pad(minutes)}:${pad(secs)}`;
+                      })()}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-2 text-[10px] font-bold text-amber-800">
+                  <p>• <strong>YES:</strong> Accept assignment → SLA timer starts immediately</p>
+                  <p>• <strong>NO:</strong> Decline assignment → Order returns to pool for other drivers</p>
+                  <p>• <strong>EXPIRES:</strong> If no response within 15 minutes, order automatically returns to pool</p>
+                </div>
+              </div>
+
+              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-zinc-600">
+                  <strong>Customer:</strong> {pendingAssignmentDialog.customer?.name}<br />
+                  <strong>Destination:</strong> {pendingAssignmentDialog.shipping_city}, {pendingAssignmentDialog.shipping_country}<br />
+                  <strong>Amount:</strong> {currency} {pendingAssignmentDialog.total_amount?.toFixed(2)}
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={handleDeclinePendingAssignment}
+                  disabled={releasingId !== null}
+                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50 font-bold rounded-xl h-11 text-xs"
+                >
+                  {releasingId !== null && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Decline (Return to Pool)
+                </Button>
+                <Button
+                  onClick={handleAcceptPendingAssignment}
+                  disabled={claimingId !== null}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[11px] tracking-wider h-11 rounded-xl"
+                >
+                  {claimingId !== null && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Accept (Start SLA)
                 </Button>
               </div>
             </div>

@@ -171,6 +171,7 @@ function AdminOrdersPageInner() {
   const [incidentFilter, setIncidentFilter] = useState<"all" | "locked" | "failed">("all");
 
   const activeIncidents = useMemo(() => {
+    if (!Array.isArray(orders)) return [];
     return orders.filter(o =>
       (o.pin_locked || (o.failed_attempts_count && o.failed_attempts_count > 0)) &&
       o.status !== "Delivered" &&
@@ -517,7 +518,50 @@ function AdminOrdersPageInner() {
     return products.find(p => p.id.toString() === selectedProductId);
   }, [products, selectedProductId]);
 
-  const handleAddItemToOrder = () => {
+  // ── Memoized Dropdown Item Arrays ───────────────────────────────────────────
+  // These are computed once when the underlying data changes, not on every render.
+  // This prevents SearchableDropdown from receiving a new array reference on every keystroke.
+  const productDropdownItems = useMemo(() =>
+    products.map((p: any) => ({
+      id: p.id.toString(),
+      name: `${p.name} — Ksh ${Number((p.is_on_offer && p.offer_price) ? p.offer_price : p.price).toLocaleString()}${p.is_on_offer && p.offer_price ? ' 🏷️' : ''}`
+    })),
+  [products]);
+
+  const warehouseDropdownItems = useMemo(() =>
+    (selectedProductDetails?.inventories || []).map((inv: any) => ({
+      id: inv.warehouse_id.toString(),
+      name: `${inv.warehouse?.name} (Stock: ${inv.quantity})`
+    })),
+  [selectedProductDetails]);
+
+  const countryDropdownItems = useMemo(() =>
+    countriesData.map((c: any) => ({ id: c.name, name: c.name })),
+  [countriesData]);
+
+  const cityDropdownItems = useMemo(() => {
+    if (!shippingCountry) return [];
+    const found = countriesData.find((c: any) => c.name === shippingCountry);
+    const cities: string[] = found?.cities?.length
+      ? found.cities.map((ct: any) => ct.name)
+      : (PREDEFINED_CITIES[shippingCountry] || []);
+    return cities.sort((a, b) => a.localeCompare(b)).map(city => ({ id: city, name: city }));
+  }, [countriesData, shippingCountry]);
+
+  const editCountryDropdownItems = useMemo(() =>
+    countriesData.map((c: any) => ({ id: c.name, name: c.name })),
+  [countriesData]);
+
+  const editCityDropdownItems = useMemo(() => {
+    if (!editWalkInForm.shipping_country) return [];
+    const found = countriesData.find((c: any) => c.name === editWalkInForm.shipping_country);
+    const cities: string[] = found?.cities?.length
+      ? found.cities.map((ct: any) => ct.name)
+      : (PREDEFINED_CITIES[editWalkInForm.shipping_country] || []);
+    return cities.sort((a, b) => a.localeCompare(b)).map(city => ({ id: city, name: city }));
+  }, [countriesData, editWalkInForm.shipping_country]);
+
+  const handleAddItemToOrder = useCallback(() => {
     if (!selectedProductId || !selectedWarehouseId) {
       toast.error("Please select a product and warehouse");
       return;
@@ -573,21 +617,21 @@ function AdminOrdersPageInner() {
     setSelectedWarehouseId("");
     setAddQuantity(1);
     toast.success("Item added to order list");
-  };
+  }, [selectedProductId, selectedWarehouseId, products, orderItems, addQuantity]);
 
-  const handleRemoveItemFromOrder = (index: number) => {
+  const handleRemoveItemFromOrder = useCallback((index: number) => {
     setOrderItems(orderItems.filter((_, i) => i !== index));
-  };
+  }, [orderItems]);
 
-  const generateWalkInRef = () => {
+  const generateWalkInRef = useCallback(() => {
     const ts = Date.now().toString(36).toUpperCase();
     const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
     return `WK-${ts}-${rand}`;
-  };
+  }, []);
 
-  const isDigitalPayment = (method: string) => ["M-Pesa", "Card", "Bank Transfer"].includes(method);
+  const isDigitalPayment = useCallback((method: string) => ["M-Pesa", "Card", "Bank Transfer"].includes(method), []);
 
-  const resetWalkInFormFields = () => {
+  const resetWalkInFormFields = useCallback(() => {
     setShippingCountry("");
     setShippingCity("");
     setShippingAddress("");
@@ -599,15 +643,15 @@ function AdminOrdersPageInner() {
     setRecipientName("");
     setRecipientPhone("");
     setRecipientEmail("");
-  };
+  }, []);
 
   // Open the payment-method selection dialog before confirming mark-paid
-  const handleMarkWalkInPaid = (order: any) => {
+  const handleMarkWalkInPaid = useCallback((order: any) => {
     setMarkPaidTarget(order);
     setMarkPaidMethod(order.payment_method || "Cash");
     setMarkPaidRefCode(order.payment_ref_code || "");
     setIsMarkPaidDialogOpen(true);
-  };
+  }, []);
 
   const handleConfirmMarkPaid = async () => {
     if (!markPaidTarget) return;
@@ -718,7 +762,7 @@ function AdminOrdersPageInner() {
     }
   };
 
-  const handleSubmitWalkInOrder = async (e: React.FormEvent) => {
+  const handleSubmitWalkInOrder = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (orderItems.length === 0) {
       toast.error("Please add at least one item to the order.");
@@ -886,7 +930,7 @@ function AdminOrdersPageInner() {
     } finally {
       setIsSavingOrder(false);
     }
-  };
+  }, [orderItems, shippingMethod, shippingCountry, shippingCity, shippingAddress, shippingFee, selectedCustomerId, recipientName, recipientPhone, recipientEmail, paymentMethod, paymentRefCode, paymentStatus, newCustomerData, customers, isDigitalPayment, generateWalkInRef, resetWalkInFormFields]);
 
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -894,7 +938,7 @@ function AdminOrdersPageInner() {
       // Always fetch ALL orders with no filters — filtering is done 100% client-side
       // so that shipment filters never affect the Walk-In data pool and vice versa.
       const res = await api.get(API_ENDPOINTS.orders.base, { params: { per_page: -1 } });
-      setOrders(res.data);
+      setOrders(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Failed to fetch orders:", err);
       toast.error("Failed to sync orders");
@@ -2966,7 +3010,7 @@ function AdminOrdersPageInner() {
                   <div className="col-span-1 md:col-span-5 space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Product</label>
                     <SearchableDropdown
-                      items={products.map(p => ({ id: p.id.toString(), name: `${p.name} — Ksh ${Number((p.is_on_offer && p.offer_price) ? p.offer_price : p.price).toLocaleString()}${p.is_on_offer && p.offer_price ? ' 🏷️' : ''}` }))}
+                      items={productDropdownItems}
                       value={selectedProductId}
                       onChange={(val) => { setSelectedProductId(val); setSelectedWarehouseId(""); }}
                       placeholder="Search spare parts..."
@@ -2976,7 +3020,7 @@ function AdminOrdersPageInner() {
                   <div className="col-span-1 md:col-span-4 space-y-1.5">
                     <label className="text-xs font-semibold text-zinc-500">Source Warehouse</label>
                     <SearchableDropdown
-                      items={(selectedProductDetails?.inventories || []).map((inv: any) => ({ id: inv.warehouse_id.toString(), name: `${inv.warehouse?.name} (Stock: ${inv.quantity})` }))}
+                      items={warehouseDropdownItems}
                       value={selectedWarehouseId}
                       onChange={(val) => setSelectedWarehouseId(val)}
                       placeholder={selectedProductId ? "Choose hub..." : "Choose hub..."}
@@ -3156,7 +3200,7 @@ function AdminOrdersPageInner() {
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Destination Country <span className="text-red-500">*</span></label>
                         <SearchableDropdown
-                          items={countriesData.map((c: any) => ({ id: c.name, name: c.name }))}
+                          items={countryDropdownItems}
                           value={shippingCountry}
                           onChange={(val) => { setShippingCountry(val); setShippingCity(""); }}
                           placeholder="Select Country"
@@ -3166,14 +3210,7 @@ function AdminOrdersPageInner() {
                         <label className="text-xs font-semibold text-zinc-500">Destination City <span className="text-red-500">*</span></label>
                         <SearchableDropdown
                           disabled={!shippingCountry}
-                          items={(() => {
-                            if (!shippingCountry) return [];
-                            const found = countriesData.find((c: any) => c.name === shippingCountry);
-                            const cities: string[] = found?.cities?.length
-                              ? found.cities.map((ct: any) => ct.name)
-                              : (PREDEFINED_CITIES[shippingCountry] || []);
-                            return cities.sort((a, b) => a.localeCompare(b)).map(city => ({ id: city, name: city }));
-                          })()}
+                          items={cityDropdownItems}
                           value={shippingCity}
                           onChange={(val) => setShippingCity(val)}
                           placeholder="Select City"
@@ -3531,7 +3568,7 @@ function AdminOrdersPageInner() {
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination Country</label>
                   <SearchableDropdown
                     disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
-                    items={countriesData.map((c: any) => ({ id: c.name, name: c.name }))}
+                    items={editCountryDropdownItems}
                     value={editWalkInForm.shipping_country}
                     onChange={(val) => setEditWalkInForm({ ...editWalkInForm, shipping_country: val, shipping_city: "" })}
                     placeholder="Select Country"
@@ -3542,14 +3579,7 @@ function AdminOrdersPageInner() {
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
                   <SearchableDropdown
                     disabled={!editWalkInForm.shipping_country || editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
-                    items={(() => {
-                      if (!editWalkInForm.shipping_country) return [];
-                      const found = countriesData.find((c: any) => c.name === editWalkInForm.shipping_country);
-                      const cities: string[] = found?.cities?.length
-                        ? found.cities.map((ct: any) => ct.name)
-                        : (PREDEFINED_CITIES[editWalkInForm.shipping_country] || []);
-                      return cities.sort((a, b) => a.localeCompare(b)).map(city => ({ id: city, name: city }));
-                    })()}
+                    items={editCityDropdownItems}
                     value={editWalkInForm.shipping_city}
                     onChange={(val) => setEditWalkInForm({ ...editWalkInForm, shipping_city: val })}
                     placeholder="Select City"

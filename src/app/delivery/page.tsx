@@ -21,6 +21,23 @@ import { useSettings } from "@/components/providers/SettingsProvider";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+// Custom hook for debounced value
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface OrderItem {
   id: number;
@@ -211,6 +228,7 @@ export default function DeliveryPortal() {
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearchQuery = useDebounce(searchQuery, 300); // 300ms debounce
   const [countryFilter, setCountryFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
@@ -315,7 +333,7 @@ export default function DeliveryPortal() {
     if (!silent) setLoading(true);
     try {
       const res = await api.get(API_ENDPOINTS.delivery.orders);
-      const incoming: Order[] = res.data as Order[];
+      const incoming: Order[] = Array.isArray(res.data) ? res.data as Order[] : [];
 
       // Detect newly assigned orders (delivered_by_user_id changed to my id)
       if (knownAssignmentsRef.current.size > 0) {
@@ -392,8 +410,8 @@ export default function DeliveryPortal() {
       (o.status === "Shipped" || o.status === "Arrived") &&
       o.delivered_by_user_id === myId
     );
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
       list = list.filter(o =>
         o.tracking_number.toLowerCase().includes(q) ||
         (o.customer?.name ?? "").toLowerCase().includes(q) ||
@@ -406,7 +424,7 @@ export default function DeliveryPortal() {
         ? new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
     );
-  }, [orders, myId, searchQuery, sortOrder]);
+  }, [orders, myId, debouncedSearchQuery, sortOrder]);
 
   const pendingHandovers = useMemo(() => {
     return orders.filter(o =>
@@ -466,7 +484,7 @@ export default function DeliveryPortal() {
         fetchNotifications();
         refreshUser();
       }
-    }, 30000);
+    }, 15000); // Reduced to 15 seconds for faster updates
     secondsRef.current = setInterval(() => setSecondsSinceSync(s => s + 1), 1000);
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
@@ -497,8 +515,8 @@ export default function DeliveryPortal() {
     });
     if (countryFilter !== "all") list = list.filter(o => o.shipping_country?.toLowerCase() === countryFilter.toLowerCase());
     if (cityFilter !== "all") list = list.filter(o => o.shipping_city === cityFilter);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
       list = list.filter(o =>
         o.tracking_number.toLowerCase().includes(q) ||
         (o.customer?.name ?? "").toLowerCase().includes(q) ||
@@ -511,7 +529,7 @@ export default function DeliveryPortal() {
         ? new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
         : new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
     );
-  }, [orders, countryFilter, cityFilter, searchQuery, sortOrder]);
+  }, [orders, countryFilter, cityFilter, debouncedSearchQuery, sortOrder]);
 
   // Pending assignments from admin - awaiting driver confirmation
   const pendingAssignments = useMemo(() => {
@@ -540,8 +558,8 @@ export default function DeliveryPortal() {
 
   const completedOrders = useMemo(() => {
     let list = orders.filter(o => o.status === "Delivered" && o.delivered_by_user_id === myId);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const q = debouncedSearchQuery.toLowerCase();
       list = list.filter(o =>
         o.tracking_number.toLowerCase().includes(q) ||
         (o.customer?.name ?? "").toLowerCase().includes(q) ||
@@ -551,7 +569,7 @@ export default function DeliveryPortal() {
       );
     }
     return list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  }, [orders, myId, searchQuery]);
+  }, [orders, myId, debouncedSearchQuery]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
   const handleReserve = (order: Order) => {
@@ -680,6 +698,7 @@ export default function DeliveryPortal() {
         style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
       });
       setActiveTab("mine");
+      // Optimistic update - background sync
       fetchOrders(true);
       fetchStats();
     } catch (err: unknown) {
@@ -714,6 +733,7 @@ export default function DeliveryPortal() {
       });
       setHandoverPinOrder(null);
       setHandoverPinInput("");
+      // Optimistic update - don't wait for fetchOrders
       fetchOrders(true);
       fetchStats();
     } catch (err: unknown) {
@@ -780,6 +800,7 @@ export default function DeliveryPortal() {
         style: { background: "#0052cc", color: "#fff", fontWeight: "bold" },
       });
       setActiveTab("mine");
+      // Optimistic update - background sync
       fetchOrders(true);
       fetchStats();
     } catch (err: unknown) {
@@ -814,6 +835,7 @@ export default function DeliveryPortal() {
 
       toast.success(res.data.message || `Order ${releaseModalOrder.tracking_number} released back to the pool.`);
       setReleaseModalOrder(null);
+      // Optimistic update - background sync
       fetchOrders(true);
       fetchStats();
     } catch (err: unknown) {
@@ -832,6 +854,7 @@ export default function DeliveryPortal() {
         icon: "📍",
         style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
       });
+      // Optimistic update - background sync
       fetchOrders(true);
       fetchStats();
     } catch (err: unknown) {
@@ -1019,6 +1042,7 @@ export default function DeliveryPortal() {
       setSignatureOrder(null);
       setPhotoBase64(null);
       setActiveTab("completed");
+      // Optimistic update - background sync
       fetchOrders(true);
       fetchStats();
       refreshUser();
@@ -1070,6 +1094,10 @@ export default function DeliveryPortal() {
   const handleAcknowledgeSla = async () => {
     setAcknowledgingSla(true);
     try {
+      // Store acknowledgment locally for immediate UI feedback
+      if (user && typeof window !== "undefined") {
+        localStorage.setItem(`sla_acknowledged_${user.id}`, Date.now().toString());
+      }
       await api.post("/delivery/acknowledge-sla-breaches");
       toast.success("SLA warning acknowledged.", { icon: "📝" });
       await refreshUser();
@@ -1115,6 +1143,24 @@ export default function DeliveryPortal() {
                   ? <span className="text-blue-200 font-bold"> | {(user as { vehicle_plate?: string }).vehicle_plate}</span>
                   : ""}
               </p>
+              {/* Persistent SLA breach indicator in the header */}
+              {(user.sla_breaches ?? 0) > 0 && (
+                <div className="flex items-center gap-1 mt-0.5">
+                  {[1, 2, 3].map(i => (
+                    <div
+                      key={i}
+                      className={`h-1.5 w-4 rounded-full ${
+                        i <= (user.sla_breaches ?? 0)
+                          ? i === 3 ? "bg-red-400" : "bg-amber-400"
+                          : "bg-white/20"
+                      }`}
+                    />
+                  ))}
+                  <span className={`text-[9px] font-black uppercase tracking-wide ml-0.5 ${(user.sla_breaches ?? 0) >= 3 ? "text-red-300" : "text-amber-300"}`}>
+                    {(user.sla_breaches ?? 0) >= 3 ? "SUSPENDED" : `Breach ${user.sla_breaches}/3`}
+                  </span>
+                </div>
+              )}
             </div>
           </button>
 
@@ -1181,6 +1227,48 @@ export default function DeliveryPortal() {
 
       {/* ── MAIN ───────────────────────────────────────────────────────────── */}
       <main className="flex-1 container mx-auto px-4 max-w-xl pt-4 pb-20">
+
+        {/* ── PERSISTENT SLA BREACH RECORD CARD ────────────────────────────── */}
+        {/* Shows at all times when the driver has acknowledged breaches, so they always know their strike count */}
+        {(user.sla_breaches ?? 0) > 0 && (user.sla_breaches ?? 0) <= (user.sla_breaches_acknowledged ?? 0) && (
+          <div className={`rounded-xl border mb-4 p-3 ${
+            (user.sla_breaches ?? 0) >= 3
+              ? "bg-red-50 border-red-200"
+              : "bg-amber-50 border-amber-200"
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+                  (user.sla_breaches ?? 0) >= 3 ? "bg-red-100" : "bg-amber-100"
+                }`}>
+                  <AlertOctagon className={`h-4 w-4 ${(user.sla_breaches ?? 0) >= 3 ? "text-red-600" : "text-amber-600"}`} />
+                </div>
+                <div>
+                  <p className={`text-[11px] font-black uppercase tracking-wide ${(user.sla_breaches ?? 0) >= 3 ? "text-red-700" : "text-amber-700"}`}>
+                    SLA Record — Strike {user.sla_breaches} of 3
+                  </p>
+                  <p className="text-[10px] text-zinc-500 font-medium">
+                    {(user.sla_breaches ?? 0) >= 3
+                      ? "Account suspended. Contact admin to reactivate."
+                      : `${3 - (user.sla_breaches ?? 0)} strike(s) remaining before suspension`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-1 flex-shrink-0">
+                {[1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className={`h-2 w-5 rounded-full ${
+                      i <= (user.sla_breaches ?? 0)
+                        ? i === 3 ? "bg-red-500" : "bg-amber-500"
+                        : "bg-zinc-200"
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Pending Assignments Banner */}
         {pendingAssignments.length > 0 && (

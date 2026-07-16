@@ -68,22 +68,32 @@ export function SearchableDropdown({
     }
   }, [open]);
 
-  const filtered = items.filter((item) =>
-    item.name.toLowerCase().includes(search.toLowerCase())
-  );
+  // Memoize filtered items to prevent unnecessary re-renders
+  const filtered = React.useMemo(() => {
+    const searchLower = search.toLowerCase();
+    return items.filter((item) =>
+      item.name.toLowerCase().includes(searchLower)
+    );
+  }, [items, search]);
 
-  const exactMatch = items.some(
-    (item) => item.name.toLowerCase() === search.toLowerCase()
-  );
+  // Memoize exact match check
+  const exactMatch = React.useMemo(() => {
+    const searchLower = search.toLowerCase();
+    return items.some((item) => item.name.toLowerCase() === searchLower);
+  }, [items, search]);
 
-  const selectedItem = items.find((item) => item.id.toString() === value);
+  // Memoize selected item
+  const selectedItem = React.useMemo(() => {
+    return items.find((item) => item.id.toString() === value);
+  }, [items, value]);
 
-  const handleSelect = (item: Item) => {
+  // Memoize event handlers to prevent unnecessary re-renders
+  const handleSelect = React.useCallback((item: Item) => {
     onChange(item.id.toString());
     setOpen(false);
-  };
+  }, [onChange]);
 
-  const handleAdd = async () => {
+  const handleAdd = React.useCallback(async () => {
     if (!onAdd || !search.trim() || exactMatch) return;
     setAdding(true);
     try {
@@ -95,16 +105,16 @@ export function SearchableDropdown({
     } finally {
       setAdding(false);
     }
-  };
+  }, [onAdd, search, exactMatch]);
 
-  const handleDeleteClick = (e: React.MouseEvent, id: string | number) => {
+  const handleDeleteClick = React.useCallback((e: React.MouseEvent, id: string | number) => {
     e.stopPropagation();
     if (!onDelete) return;
     setDeleteConfirmId(id);
     setOpen(false);
-  };
+  }, [onDelete]);
 
-  const confirmDelete = async () => {
+  const confirmDelete = React.useCallback(async () => {
     if (!onDelete || !deleteConfirmId) return;
     setDeletingId(deleteConfirmId);
     try {
@@ -115,17 +125,17 @@ export function SearchableDropdown({
       setDeletingId(null);
       setDeleteConfirmId(null);
     }
-  };
+  }, [onDelete, deleteConfirmId]);
 
-  const handleEditClick = (e: React.MouseEvent, id: string | number, currentName: string) => {
+  const handleEditClick = React.useCallback((e: React.MouseEvent, id: string | number, currentName: string) => {
     e.stopPropagation();
     if (!onEdit) return;
     setEditModalData({ id, name: currentName });
     setEditInputValue(currentName);
     setOpen(false);
-  };
+  }, [onEdit]);
 
-  const confirmEdit = async (e: React.FormEvent) => {
+  const confirmEdit = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!onEdit || !editModalData) return;
     const newName = editInputValue.trim();
@@ -142,7 +152,7 @@ export function SearchableDropdown({
       setEditingId(null);
       setEditModalData(null);
     }
-  };
+  }, [onEdit, editModalData, editInputValue]);
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -206,7 +216,7 @@ export function SearchableDropdown({
                 No results found
               </div>
             ) : (
-              filtered.map((item) => (
+              filtered.slice(0, 100).map((item) => (
                 <div
                   key={item.id}
                   onMouseDown={(e) => {

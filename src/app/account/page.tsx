@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Fragment } from "react";
+import { useEffect, useState, Fragment, useMemo } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
@@ -40,15 +40,13 @@ function getOrderRefundedTotal(order: any): number {
   if (order.refunded_amount !== undefined && order.refunded_amount !== null) {
     return Number(order.refunded_amount || 0);
   }
-  // Legacy fallback
+  // Legacy fallback: use per-item shipping fee if available, else zero
   if (!order.items) return 0;
-  const totalUnits = Math.max(1, order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-  const shippingFee = Number(order.shipping_fee || 0);
   return order.items
     .filter((i: any) => i.cancellation_status === "Cancelled")
     .reduce((sum: number, i: any) => {
-      const itemProductCost = Number(i.price) * i.quantity;
-      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
+      const itemProductCost = Number(i.price) * Number(i.quantity);
+      const itemShippingShare = parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity);
       return sum + itemProductCost + itemShippingShare;
     }, 0);
 }
@@ -284,12 +282,17 @@ function AccountPortalInner() {
   });
   const [passwordStatus, setPasswordStatus] = useState({ loading: false, success: false, error: "" });
 
+  // Order Search + Filter State
+  const [orderSearch, setOrderSearch] = useState("");
+  const [orderStatusFilter, setOrderStatusFilter] = useState("All");
+
   // Return Request State
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnReason, setReturnReason] = useState("");
   const [returnExplanation, setReturnExplanation] = useState("");
   const [submittingReturn, setSubmittingReturn] = useState(false);
   const [myReturns, setMyReturns] = useState<any[]>([]);
+  const [returnsLoading, setReturnsLoading] = useState(true);
   const [selectedReturnItems, setSelectedReturnItems] = useState<Record<number, number>>({});
 
   const openReturnModal = (order: any) => {
@@ -302,8 +305,14 @@ function AccountPortalInner() {
 
   const fetchReturns = () => {
     api.get(API_ENDPOINTS.returns.mine)
-      .then(res => setMyReturns(res.data))
-      .catch(err => console.error("Failed to fetch returns history:", err));
+      .then(res => {
+        setMyReturns(res.data);
+        setReturnsLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch returns history:", err);
+        setReturnsLoading(false);
+      });
   };
 
   useEffect(() => {
@@ -330,13 +339,13 @@ function AccountPortalInner() {
     // Load returns
     fetchReturns();
 
-    // 15-second silent polling in background
+    // 3-second silent polling in background for instant updates
     const interval = setInterval(() => {
       api.get("/my-orders")
         .then(res => setOrders(res.data))
         .catch(err => console.error("Silent orders update failed:", err));
       fetchReturns();
-    }, 15000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, []);
@@ -476,6 +485,23 @@ function AccountPortalInner() {
       return sum + itemsCount;
     }, 0);
 
+  // ── Filtered + searched orders for the My Orders tab ──────────────────────
+  const filteredOrders = useMemo(() => {
+    const sq = orderSearch.toLowerCase().trim();
+    return orders.filter((o: any) => {
+      const matchesStatus = orderStatusFilter === "All" || o.status === orderStatusFilter;
+      if (!matchesStatus) return false;
+      if (!sq) return true;
+      const trackingMatch = (o.tracking_number || "").toLowerCase().includes(sq);
+      const productMatch = o.items?.some((item: any) =>
+        (item.product?.name || "").toLowerCase().includes(sq) ||
+        (item.product?.part_number || "").toLowerCase().includes(sq)
+      );
+      const refMatch = (o.payment_ref_code || "").toLowerCase().includes(sq);
+      return trackingMatch || productMatch || refMatch;
+    });
+  }, [orders, orderSearch, orderStatusFilter]);
+
   const tabs = [
     { name: "Dashboard", icon: Package },
     { name: "My Orders", icon: ShoppingBag },
@@ -545,8 +571,8 @@ function AccountPortalInner() {
       )}
       <Navbar />
 
-      <main className="flex-1 py-10">
-        <div className="container mx-auto px-6 max-w-7xl">
+      <main className="flex-1 py-6 sm:py-10">
+        <div className="container mx-auto px-4 sm:px-6 max-w-7xl">
 
           {/* Header Section - Matching Image 1 Style */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -586,23 +612,50 @@ function AccountPortalInner() {
             </div>
           </div>
 
+          {/* ── Mobile horizontal tab bar ───────────────────────────── */}
+          <div id="tour-nav" className="lg:hidden mb-5 -mx-4 px-4 overflow-x-auto">
+            <div className="flex items-center gap-2 pb-2" style={{ minWidth: 'max-content' }}>
+              {tabs.map((item) => (
+                <button
+                  key={item.name}
+                  onClick={() => setActiveTab(item.name)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-bold transition-all whitespace-nowrap border",
+                    activeTab === item.name
+                      ? "bg-[#0052cc] text-white border-[#0052cc] shadow-sm"
+                      : "bg-white text-[#64748b] border-[#e2e8f0] hover:border-[#0052cc]/40 hover:text-[#0052cc]"
+                  )}
+                >
+                  <item.icon className="h-3.5 w-3.5" />
+                  {item.name}
+                </button>
+              ))}
+              <Link href="/products" className="flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-bold text-[#0052cc] border border-[#0052cc]/30 bg-white whitespace-nowrap">
+                <ShoppingBag className="h-3.5 w-3.5" /> Shop
+              </Link>
+              <button onClick={logout} className="flex items-center gap-2 px-4 py-2 rounded-full text-[12px] font-bold text-red-500 border border-red-200 bg-white whitespace-nowrap">
+                <LogOut className="h-3.5 w-3.5" /> Sign Out
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-            {/* Sidebar - Clean Style */}
-            <div id="tour-nav" className="lg:col-span-3 space-y-1">
+            {/* Sidebar - Desktop only */}
+            <div className="hidden lg:block lg:col-span-3 space-y-1">
               <p className="text-[11px] font-bold text-[#94a3b8] uppercase tracking-widest mb-4 ml-2">Account Portal</p>
               {tabs.map((item) => (
                 <button
                   key={item.name}
                   onClick={() => setActiveTab(item.name)}
                   className={cn(
-                    "w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 group text-[14px] font-medium",
+                    "w-full flex items-center gap-3 px-4 py-3 rounded-md transition-all duration-200 group text-[14px] font-medium border-l-2",
                     activeTab === item.name
-                      ? "bg-[#f1f5f9] text-[#0052cc]"
-                      : "text-[#64748b] hover:bg-[#f8fafc] hover:text-[#1e293b]"
+                      ? "bg-blue-50 text-[#0052cc] font-semibold border-[#0052cc] shadow-sm"
+                      : "text-[#64748b] hover:bg-[#f8fafc] hover:text-[#1e293b] border-transparent"
                   )}
                 >
-                  <item.icon className={cn("h-4 w-4", activeTab === item.name ? "text-[#0052cc]" : "text-[#94a3b8]")} />
+                  <item.icon className={cn("h-4 w-4 shrink-0", activeTab === item.name ? "text-[#0052cc]" : "text-[#94a3b8] group-hover:text-[#475569]")} />
                   <span>{item.name}</span>
                 </button>
               ))}
@@ -768,7 +821,7 @@ function AccountPortalInner() {
                       </div>
 
                       <div className="overflow-x-auto overflow-y-auto max-h-[480px] custom-scrollbar">
-                        <table className="w-full text-left">
+                        <table className="w-full min-w-[900px] text-left">
                           <thead className="sticky top-0 z-10 bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
                             <tr>
                               <th className="px-6 py-4">Order Ref</th>
@@ -884,19 +937,19 @@ function AccountPortalInner() {
                                     })()}
                                   </td>
                                   <td className="px-6 py-4 text-center">
-                                    <Badge className={cn(
-                                      "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+                                    <span className={cn(
+                                      "inline-flex items-center rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                                      order.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
                                       order.status === "Processing" ? "bg-orange-500 text-white" :
-                                      (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
-                                      order.status === "Arrived" ? "bg-indigo-600 text-white" : 
-                                      order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-red-600 text-white" : 
-                                      (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
+                                      (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
+                                      order.status === "Arrived" ? "bg-indigo-600 text-white" :
+                                      order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                                      order.status === "Returned" ? "bg-red-600 text-white" :
+                                      (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700" :
                                       "bg-zinc-200 text-zinc-700"
                                     )}>
                                       {order.status === "In Transit" ? "SHIPPED" : order.status}
-                                    </Badge>
+                                    </span>
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                     <button
@@ -995,15 +1048,47 @@ function AccountPortalInner() {
                 {activeTab === "My Orders" && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                     <div id="tour-statement-section" className="bg-white rounded-lg border border-[#e2e8f0] shadow-sm overflow-hidden">
-                      <div className="px-6 py-5 border-b border-[#e2e8f0] flex items-center justify-between">
-                        <h2 className="text-[16px] font-bold text-[#1e293b]">Full Order Ledger</h2>
-                        <Button onClick={downloadStatement} size="sm" className="bg-[#0052cc] hover:bg-[#0747a6] text-[12px] font-bold text-white uppercase tracking-wider h-9 px-4">
-                          <FileText className="h-4 w-4 mr-2" /> Download Statement PDF
-                        </Button>
+                      <div className="px-6 py-5 border-b border-[#e2e8f0] flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                        <div>
+                          <h2 className="text-[16px] font-bold text-[#1e293b]">Full Order Ledger</h2>
+                          <p className="text-[11px] text-[#94a3b8] font-medium mt-0.5">{filteredOrders.length} of {orders.length} orders</p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                          {/* Search */}
+                          <div className="relative flex-1 sm:w-56">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#94a3b8]" />
+                            <input
+                              type="text"
+                              placeholder="Search orders, parts, M-Pesa ref..."
+                              value={orderSearch}
+                              onChange={e => setOrderSearch(e.target.value)}
+                              className="w-full pl-8 pr-3 h-9 text-[12px] border border-[#e2e8f0] rounded-lg bg-[#f8fafc] text-[#1e293b] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 focus:border-[#0052cc] transition-all"
+                            />
+                          </div>
+                          {/* Status Filter */}
+                          <select
+                            value={orderStatusFilter}
+                            onChange={e => setOrderStatusFilter(e.target.value)}
+                            className="h-9 px-3 text-[12px] border border-[#e2e8f0] rounded-lg bg-[#f8fafc] text-[#1e293b] focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 focus:border-[#0052cc] font-semibold transition-all cursor-pointer"
+                          >
+                            <option value="All">All Statuses</option>
+                            <option value="Pending">🟡 Pending</option>
+                            <option value="Processing">🟠 Processing</option>
+                            <option value="Shipped">🔵 Shipped</option>
+                            <option value="Arrived">🟣 Arrived</option>
+                            <option value="Delivered">🟢 Delivered</option>
+                            <option value="Returned">🔴 Returned</option>
+                            <option value="Cancelled">❌ Cancelled</option>
+                          </select>
+                          {/* PDF Export */}
+                          <Button onClick={downloadStatement} size="sm" className="bg-[#0052cc] hover:bg-[#0747a6] text-[12px] font-bold text-white uppercase tracking-wider h-9 px-4 shrink-0">
+                            <FileText className="h-4 w-4 mr-2" /> Statement
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="overflow-x-auto">
-                        <table className="w-full text-left">
+                        <table className="w-full min-w-[950px] text-left">
                           <thead className="bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
                             <tr>
                               <th className="px-6 py-4">Order Ref</th>
@@ -1022,8 +1107,16 @@ function AccountPortalInner() {
                           </thead>
                           <tbody className="divide-y divide-[#f1f5f9]">
                             {loading ? (
-                              <tr><td colSpan={9} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#64748b]" /></td></tr>
-                            ) : orders.map((order: any) => (
+                              <tr><td colSpan={12} className="p-10 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-[#64748b]" /></td></tr>
+                            ) : filteredOrders.length === 0 ? (
+                              <tr><td colSpan={12} className="p-12 text-center">
+                                <div className="flex flex-col items-center gap-2">
+                                  <Search className="h-8 w-8 text-[#cbd5e1]" />
+                                  <p className="text-[13px] font-semibold text-[#94a3b8]">No orders match your search</p>
+                                  <button onClick={() => { setOrderSearch(""); setOrderStatusFilter("All"); }} className="text-[12px] text-[#0052cc] font-bold hover:underline mt-1">Clear filters</button>
+                                </div>
+                              </td></tr>
+                            ) : filteredOrders.map((order: any) => (
                               <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                 <td className="px-6 py-4">
                                   <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
@@ -1116,17 +1209,19 @@ function AccountPortalInner() {
                                   })()}
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <Badge className={cn(
-                                    "rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                                                                        (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" : 
-                                      order.status === "Arrived" ? "bg-indigo-600 text-white" : 
-                                      order.status === "Delivered" ? "bg-emerald-500 text-white" : 
-                                      order.status === "Returned" ? "bg-red-600 text-white" : 
-                                      (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
-                                      "bg-zinc-200 text-zinc-700"
-                                    )}>
-                                      {order.status === "In Transit" ? "SHIPPED" : order.status}
-                                    </Badge>
+                                  <span className={cn(
+                                    "inline-flex items-center rounded-full px-3 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                                    order.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
+                                    order.status === "Processing" ? "bg-orange-500 text-white" :
+                                    (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
+                                    order.status === "Arrived" ? "bg-indigo-600 text-white" :
+                                    order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                                    order.status === "Returned" ? "bg-red-600 text-white" :
+                                    (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-100 text-red-700" :
+                                    "bg-zinc-200 text-zinc-700"
+                                  )}>
+                                    {order.status === "In Transit" ? "SHIPPED" : order.status}
+                                  </span>
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                     <Button 
@@ -1157,7 +1252,25 @@ function AccountPortalInner() {
                       <CardContent className="p-6">
                         <div className="max-h-96 overflow-y-auto pr-2 custom-scrollbar">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {orders.length === 0 ? (
+                            {loading ? (
+                              /* ── Skeleton shimmer for addresses ── */
+                              [1, 2, 3, 4].map((i) => (
+                                <div key={i} className="border border-[#e2e8f0] rounded-lg p-5 bg-[#f8fafc] animate-pulse space-y-3">
+                                  {/* City title */}
+                                  <div className="h-4 w-28 bg-zinc-200 rounded" />
+                                  {/* Address lines */}
+                                  <div className="space-y-1.5">
+                                    <div className="h-3 w-48 bg-zinc-100 rounded" />
+                                    <div className="h-3 w-32 bg-zinc-100 rounded" />
+                                  </div>
+                                  {/* Action buttons */}
+                                  <div className="flex gap-3 pt-1">
+                                    <div className="h-4 w-24 bg-zinc-200 rounded" />
+                                    <div className="h-4 w-16 bg-zinc-100 rounded" />
+                                  </div>
+                                </div>
+                              ))
+                            ) : orders.length === 0 ? (
                               <div className="col-span-2 text-center py-10 text-[#64748b] bg-[#f8fafc] rounded-lg border border-dashed">
                                 No shipping destinations recorded yet.
                               </div>
@@ -1213,78 +1326,314 @@ function AccountPortalInner() {
                 )}
 
                 {activeTab === "Returns & Refunds" && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                    <Card className="border-[#e2e8f0] shadow-sm rounded-lg overflow-hidden">
-                      <CardHeader className="px-6 py-5 border-b border-[#e2e8f0]">
-                        <CardTitle className="text-lg font-bold text-[#1e293b]">Returns & Refunds Ledger</CardTitle>
-                        <p className="text-xs text-[#64748b] font-medium mt-1">Submit new return requests or check the status of your past requests.</p>
-                      </CardHeader>
-                      <CardContent className="p-6">
-                        {myReturns.length === 0 ? (
-                          <div className="text-center py-12 text-[#64748b] bg-[#f8fafc] rounded-lg border border-dashed text-xs font-semibold">
-                            No return requests logged yet. If you need to return a delivered part, select the order in "My Orders" and click "Request Return".
+                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
+
+                    {/* ── Policy Banner ─────────────────────────────────────── */}
+                    <div className="rounded-xl border border-blue-100 bg-blue-50/60 px-5 py-4 flex gap-3 items-start">
+                      <div className="shrink-0 mt-0.5 bg-blue-100 rounded-full p-1.5">
+                        <AlertCircle className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-blue-900 mb-0.5">Returns &amp; Refunds Policy</p>
+                        <p className="text-xs text-blue-700 leading-relaxed">
+                          Returns can be requested within <strong>14 days of delivery</strong>. Parts must be in their <strong>original, unused condition</strong> with all original packaging.
+                          {" "}For orders that have <strong>not yet been delivered</strong>, refunds are processed immediately once approved.
+                          {" "}For <strong>delivered orders</strong>, you will need to return the part to our warehouse first — once we confirm receipt, your refund will be sent to your M-Pesa.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* ── How It Works Steps ────────────────────────────────── */}
+                    <div className="rounded-xl border border-[#e2e8f0] bg-white shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-[#f1f5f9] bg-zinc-50/40">
+                        <p className="text-xs font-extrabold uppercase tracking-widest text-zinc-500">How Returns Work</p>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[#f1f5f9]">
+                        {[
+                          { step: "1", icon: "📋", title: "Submit Request", desc: "Go to My Orders, find your order and click \"Request Return\"." },
+                          { step: "2", icon: "🔍", title: "Admin Review", desc: "Our team reviews your request within 1–2 business days." },
+                          { step: "3", icon: "📦", title: "Return Item", desc: "For delivered orders: return the part to our warehouse. Pending/processing orders: nothing to return — item is still with us." },
+                          { step: "4", icon: "💰", title: "Receive Refund", desc: "Refund is sent to your M-Pesa once approved (immediate for pending orders, after receipt confirmation for delivered orders)." },
+                        ].map(s => (
+                          <div key={s.step} className="px-4 py-4 flex flex-col gap-1">
+                            <span className="text-xl mb-1">{s.icon}</span>
+                            <p className="text-[11px] font-extrabold text-[#1e293b] uppercase tracking-wide">{s.title}</p>
+                            <p className="text-[11px] text-zinc-500 leading-relaxed">{s.desc}</p>
                           </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-[13px] text-[#1e293b] border-collapse">
-                              <thead>
-                                <tr className="border-b border-[#e2e8f0] text-[#64748b] font-bold text-left bg-zinc-50/50">
-                                  <th className="px-4 py-3">Return Ref</th>
-                                  <th className="px-4 py-3">Order Ref</th>
-                                  <th className="px-4 py-3">Reason</th>
-                                  <th className="px-4 py-3">Explanation</th>
-                                  <th className="px-4 py-3">Date Filed</th>
-                                  <th className="px-4 py-3 text-center">Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {myReturns.map((ret: any) => (
-                                  <Fragment key={ret.id}>
-                                    <tr className="border-b border-[#f1f5f9] hover:bg-zinc-50/40 font-medium">
-                                      <td className="px-4 py-3.5 font-bold text-[#0052cc]">RET-{ret.id}</td>
-                                      <td className="px-4 py-3.5 font-semibold">{ret.order?.tracking_number || `#${ret.order_id}`}</td>
-                                      <td className="px-4 py-3.5 font-semibold text-slate-700">{ret.reason}</td>
-                                      <td className="px-4 py-3.5 text-zinc-500 max-w-[200px] truncate" title={ret.explanation}>{ret.explanation || "—"}</td>
-                                      <td className="px-4 py-3.5 text-zinc-500">{new Date(ret.created_at).toLocaleDateString()}</td>
-                                      <td className="px-4 py-3.5 text-center">
-                                        <Badge className={cn(
-                                          "rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase border-none tracking-wider",
-                                          ret.status === "Approved" ? "bg-emerald-500 text-white" :
-                                          ret.status === "Rejected" ? "bg-red-600 text-white" :
-                                          "bg-yellow-400 text-yellow-950"
-                                        )}>
-                                          {ret.status}
-                                        </Badge>
-                                      </td>
-                                    </tr>
-                                    {ret.admin_notes && (
-                                      <tr className="bg-zinc-50/20 border-b border-[#f1f5f9]">
-                                        <td colSpan={6} className="px-6 py-3">
-                                          <div className={cn(
-                                            "p-3 rounded-lg border text-xs font-semibold text-left flex items-start gap-2.5 shadow-xs max-w-2xl",
-                                            ret.status === "Rejected"
-                                              ? "bg-red-50/60 border-red-100 text-red-800"
-                                              : "bg-emerald-50/60 border-emerald-100 text-emerald-800"
-                                          )}>
-                                            <AlertCircle className={cn("h-4 w-4 shrink-0 mt-0.5", ret.status === "Rejected" ? "text-red-500" : "text-emerald-500")} />
-                                            <div>
-                                              <p className="font-extrabold uppercase tracking-widest text-[9px] opacity-80 mb-1">
-                                                {ret.status === "Rejected" ? "Rejection Reason from Administration" : "Approval Notes from Administration"}
-                                              </p>
-                                              <p className="leading-relaxed font-medium">{ret.admin_notes}</p>
-                                            </div>
-                                          </div>
-                                        </td>
-                                      </tr>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ── Returns Ledger ────────────────────────────────────── */}
+                    <div className="rounded-xl border border-[#e2e8f0] bg-white shadow-sm overflow-hidden">
+                      <div className="px-5 py-4 border-b border-[#f1f5f9] flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-[#1e293b]">My Return Requests</p>
+                          <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Track the status of all your submitted return requests below.</p>
+                        </div>
+                        <span className="text-[11px] font-black bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 shadow-sm">
+                          {returnsLoading ? "—" : `${myReturns.length} request${myReturns.length !== 1 ? "s" : ""}`}
+                        </span>
+                      </div>
+
+                      {returnsLoading ? (
+                        /* ── Skeleton shimmer ── */
+                        <div className="divide-y divide-[#f1f5f9]">
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} className="px-5 py-5 space-y-3 animate-pulse">
+                              <div className="flex items-center justify-between">
+                                <div className="h-4 w-32 bg-zinc-200 rounded-md" />
+                                <div className="h-5 w-20 bg-zinc-100 rounded-full" />
+                              </div>
+                              <div className="h-3 w-48 bg-zinc-100 rounded" />
+                              <div className="flex gap-2 pt-1">
+                                <div className="h-8 w-24 bg-zinc-100 rounded-lg" />
+                                <div className="h-8 w-24 bg-zinc-100 rounded-lg" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : myReturns.length === 0 ? (
+                        <div className="text-center py-14 text-zinc-400 flex flex-col items-center gap-3">
+                          <RotateCcw className="h-8 w-8 opacity-30" />
+                          <div>
+                            <p className="text-sm font-bold text-zinc-500">No return requests yet</p>
+                            <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto">If you need to return a part, go to the <strong>My Orders</strong> tab, find the delivered order, and click <strong>"Request Return"</strong>.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          className="divide-y divide-[#f1f5f9] overflow-y-auto"
+                          style={{ maxHeight: myReturns.length > 1 ? "680px" : "none" }}
+                        >
+                          {myReturns.length > 1 && (
+                            <div className="px-5 py-2 bg-zinc-50/60 border-b border-[#f1f5f9] flex items-center gap-2">
+                              <span className="text-[10px] text-zinc-400 font-semibold">
+                                ↕ Scroll to see all {myReturns.length} requests
+                              </span>
+                            </div>
+                          )}
+                          {myReturns.map((ret: any) => {
+                            const items = ret.order?.items ?? [];
+                            const returnItemIds: number[] = (ret.return_items ?? []).map((ri: any) => ri.order_item_id);
+                            const returnedItems = returnItemIds.length > 0
+                              ? items.filter((i: any) => returnItemIds.includes(i.id))
+                              : items;
+                            let productCostTotal = 0;
+                            let shippingShareTotal = 0;
+                            returnedItems.forEach((i: any) => {
+                              const qty = ret.return_items?.find((ri: any) => ri.order_item_id === i.id)?.quantity ?? i.quantity;
+                              productCostTotal += parseFloat(i.price ?? 0) * qty;
+                              shippingShareTotal += parseFloat(i.shipping_fee_per_unit ?? 0) * qty;
+                            });
+                            const refundTotal = productCostTotal + shippingShareTotal;
+                            const isPartial = ret.return_items && ret.return_items.length > 0;
+
+                            return (
+                              <div key={ret.id} className="p-4 sm:p-5 hover:bg-zinc-50/40 transition-colors">
+                                {/* Header row */}
+                                <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3 sm:justify-between mb-4">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-extrabold text-[#0052cc]">RET-{ret.id}</span>
+                                    <span className="text-zinc-300 text-xs hidden sm:inline">•</span>
+                                    <span className="text-xs font-semibold text-zinc-600">Order: <span className="text-[#1e293b] font-bold">{ret.order?.tracking_number || `#${ret.order_id}`}</span></span>
+                                    <span className="text-zinc-300 text-xs hidden sm:inline">•</span>
+                                    <span className="text-xs text-zinc-400 font-medium">Filed {new Date(ret.created_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}</span>
+                                    {isPartial && (
+                                      <span className="text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wide">Partial Return</span>
                                     )}
-                                  </Fragment>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
+                                  </div>
+                                  <span className={cn(
+                                    "inline-flex self-start sm:self-auto items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider whitespace-nowrap",
+                                    ret.status === "Approved" ? "bg-blue-100 text-blue-700 border border-blue-200" :
+                                    ret.status === "Completed" ? "bg-emerald-500 text-white" :
+                                    ret.status === "Rejected" ? "bg-red-600 text-white" :
+                                    "bg-amber-100 text-amber-700 border border-amber-200"
+                                  )}>
+                                    {ret.status === "Pending" && "⏳ Pending Review"}
+                                    {ret.status === "Approved" && "📦 Awaiting Return"}
+                                    {ret.status === "Completed" && "✅ Refunded"}
+                                    {ret.status === "Rejected" && "✕ Rejected"}
+                                  </span>
+                                </div>
+
+                                {/* Reason + Items grid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                  {/* Reason block */}
+                                  <div className="bg-zinc-50 rounded-lg border border-zinc-100 px-4 py-3">
+                                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-1.5">Return Reason</p>
+                                    <p className="text-xs font-bold text-[#1e293b]">{ret.reason}</p>
+                                    {ret.explanation && (
+                                      <p className="text-xs text-zinc-500 mt-1 leading-relaxed">{ret.explanation}</p>
+                                    )}
+                                  </div>
+
+                                  {/* Items being returned */}
+                                  <div className="bg-zinc-50 rounded-lg border border-zinc-100 px-4 py-3">
+                                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400 mb-2">
+                                      {isPartial ? "Items Being Returned" : "All Items (Full Return)"}
+                                    </p>
+                                    {returnedItems.length > 0 ? (
+                                      <div className="space-y-1.5">
+                                        {returnedItems.map((item: any) => {
+                                          const qty = ret.return_items?.find((ri: any) => ri.order_item_id === item.id)?.quantity ?? item.quantity;
+                                          return (
+                                            <div key={item.id} className="flex items-center justify-between gap-2">
+                                              <div className="flex items-start gap-1.5 min-w-0">
+                                                <span className="text-zinc-400 text-[10px] mt-0.5 shrink-0">›</span>
+                                                <p className="text-xs font-semibold text-[#1e293b] truncate">{item.product?.name ?? `Product #${item.product_id}`}</p>
+                                              </div>
+                                              <span className="text-[10px] font-bold text-zinc-500 shrink-0 bg-white border border-zinc-200 rounded px-1.5 py-0.5">×{qty}</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-zinc-400">All items in the order</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Estimated refund breakdown */}
+                                {refundTotal > 0 && (
+                                  <div className={cn(
+                                    "rounded-lg border mb-4 overflow-hidden",
+                                    ret.status === "Approved" ? "border-emerald-100" :
+                                    ret.status === "Rejected" ? "border-red-100 opacity-60" :
+                                    "border-amber-100"
+                                  )}>
+                                    <div className={cn(
+                                      "flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-widest",
+                                      ret.status === "Approved" ? "bg-emerald-50 text-emerald-700" :
+                                      ret.status === "Rejected" ? "bg-red-50 text-red-600" :
+                                      "bg-amber-50 text-amber-700"
+                                    )}>
+                                      <span className="text-sm">💸</span>
+                                      {ret.status === "Approved" ? "Approved Refund Breakdown" : ret.status === "Rejected" ? "Estimated Refund (Not Approved)" : "Estimated Refund Breakdown"}
+                                    </div>
+                                    <div className="px-4 py-3 bg-white space-y-1.5">
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-zinc-500 font-medium">Product cost</span>
+                                        <span className="font-bold text-[#1e293b]">Ksh {productCostTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                                      </div>
+                                      {shippingShareTotal > 0 && (
+                                        <div className="flex items-center justify-between text-xs">
+                                          <span className="text-zinc-500 font-medium">
+                                            Shipping fee <span className="hidden sm:inline text-zinc-400">(per returned unit)</span>
+                                          </span>
+                                          <span className="font-bold text-[#1e293b]">Ksh {shippingShareTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                      )}
+                                      <div className="border-t border-zinc-100 pt-1.5 flex items-center justify-between text-xs">
+                                        <span className={cn("font-extrabold", ret.status === "Rejected" ? "text-red-600 line-through" : "text-[#1e293b]")}>Total Refund</span>
+                                        <span className={cn("text-sm font-extrabold", ret.status === "Approved" || ret.status === "Completed" ? "text-emerald-600" : ret.status === "Rejected" ? "text-red-500 line-through" : "text-amber-700")}>
+                                          Ksh {refundTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Status timeline */}
+                                <div className="flex items-center gap-0 text-[10px] font-semibold mb-4 overflow-x-auto pb-1">
+                                  {[
+                                    { label: "Submitted", done: true },
+                                    { label: "Under Review", done: ret.status !== "Pending" },
+                                    { label: ret.status === "Rejected" ? "Rejected" : "Approved", done: ret.status === "Approved" || ret.status === "Completed" || ret.status === "Rejected", rejected: ret.status === "Rejected" },
+                                    { label: "Refund Sent", done: ret.status === "Completed" },
+                                  ].map((s, idx, arr) => (
+                                    <Fragment key={s.label}>
+                                      <div className="flex flex-col items-center gap-1 shrink-0">
+                                        <div className={cn(
+                                          "w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black border-2",
+                                          s.done && !s.rejected ? "bg-emerald-500 border-emerald-500 text-white" :
+                                          s.rejected ? "bg-red-500 border-red-500 text-white" :
+                                          "bg-white border-zinc-200 text-zinc-300"
+                                        )}>
+                                          {s.done ? (s.rejected ? "✕" : "✓") : idx + 1}
+                                        </div>
+                                        <span className={cn("text-[9px] font-bold text-center", s.done ? (s.rejected ? "text-red-500" : "text-emerald-600") : "text-zinc-400")}>{s.label}</span>
+                                      </div>
+                                      {idx < arr.length - 1 && (
+                                        <div className={cn("flex-1 min-w-[16px] h-0.5 mx-1 mb-4 rounded-full", s.done && !s.rejected ? "bg-emerald-400" : "bg-zinc-100")} />
+                                      )}
+                                    </Fragment>
+                                  ))}
+                                </div>
+
+                                {/* Next steps guidance */}
+                                {ret.status === "Pending" && (
+                                  <div className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 text-xs text-amber-800 font-medium flex gap-2 items-start">
+                                    <span className="text-base shrink-0">⏳</span>
+                                    <span><strong>What happens next:</strong> Our admin team is reviewing your return request. This typically takes 1–2 business days. You will receive an update in this tab once a decision is made.</span>
+                                  </div>
+                                )}
+                                {ret.status === "Approved" && (
+                                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs text-blue-800 font-medium flex gap-2 items-start">
+                                    <span className="text-base shrink-0">📦</span>
+                                    <span><strong>Return authorized — action required:</strong> Please carefully pack the part(s) and send them back to our warehouse using a tracked courier or drop them off at our branch. Once we confirm receipt of the returned items, your refund of <strong>Ksh {refundTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong> will be processed to your M-Pesa.</span>
+                                  </div>
+                                )}
+                                {ret.status === "Completed" && (
+                                  <div className="bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3 text-xs text-emerald-800 font-medium flex gap-2 items-start">
+                                    <span className="text-base shrink-0">✅</span>
+                                    <span>
+                                      <strong>Refund processed!</strong> Your return has been finalized. A refund of <strong>Ksh {refundTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</strong> has been sent via <strong>{ret.refund_payment_method || "your selected method"}</strong>.
+                                      {ret.refund_reference && <> Transaction ref: <span className="font-mono font-black text-[#0052cc] bg-blue-50/50 border border-blue-100 px-1.5 py-0.5 rounded text-[10px]">{ret.refund_reference}</span>.</>}
+                                      {" "}Please allow up to 24 hours for the amount to reflect in your account.
+                                    </span>
+                                  </div>
+                                )}
+                                {ret.status === "Rejected" && !ret.admin_notes && (
+                                  <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-3 text-xs text-red-700 font-medium flex gap-2 items-start">
+                                    <span className="text-base shrink-0">❌</span>
+                                    <span><strong>Return request not approved.</strong> Unfortunately, this return request did not meet our return policy criteria. If you believe this is an error, please contact our support team with your order reference <strong>{ret.order?.tracking_number}</strong>.</span>
+                                  </div>
+                                )}
+
+                                {/* Admin notes */}
+                                {ret.admin_notes && (
+                                  <div className={cn(
+                                    "mt-3 rounded-lg border px-4 py-3 text-xs font-medium flex gap-2.5 items-start",
+                                    ret.status === "Rejected"
+                                      ? "bg-red-50/60 border-red-100 text-red-800"
+                                      : "bg-emerald-50/60 border-emerald-100 text-emerald-800"
+                                  )}>
+                                    <AlertCircle className={cn("h-4 w-4 shrink-0 mt-0.5", ret.status === "Rejected" ? "text-red-500" : "text-emerald-500")} />
+                                    <div>
+                                      <p className="font-extrabold uppercase tracking-widest text-[9px] opacity-80 mb-1">
+                                        {ret.status === "Rejected" ? "Reason for Rejection (from Admin)" : "Approval Notes (from Admin)"}
+                                      </p>
+                                      <p className="leading-relaxed">{ret.admin_notes}</p>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Refund payment method + reference display */}
+                                {ret.refund_payment_method && (
+                                  <div className="mt-3 bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-3 space-y-2">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <span className="text-zinc-500 font-medium">Refund Method</span>
+                                      <span className="font-bold text-[#0052cc] bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full">
+                                        {ret.refund_payment_method}
+                                      </span>
+                                    </div>
+                                    {ret.refund_reference && (
+                                      <div className="flex items-center justify-between text-xs border-t border-zinc-100 pt-2">
+                                        <span className="text-zinc-500 font-medium">Transaction Reference</span>
+                                        <span className="font-mono font-black text-[#0052cc] bg-blue-50/50 border border-blue-100 px-2.5 py-0.5 rounded tracking-wide text-[11px]">
+                                          {ret.refund_reference}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </motion.div>
                 )}
 
@@ -1325,19 +1674,19 @@ function AccountPortalInner() {
                  Placed on {selectedOrder ? new Date(selectedOrder.created_at).toLocaleDateString() : ''}
                </DialogDescription>
              </div>
-             <Badge className={cn(
-               "rounded-full px-3 py-1 text-[10px] font-bold uppercase border-none tracking-wider",
-               selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" : 
+             <span className={cn(
+               "inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider",
+               selectedOrder?.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
                selectedOrder?.status === "Processing" ? "bg-orange-500 text-white" :
-               (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" : 
-               selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" : 
-               selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" : 
-               selectedOrder?.status === "Returned" ? "bg-red-600 text-white" : 
-               (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700 font-black" :
+               (selectedOrder?.status === "Shipped" || selectedOrder?.status === "In Transit") ? "bg-blue-600 text-white" :
+               selectedOrder?.status === "Arrived" ? "bg-indigo-600 text-white" :
+               selectedOrder?.status === "Delivered" ? "bg-emerald-500 text-white" :
+               selectedOrder?.status === "Returned" ? "bg-red-600 text-white" :
+               (selectedOrder?.status === "Cancelled" || selectedOrder?.status === "Cancellation Requested") ? "bg-red-100 text-red-700" :
                "bg-zinc-200 text-zinc-700"
              )}>
                {selectedOrder?.status === "In Transit" ? "SHIPPED" : selectedOrder?.status}
-             </Badge>
+             </span>
           </DialogHeader>
           <div className="p-6 max-h-[60vh] overflow-y-auto space-y-6">
             <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0]">

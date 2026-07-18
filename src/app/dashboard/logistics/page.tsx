@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { Search, Filter, Plus, Loader2, Navigation, Package, ArrowRight, RefreshCw, X, MoreHorizontal, Edit, Trash2, CheckSquare, Square, ArrowRightLeft, FileText } from "lucide-react";
+import { Search, Filter, Plus, Loader2, Navigation, Package, ArrowRight, RefreshCw, X, MoreHorizontal, Edit, Trash2, CheckSquare, Square, ArrowRightLeft, FileText, AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -140,6 +140,8 @@ export default function AdminLogisticsPage() {
   const [bulkZoneProductId, setBulkZoneProductId] = useState<string>("");
   const [bulkZoneRoutes, setBulkZoneRoutes] = useState<BulkRoute[]>([]);
   const [isSavingBulk, setIsSavingBulk] = useState(false);
+  const [showBulkZoneUnsavedWarning, setShowBulkZoneUnsavedWarning] = useState(false);
+  const [pendingBulkZoneProductId, setPendingBulkZoneProductId] = useState("");
 
   // Derive unique options for filters
   const warehouses = Array.from(new Set(unassignedOrders.map(o => o.items?.[0]?.warehouse).filter(Boolean).map(w => JSON.stringify(w))))
@@ -946,6 +948,49 @@ export default function AdminLogisticsPage() {
       fetchDestinations();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to save shipping routes in bulk.");
+    } finally {
+      setIsSavingBulk(false);
+    }
+  };
+
+  const handleSaveAndSwitchBulkZone = async (nextProductId: string) => {
+    const routesToSave = bulkZoneRoutes.filter(r => r.standard_fee > 0);
+    if (routesToSave.length === 0) {
+      // Nothing to save, just switch directly
+      setBulkZoneProductId(nextProductId);
+      generateBulkRoutes(nextProductId);
+      setShowBulkZoneUnsavedWarning(false);
+      setPendingBulkZoneProductId("");
+      return;
+    }
+    setIsSavingBulk(true);
+    const prod = products.find(p => p.id.toString() === bulkZoneProductId);
+    const weight = prod ? parseFloat(prod.weight || 0) : 0;
+    
+    try {
+      await api.post(API_ENDPOINTS.shippingDestinations.base + "/bulk", {
+        destinations: routesToSave.map(route => ({
+          product_id: bulkZoneProductId ? parseInt(bulkZoneProductId) : null,
+          warehouse_id: route.warehouse_id ? parseInt(route.warehouse_id) : null,
+          country: route.country,
+          city: route.city,
+          weight,
+          distance: 0,
+          standard_fee: route.standard_fee,
+          express_fee: route.express_fee,
+          weight_rate: 0,
+          distance_rate: 0,
+          is_active: true,
+        }))
+      });
+      toast.success(`${routesToSave.length} shipping routes saved successfully!`);
+      setBulkZoneProductId(nextProductId);
+      generateBulkRoutes(nextProductId);
+      setShowBulkZoneUnsavedWarning(false);
+      setPendingBulkZoneProductId("");
+      fetchDestinations();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to save shipping routes.");
     } finally {
       setIsSavingBulk(false);
     }
@@ -2271,6 +2316,58 @@ export default function AdminLogisticsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Unsaved Changes Confirmation Modal */}
+      <Dialog open={showBulkZoneUnsavedWarning} onOpenChange={(open) => { if (!open) { setShowBulkZoneUnsavedWarning(false); setPendingBulkZoneProductId(""); } }}>
+        <DialogContent className="sm:max-w-[480px] p-0 overflow-hidden bg-white rounded-2xl shadow-2xl border border-zinc-200">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto">
+              <AlertTriangle className="h-8 w-8 text-amber-500" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-zinc-900">Unsaved Shipping Fees</h3>
+              <p className="text-xs text-zinc-500 font-bold uppercase tracking-wider">
+                Product: {products.find(p => p.id.toString() === bulkZoneProductId)?.name || "Current Product"}
+              </p>
+              <p className="text-sm text-zinc-500 font-medium leading-normal pt-2">
+                You have entered shipping fees for the current product that are not saved yet. How would you like to proceed?
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="p-4 bg-zinc-50/50 flex flex-col sm:flex-row items-center justify-end gap-3 border-t">
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto h-11 rounded-xl font-bold text-xs"
+              onClick={() => {
+                setShowBulkZoneUnsavedWarning(false);
+                setPendingBulkZoneProductId("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto h-11 bg-red-50 text-red-600 hover:bg-red-100 border-none rounded-xl font-black text-[11px] tracking-wider uppercase"
+              onClick={() => {
+                setBulkZoneProductId(pendingBulkZoneProductId);
+                generateBulkRoutes(pendingBulkZoneProductId);
+                setShowBulkZoneUnsavedWarning(false);
+                setPendingBulkZoneProductId("");
+              }}
+            >
+              Discard &amp; Switch
+            </Button>
+            <Button
+              className="w-full sm:w-auto h-11 bg-[#0052cc] hover:bg-[#003d99] text-white rounded-xl font-black text-[11px] tracking-wider uppercase shadow-md"
+              onClick={() => {
+                handleSaveAndSwitchBulkZone(pendingBulkZoneProductId);
+              }}
+            >
+              Save &amp; Switch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Bulk Shipping Zone Modal ─────────────────────────────────── */}
       <Dialog open={isBulkZoneModalOpen} onOpenChange={(open) => { setIsBulkZoneModalOpen(open); if (!open) { setBulkZoneProductId(""); setBulkZoneRoutes([]); } }}>
         <DialogContent className="max-w-[96vw] w-full md:max-w-[900px] p-0 overflow-hidden bg-white rounded-2xl shadow-2xl border border-zinc-200 max-h-[90vh] flex flex-col">
@@ -2293,7 +2390,8 @@ export default function AdminLogisticsPage() {
                   onChange={(val) => {
                     const hasUnsaved = bulkZoneRoutes.some(r => r.standard_fee > 0);
                     if (hasUnsaved) {
-                      alert("Please save the routes for the current product first before selecting another product, to avoid losing your changes.");
+                      setPendingBulkZoneProductId(val);
+                      setShowBulkZoneUnsavedWarning(true);
                       return;
                     }
                     setBulkZoneProductId(val);

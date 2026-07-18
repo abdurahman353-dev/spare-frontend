@@ -142,8 +142,11 @@ export default function AdminReportsPage() {
   }, []);
 
   // Step 1: Date-only filter (before channel or warehouse)
+  // Exclude Cancelled, Returned, and fully-Refunded orders from ALL financial reports
   const dateFilteredOrders = useMemo(() => orders.filter(o => {
     if (o.status?.toLowerCase() === "cancelled") return false;
+    if (o.status?.toLowerCase() === "returned") return false;
+    if (o.payment_status?.toLowerCase() === "refunded") return false;
     if (o.created_at) {
       const d = o.created_at.split("T")[0];
       if (d < startDate || d > endDate) return false;
@@ -178,9 +181,14 @@ export default function AdminReportsPage() {
 
   const isVoidedOrder = (o: any) => o.status === "Cancelled" || o.payment_status === "Refunded";
 
-  // Revenue-eligible orders: Paid + not cancelled, respecting both filters
+  // Revenue-eligible orders: Paid + not cancelled/returned/refunded, respecting both filters
   const channelRevenueOrders = useMemo(
-    () => channelFilteredOrders.filter(o => o.payment_status === "Paid" && o.status !== "Cancelled"),
+    () => channelFilteredOrders.filter(o =>
+      o.payment_status === "Paid" &&
+      o.status !== "Cancelled" &&
+      o.status !== "Returned" &&
+      o.payment_status !== "Refunded"
+    ),
     [channelFilteredOrders]
   );
 

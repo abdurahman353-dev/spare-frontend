@@ -278,7 +278,7 @@ export default function CheckoutPage() {
   // ── Polling for STK Push result ──────────────────────────────────────────────
   const startPolling = (reqId: string, orderIds: number[]) => {
     let attempts = 0;
-    const maxAttempts = 24; // 24 × 5s = 2 minutes
+    const maxAttempts = 12; // 12 × 10s = 2 minutes
 
     setCountdown(120);
     countdownIntervalRef.current = setInterval(() => {
@@ -331,7 +331,7 @@ export default function CheckoutPage() {
         setPaymentError("Payment timed out. If you completed the payment, check your orders page.");
         setIsProcessing(false);
       }
-    }, 5000);
+    }, 10000);
   };
 
   const copyToClipboard = (text: string, key: string) => {

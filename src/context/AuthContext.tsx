@@ -29,7 +29,7 @@ interface AuthContextType {
   loading: boolean;
   login: (credentials: any, redirectUrl?: string) => Promise<void>;
   register: (data: any, redirectUrl?: string) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: () => void;
   changePassword: (data: any) => Promise<void>;
   /** Re-fetch live user profile (total_spent, etc.) from /user */
   refreshUser: () => Promise<void>;
@@ -160,17 +160,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return res.data;
   };
 
-  const logout = async () => {
-    try {
-      await api.post(API_ENDPOINTS.auth.logout);
-    } finally {
-      localStorage.removeItem("auth_token");
-      deleteCookie("auth_token");
-      deleteCookie("user_role");
-      delete api.defaults.headers.common["Authorization"];
-      setUser(null);
-      window.location.href = "/login";
-    }
+  const logout = () => {
+    // Clear local state IMMEDIATELY — user is redirected at once regardless of
+    // server speed. Token revocation is fire-and-forget in the background.
+    localStorage.removeItem("auth_token");
+    deleteCookie("auth_token");
+    deleteCookie("user_role");
+    delete api.defaults.headers.common["Authorization"];
+    setUser(null);
+    window.location.href = "/login";
+
+    // Revoke the token on the backend silently in the background.
+    // Even if this fails (server busy / offline) the local session is already gone.
+    api.post(API_ENDPOINTS.auth.logout).catch(() => {/* silent — already logged out locally */});
   };
 
   /**

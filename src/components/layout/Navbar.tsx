@@ -35,7 +35,7 @@ export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { cart } = useCart();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, loading: authLoading } = useAuth();
   const { settings } = useSettings();
   const cartCount = cart.reduce((count, item) => count + item.quantity, 0);
 
@@ -107,7 +107,16 @@ export function Navbar() {
             </Link>
           </div>
 
-          {isAuthenticated ? (
+          {authLoading ? (
+            /* ── Auth resolving: skeleton so Login never flashes ── */
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-zinc-100 animate-pulse" />
+              <div className="hidden lg:flex flex-col gap-1">
+                <div className="h-2 w-10 rounded bg-zinc-100 animate-pulse" />
+                <div className="h-3 w-16 rounded bg-zinc-100 animate-pulse" />
+              </div>
+            </div>
+          ) : isAuthenticated ? (
             <div className="flex items-center gap-4">
               <DropdownMenu>
                 <DropdownMenuTrigger>

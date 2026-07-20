@@ -64,12 +64,19 @@ function isWithinReturnPeriod(order: any): boolean {
 
 /**
  * Determines if an order is a same-city (local) shipment by comparing
- * the warehouse origin city against the customer's shipping city.
- * Local → PIN visible from "Shipped"
- * Cross-city → PIN visible only from "Arrived" (driver is in your city)
+ * the warehouse location/name against the customer's shipping city.
+ * Local  → PIN visible from "Shipped" or "Arrived"
+ * Cross-city → PIN visible only from "Arrived" (driver is now in your city)
  */
 function isLocalShipmentOrder(order: any): boolean {
-  const origin = (order?.items?.[0]?.warehouse?.city || order?.items?.[0]?.warehouse?.name || "")
+  // Walk-in orders are always local
+  if ((order?.tracking_number ?? '').startsWith('WK-')) return true;
+  // Pickup = in-store, always local
+  if (order?.shipping_method === 'Pickup') return true;
+
+  const warehouse = order?.items?.[0]?.warehouse;
+  // Use location field (backend now returns it); fall back to name
+  const origin = (warehouse?.location || warehouse?.name || "")
     .trim().toLowerCase();
   const destination = (order?.shipping_city || "").trim().toLowerCase();
   if (!origin || !destination) return false;
@@ -366,8 +373,8 @@ function AccountPortalInner() {
       await api.post(API_ENDPOINTS.auth.changePassword, passwordData);
       setPasswordStatus({ loading: false, success: true, error: "" });
 
-      setTimeout(async () => {
-        await logout();
+      setTimeout(() => {
+        logout();
         router.push("/login");
       }, 2000);
     } catch (err: any) {
@@ -1087,9 +1094,9 @@ function AccountPortalInner() {
                         </div>
                       </div>
 
-                      <div className="overflow-x-auto">
+                      <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
                         <table className="w-full min-w-[950px] text-left">
-                          <thead className="bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0]">
+                          <thead className="bg-[#f8fafc] text-[11px] uppercase tracking-wider font-bold text-[#64748b] border-b border-[#e2e8f0] sticky top-0 z-10">
                             <tr>
                               <th className="px-6 py-4">Order Ref</th>
                               <th className="px-6 py-4">Date</th>
@@ -1789,12 +1796,9 @@ function AccountPortalInner() {
             )}
 
 
-            {/* Delivery PIN — Local: visible from Shipped only | Cross-city: visible from Arrived only */}
+            {/* Delivery PIN — visible from Shipped AND Arrived for all order types */}
             {selectedOrder?.delivery_pin && (
-              (isLocalShipmentOrder(selectedOrder)
-                ? selectedOrder.status === "Shipped"
-                : selectedOrder.status === "Arrived"
-              )
+              ["Shipped", "Arrived"].includes(selectedOrder.status)
             ) && (
               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-5 text-center shadow-inner">
                 <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-1 flex items-center justify-center gap-1.5">
@@ -1814,10 +1818,7 @@ function AccountPortalInner() {
                   ))}
                 </div>
                 <p className="text-[10px] text-amber-700 font-bold leading-snug max-w-[280px] mx-auto">
-                  {isLocalShipmentOrder(selectedOrder)
-                    ? "🔐 Share this PIN only with the driver when they arrive at your door. Never share it before arrival."
-                    : "🔐 Your order has arrived in your city. Share this PIN with the driver when they deliver to your door."
-                  }
+                  🔐 Only share this PIN with the driver at the moment they hand you the package. Do <strong>not</strong> share it before the package is physically in your hands.
                 </p>
               </div>
             )}
@@ -1952,12 +1953,9 @@ function AccountPortalInner() {
                 </div>
               )}
 
-            {/* Verification PIN Section — Local: Shipped only | Cross-city: Arrived only */}
+            {/* Verification PIN Section — visible from Shipped AND Arrived for all order types */}
             {selectedOrder && selectedOrder.delivery_pin && (
-              (isLocalShipmentOrder(selectedOrder)
-                ? selectedOrder.status === "Shipped"
-                : selectedOrder.status === "Arrived"
-              )
+              ["Shipped", "Arrived"].includes(selectedOrder.status)
             ) && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-left my-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-2 text-amber-800">
@@ -1965,10 +1963,7 @@ function AccountPortalInner() {
                   <h5 className="text-[12px] font-bold uppercase tracking-wider">Delivery Verification PIN</h5>
                 </div>
                 <p className="text-[11px] text-amber-700 leading-relaxed mb-3">
-                  {isLocalShipmentOrder(selectedOrder)
-                    ? "Please quote this secure PIN to the delivery driver upon collection. The driver will verify it to authorize your handover."
-                    : "Your order has arrived in your city and is out for delivery. Quote this PIN to the driver at your door to confirm receipt."
-                  }
+                  🔐 Only share this PIN with the driver at the exact moment they hand you the package. Do <strong>not</strong> share it before the package is physically in your hands.
                 </p>
                 <div className="inline-flex items-center bg-white border border-amber-300 rounded-lg px-4 py-2 font-mono text-lg font-black tracking-widest text-[#0052cc] shadow-sm select-all">
                   {selectedOrder.delivery_pin}
@@ -2177,7 +2172,7 @@ function AccountPortalInner() {
                 <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold block">Single Return Request Permitted</span>
-                  You can only submit one return request per order reference. Please make sure to select all items you wish to return in this form. Subsequent requests for this order will be blocked.
+                  You can only submit one return request per order reference. Please make sure to select all items you wish to return in this form. Subsequent requests for this order will be blocked — <span className="font-bold">except if the order is marked as Delivered, in which case one additional return request may be submitted.</span>
                 </div>
               </div>
 

@@ -1028,7 +1028,7 @@ export default function DeliveryPortal() {
     setSubmittingSignature(true);
     try {
       await api.post(API_ENDPOINTS.delivery.deliver(signatureOrder.id), {
-        signature: canvas.toDataURL("image/png"),
+        signature: canvas.toDataURL("image/jpeg", 0.8),
         delivery_lat: null,
         delivery_lng: null,
         delivery_photo: photoBase64 || null,
@@ -1563,6 +1563,7 @@ export default function DeliveryPortal() {
         <div className="flex-1 p-5 space-y-3 overflow-y-auto">
           {([
             { label: "Email", value: user.email, icon: User },
+            { label: "Location / Hub", value: user.city && user.country ? `${user.city}, ${user.country}` : user.city || user.country || "Not set", icon: MapPin },
             { label: "Vehicle Plate", value: (user as { vehicle_plate?: string }).vehicle_plate ?? "Not set", icon: Truck },
             { label: "License", value: (user as { license_number?: string }).license_number ?? "Not set", icon: Shield },
             { label: "Role", value: "Delivery Driver", icon: BarChart3 },

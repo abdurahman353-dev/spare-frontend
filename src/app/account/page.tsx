@@ -228,16 +228,16 @@ function AccountPortalInner() {
 
   const handleSaveAddress = async () => {
     try {
-      await api.put(API_ENDPOINTS.profile.user, addressFormData);
+      const res = await api.put(API_ENDPOINTS.profile.user, addressFormData);
       toast.success("Delivery address updated successfully!");
       setIsAddressModalOpen(false);
-      // Optional: Store in localStorage for immediate checkout prefill
+      // Store in localStorage for immediate checkout prefill
       localStorage.setItem("spare_prefill_shipping", JSON.stringify({
         city: addressFormData.city,
         address: addressFormData.address
       }));
-      // We could also refresh the user context here if needed
-      window.location.reload(); // Simple way to refresh user data from AuthContext check
+      // Refresh auth context so Navbar and other consumers get the updated user immediately
+      await refreshUser();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to update address");
     }

@@ -3,6 +3,7 @@ import { API_ENDPOINTS } from "@/lib/apis";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api",
+  timeout: 60000, // 60 seconds timeout for single-threaded dev server concurrency
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -28,6 +29,20 @@ api.interceptors.response.use(
         window.location.pathname.startsWith("/dashboard")
       ) {
         window.location.href = "/account";
+      }
+    }
+    if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+      if (error.response) {
+        error.response.data = error.response.data || {};
+        error.response.data.message = "The request timed out. Please check your network connection or try again later.";
+      } else {
+        error.response = {
+          status: 408,
+          statusText: "Request Timeout",
+          data: { message: "The request timed out. Please check your network connection or try again later." },
+          headers: {},
+          config: error.config
+        };
       }
     }
     return Promise.reject(error);

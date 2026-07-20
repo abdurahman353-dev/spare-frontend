@@ -363,17 +363,16 @@ export default function AdminLogisticsPage() {
       const matchesDateFrom = !dateFrom || orderDate >= new Date(dateFrom).setHours(0, 0, 0, 0);
       const matchesDateTo = !dateTo || orderDate <= new Date(dateTo).setHours(0, 0, 0, 0);
 
-      // Local deliveries (warehouse name or location contains destination city) are not containerized.
+      // Local deliveries: warehouse origin city word matches destination city word
+      // (case-insensitive, bidirectional substring — same rule as orders/page.tsx)
+      // e.g. "nairobi warehouse" ↔ "nairobi" = Local Shipment
+      //      "nairobi" ↔ "mombasa"            = Cross-City Shipment
       const isLocal = (() => {
         if (order.shipping_method === "Pickup") return true;
-        const warehouseLocation = order.items?.[0]?.warehouse?.location || "";
-        const warehouseName = order.items?.[0]?.warehouse?.name || "";
-        const destCity = (order.shipping_city || "").trim().toLowerCase();
-        if (!destCity) return false;
-
-        const locLower = warehouseLocation.toLowerCase();
-        const nameLower = warehouseName.toLowerCase();
-        return locLower.includes(destCity) || nameLower.includes(destCity);
+        const originName = (order.items?.[0]?.warehouse?.name || "").trim().toLowerCase();
+        const destCity   = (order.shipping_city || "").trim().toLowerCase();
+        if (!originName || !destCity) return false;
+        return originName.includes(destCity) || destCity.includes(originName);
       })();
 
       return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesDateFrom && matchesDateTo && !isLocal;

@@ -101,13 +101,18 @@ function parseRecipientNotes(notes: string | null) {
   };
 }
 
-/** Compares warehouse origin city vs shipping destination city to tell a
- *  same-city "Local Shipment" route (e.g. Nairobi → Nairobi) apart from a
- *  cross-city "Shipment" route (e.g. Nairobi → Mombasa). */
+/** Compares warehouse origin name vs shipping destination city to decide
+ *  if this is a same-city "Local Shipment" (e.g. Nairobi → Nairobi) or a
+ *  cross-city "Shipment" (e.g. Nairobi → Mombasa).
+ *
+ *  Rule: if the WORD used for origin and destination match (case-insensitive,
+ *  either one is a substring of the other) → Local Shipment.
+ *  e.g. "nairobi warehouse" contains "nairobi" → Local
+ *       "nairobi" is contained in "nairobi cbd" → Local
+ *       "nairobi" vs "mombasa" → no match → Cross-City Shipment */
 function getShipmentRouteCities(order: any): { origin: string; destination: string } {
-  const origin = (order.items?.[0]?.warehouse?.city || order.items?.[0]?.warehouse?.name || "")
-    .trim()
-    .toLowerCase();
+  // Warehouse has no 'city' field — use 'name' (e.g. "Nairobi Warehouse")
+  const origin = (order.items?.[0]?.warehouse?.name || "").trim().toLowerCase();
   const destination = (order.shipping_city || "").trim().toLowerCase();
   return { origin, destination };
 }
@@ -115,8 +120,7 @@ function getShipmentRouteCities(order: any): { origin: string; destination: stri
 function isLocalShipmentRoute(order: any): boolean {
   const { origin, destination } = getShipmentRouteCities(order);
   if (!origin || !destination) return false;
-  // Use substring containment — handles "Nairobi Shop" vs "Nairobi", "NAIROBI" vs "nairobi", etc.
-  // Both sides are already lowercased by getShipmentRouteCities.
+  // Bidirectional substring match, case-insensitive (both already lowercased)
   return origin.includes(destination) || destination.includes(origin);
 }
 
@@ -317,7 +321,7 @@ function AdminOrdersPageInner() {
           setHandoverHistory(res.data || []);
         })
         .catch(err => {
-          console.error("Failed to load handover history", err);
+          console.warn("Failed to load handover history:", err?.message || err);
         })
         .finally(() => {
           setLoadingHandoverHistory(false);
@@ -925,7 +929,7 @@ function AdminOrdersPageInner() {
       fetchOrders();
       fetchMetadata();
     } catch (err: any) {
-      console.error("Failed to create walk-in order:", err);
+      console.warn("Failed to create walk-in order:", err?.message || err);
       toast.error(err.response?.data?.message || "Failed to submit walk-in order.");
     } finally {
       setIsSavingOrder(false);
@@ -939,8 +943,8 @@ function AdminOrdersPageInner() {
       // so that shipment filters never affect the Walk-In data pool and vice versa.
       const res = await api.get(API_ENDPOINTS.orders.base, { params: { per_page: -1 } });
       setOrders(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error("Failed to fetch orders:", err);
+    } catch (err: any) {
+      console.warn("Failed to fetch orders:", err?.message || err);
       toast.error("Failed to sync orders");
     } finally {
       if (!silent) setLoading(false);
@@ -963,8 +967,8 @@ function AdminOrdersPageInner() {
       setProducts(pRes.data);
       setCountriesData(locRes.data);
       setDrivers(dRes.data || []);
-    } catch (err) {
-      console.error("Failed to fetch metadata:", err);
+    } catch (err: any) {
+      console.warn("Failed to fetch metadata:", err?.message || err);
     }
   };
 
@@ -1075,9 +1079,10 @@ function AdminOrdersPageInner() {
       }
 
       fetchOrders(true);
-    } catch (err) {
-      console.error("Failed to update status", err);
-      toast.error("Status update failed");
+    } catch (err: any) {
+      console.warn("Failed to update status:", err?.message || err);
+      const errMsg = err.response?.data?.message || "Status update failed";
+      toast.error(errMsg, { duration: 8000 });
     } finally {
       setUpdatingOrderIds(prev => ({ ...prev, [id]: false }));
     }
@@ -1113,7 +1118,38 @@ function AdminOrdersPageInner() {
         status: status
       });
       const updated = res.data?.updated ?? eligibleIds.length;
-      toast.success(`${updated} order(s) marked as ${status}.${skipped > 0 ? ` ${skipped} skipped (already Delivered/Cancelled).` : ""}`);
+      const blocked: string[] = res.data?.blocked ?? [];
+
+      // Show success for updated orders
+      if (updated > 0) {
+        toast.success(`${updated} order(s) marked as ${status}.${skipped > 0 ? ` ${skipped} skipped (already Delivered/Cancelled).` : ""}`);
+      }
+
+      // Show a clear warning for every order blocked by a pending return request
+      if (blocked.length > 0) {
+        toast(
+          `⚠️ ${blocked.length} order${blocked.length > 1 ? "s" : ""} blocked — pending return request must be resolved first:\n${blocked.join(", ")}`,
+          {
+            duration: 10000,
+            icon: "🚫",
+            style: {
+              background: "#fffbeb",
+              border: "1px solid #f59e0b",
+              color: "#92400e",
+              fontWeight: "600",
+              fontSize: "13px",
+              maxWidth: "480px",
+            },
+          }
+        );
+      }
+
+      // If nothing was updated and nothing was skipped, only blocks happened
+      if (updated === 0 && skipped === 0 && blocked.length > 0) {
+        // The warning toasts above are enough — no extra toast needed
+      } else if (updated === 0 && blocked.length === 0) {
+        toast.error("No orders were updated.");
+      }
 
       // Check SMS logs
       if (res.data?.sms_logs && res.data.sms_logs.length > 0) {
@@ -1128,8 +1164,8 @@ function AdminOrdersPageInner() {
 
       setSelectedOrderIds([]);
       fetchOrders(true);
-    } catch (err) {
-      console.error("Bulk update failed", err);
+    } catch (err: any) {
+      console.warn("Bulk update failed:", err?.message || err);
       toast.error("Bulk update failed");
     } finally {
       setIsBulkProcessing(false);

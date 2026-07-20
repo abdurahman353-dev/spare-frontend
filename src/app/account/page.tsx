@@ -11,7 +11,7 @@ import {
   ChevronRight, LogOut, Loader2, User, Lock, ShieldCheck,
   Eye, EyeOff, CheckCircle2, AlertCircle, Plus, Home, Smartphone,
   Search, Download, ArrowRightLeft, FileText, Truck, Star, Compass,
-  RotateCcw
+  RotateCcw, XCircle
 } from "lucide-react";
 import Link from "next/link";
 import { Joyride, Step } from "react-joyride";
@@ -2006,7 +2006,11 @@ function AccountPortalInner() {
           </div>
           <DialogFooter className="p-4 bg-[#f8fafc] border-t border-[#e2e8f0] flex-col sm:flex-row justify-between gap-3">
             <div className="flex gap-2 flex-wrap">
-              {selectedOrder && isWithinReturnPeriod(selectedOrder) && !myReturns.some((r: any) => r.order_id === selectedOrder.id && (r.status === "Pending" || r.status === "Approved" || r.status === "Rejected")) && (
+              {selectedOrder && isWithinReturnPeriod(selectedOrder) && (
+                selectedOrder.status === "Delivered"
+                  ? !myReturns.some((r: any) => r.order_id === selectedOrder.id && r.is_post_delivery)
+                  : !myReturns.some((r: any) => r.order_id === selectedOrder.id)
+              ) && (
                 <Button
                   variant="outline"
                   className="text-[12px] font-bold h-9 border-purple-200 text-purple-700 hover:bg-purple-50"
@@ -2030,31 +2034,43 @@ function AccountPortalInner() {
                 </a>
               )}
 
-              {selectedOrder && ["Pending", "Processing", "Delivered"].includes(selectedOrder.status) && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Pending") && (
-                <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
-                  <RotateCcw className="h-3 w-3" /> Return Requested — Pending Review
-                </span>
-              )}
-              {myReturns.some((r: any) => r.order_id === selectedOrder?.id && r.status === "Approved") && (
-                <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
-                  <CheckCircle2 className="h-3 w-3" /> Return Approved
-                </span>
-              )}
-              {selectedOrder && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Rejected") && (() => {
-                const rejectedReturn = myReturns.find((r: any) => r.order_id === selectedOrder.id && r.status === "Rejected");
-                return (
-                  <div className="flex flex-col gap-1 text-left">
-                    <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
-                      <AlertCircle className="h-3 w-3 shrink-0" /> Return Request Rejected
-                    </span>
-                    {rejectedReturn?.admin_notes && (
-                      <span className="text-[10px] font-semibold text-red-700 bg-red-50/60 border border-red-100 px-2.5 py-1 rounded-md leading-snug">
-                        Reason: {rejectedReturn.admin_notes}
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
+              {/* Render Status Badges for each Return Request for this order */}
+              {selectedOrder && myReturns
+                .filter((r: any) => r.order_id === selectedOrder.id)
+                .map((r: any) => {
+                  const typeLabel = r.is_post_delivery ? "Delivered Return" : "Pre-Delivery Cancel";
+                  return (
+                    <div key={r.id} className="flex flex-col gap-1 text-left">
+                      {r.status === "Pending" && (
+                        <span className="text-[11px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
+                          <RotateCcw className="h-3 w-3" /> {typeLabel}: Pending Review
+                        </span>
+                      )}
+                      {r.status === "Approved" && (
+                        <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3 w-3" /> {typeLabel}: Approved
+                        </span>
+                      )}
+                      {r.status === "Completed" && (
+                        <span className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3 w-3" /> {typeLabel}: Refunded
+                        </span>
+                      )}
+                      {r.status === "Rejected" && (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[11px] font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-md flex items-center gap-1.5">
+                            <AlertCircle className="h-3 w-3 shrink-0" /> {typeLabel}: Rejected
+                          </span>
+                          {r.admin_notes && (
+                            <span className="text-[10px] font-semibold text-red-700 bg-red-50/60 border border-red-100 px-2.5 py-1 rounded-md leading-snug">
+                              Reason: {r.admin_notes}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
             </div>
             <div className="flex gap-2">
@@ -2069,15 +2085,15 @@ function AccountPortalInner() {
 
 
 
-      {/* Return Request Modal */}
-      <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
+      {/* Cancel Order Modal */}
+      <Dialog open={isCancelModalOpen} onOpenChange={setIsCancelModalOpen}>
         <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[500px] p-0 overflow-hidden">
-          <DialogHeader className="px-6 py-5 bg-purple-50 border-b border-purple-100">
+          <DialogHeader className="px-6 py-5 bg-red-50 border-b border-red-100">
             <DialogTitle className="font-bold text-[#1e293b] flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-purple-600" /> Request Return — {selectedOrder?.tracking_number}
+              <XCircle className="h-4 w-4 text-red-600" /> Cancel Order — {selectedOrder?.tracking_number}
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748b] font-medium mt-1">
-              Select the items you wish to return and specify quantities. Our team will review your request within 2–3 business days.
+              Select the items you wish to cancel and provide a reason. Our team will review your request.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -2156,6 +2172,15 @@ function AccountPortalInner() {
           </DialogHeader>
           <form onSubmit={handleRequestReturn}>
             <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+              {/* One-time Submission Warning Banner */}
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-3 flex gap-2.5 items-start text-xs text-amber-800 leading-normal">
+                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Single Return Request Permitted</span>
+                  You can only submit one return request per order reference. Please make sure to select all items you wish to return in this form. Subsequent requests for this order will be blocked.
+                </div>
+              </div>
+
               {/* Item Selection with Quantity Pickers */}
               {selectedOrder?.items && selectedOrder.items.filter((i: any) => i.cancellation_status !== "Cancelled").length > 0 && (
                 <div className="space-y-2">

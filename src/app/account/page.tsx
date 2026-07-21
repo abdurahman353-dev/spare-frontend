@@ -1919,9 +1919,9 @@ function AccountPortalInner() {
                         <span className="text-red-700">Refund Status: </span>
                         <span className={cn(
                           "font-black uppercase tracking-wider",
-                          (selectedOrder?.refund_status === "Completed" || selectedOrder?.refund_transaction_id) ? "text-green-700" : "text-orange-600"
+                          (selectedOrder?.refund_status === "Completed" || selectedOrder?.refund_transaction_id || Number(selectedOrder?.refunded_amount || 0) > 0) ? "text-green-700" : "text-orange-600"
                         )}>
-                          {selectedOrder?.refund_status || (selectedOrder?.refund_transaction_id ? "Completed" : "Pending")}
+                          {selectedOrder?.refund_status || (selectedOrder?.refund_transaction_id || Number(selectedOrder?.refunded_amount || 0) > 0 ? "Completed" : "Pending")}
                         </span>
                       </p>
                       {/* Total refunded — reads from backend-persisted refunded_amount */}

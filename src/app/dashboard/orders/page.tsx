@@ -2847,9 +2847,9 @@ function AdminOrdersPageInner() {
                       <span className="text-red-700">Refund Status:</span>{" "}
                       <span className={cn(
                         "uppercase tracking-wider font-black",
-                        (currentSelectedOrder.refund_status === "Completed" || currentSelectedOrder.refund_transaction_id) ? "text-green-700" : "text-orange-600"
+                        (currentSelectedOrder.refund_status === "Completed" || currentSelectedOrder.refund_transaction_id || Number(currentSelectedOrder.refunded_amount || 0) > 0) ? "text-green-700" : "text-orange-600"
                       )}>
-                        {currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id ? "Completed" : "Pending")}
+                        {currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id || Number(currentSelectedOrder.refunded_amount || 0) > 0 ? "Completed" : "Pending")}
                       </span>
                     </p>
                     {/* Total refunded amount — reads from backend-persisted refunded_amount */}

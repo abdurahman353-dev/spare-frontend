@@ -1026,9 +1026,11 @@ export default function DeliveryPortal() {
     }
 
     setSubmittingSignature(true);
+    const signatureData = canvas.toDataURL("image/jpeg", 0.65);
+
     try {
       await api.post(API_ENDPOINTS.delivery.deliver(signatureOrder.id), {
-        signature: canvas.toDataURL("image/jpeg", 0.8),
+        signature: signatureData,
         delivery_lat: null,
         delivery_lng: null,
         delivery_photo: photoBase64 || null,
@@ -1093,14 +1095,17 @@ export default function DeliveryPortal() {
   // Acknowledge SLA breaches handler
   const handleAcknowledgeSla = async () => {
     setAcknowledgingSla(true);
-    try {
-      // Store acknowledgment locally for immediate UI feedback
-      if (user && typeof window !== "undefined") {
+    // Optimistic update — close modal immediately
+    if (user) {
+      user.sla_breaches_acknowledged = user.sla_breaches;
+      if (typeof window !== "undefined") {
         localStorage.setItem(`sla_acknowledged_${user.id}`, Date.now().toString());
       }
+    }
+    try {
       await api.post("/delivery/acknowledge-sla-breaches");
       toast.success("SLA warning acknowledged.", { icon: "📝" });
-      await refreshUser();
+      refreshUser();
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? "Failed to acknowledge warning.");
     } finally {

@@ -2569,7 +2569,7 @@ function AdminOrdersPageInner() {
                 </div>
               )}
 
-            {currentSelectedOrder?.shipping_method !== "Pickup" && (currentSelectedOrder?.driver || currentSelectedOrder?.delivery_signature_url) && (
+            {(currentSelectedOrder?.driver || currentSelectedOrder?.delivery_signature_url || currentSelectedOrder?.delivery_photo_url) && (
               <div className="mb-6">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Delivery &amp; Driver Details</h4>
                 <div className="bg-white p-4 rounded-xl border border-zinc-200 space-y-3">

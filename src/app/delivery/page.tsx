@@ -1358,6 +1358,31 @@ export default function DeliveryPortal() {
           </div>
         )}
 
+        {/* Persistent Pending Handover Alert Banner across all tabs */}
+        {pendingHandovers.length > 0 && (
+          <div className="mb-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 rounded-2xl shadow-md border border-blue-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-pulse">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <ArrowRightLeft className="h-5 w-5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="text-xs font-black uppercase tracking-wider flex items-center gap-2">
+                  <span>🚨 HANDOVER ACTION REQUIRED ({pendingHandovers.length})</span>
+                </p>
+                <p className="text-[11px] text-blue-100 font-medium leading-snug mt-0.5">
+                  Another driver reserved an order you released! Confirm physical handover before the 15-min reservation expires.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setActiveTab("mine")}
+              className="bg-white text-[#0052cc] hover:bg-blue-50 font-black text-xs px-4 py-2 rounded-xl shadow-xs shrink-0 cursor-pointer transition-all"
+            >
+              Confirm Handover Now →
+            </button>
+          </div>
+        )}
+
         {/* 3-Tab Navigation */}
         <div className="bg-white p-1 rounded-xl border border-zinc-200 shadow-sm flex mb-4">
           {([
@@ -1368,15 +1393,26 @@ export default function DeliveryPortal() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 ${activeTab === tab.key ? "bg-[#0052cc] text-white shadow-sm" : "text-zinc-500 hover:text-slate-800"
+              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 relative ${activeTab === tab.key ? "bg-[#0052cc] text-white shadow-sm" : "text-zinc-500 hover:text-slate-800"
                 }`}
             >
               <tab.icon className="h-3.5 w-3.5" />
               {tab.label}
+              {tab.key === "mine" && pendingHandovers.length > 0 && (
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+              )}
               {tab.count > 0 && (
                 <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${activeTab === tab.key ? "bg-white text-[#0052cc]" : "bg-zinc-100 text-zinc-600"
                   }`}>
                   {tab.count}
+                </span>
+              )}
+              {tab.key === "mine" && pendingHandovers.length > 0 && (
+                <span className="bg-red-500 text-white px-1.5 py-0.5 rounded-full text-[8px] font-black animate-bounce">
+                  +{pendingHandovers.length} Handover
                 </span>
               )}
             </button>
@@ -3250,10 +3286,10 @@ function CompletedCard({ order, currency }: { order: Order; currency: string }) 
             </div>
           </div>
           <div className="flex justify-between"><span className="text-zinc-400 font-bold">Order Value</span><span className="font-black text-slate-800">{currency} {Number(order.total_amount).toLocaleString()}</span></div>
-          {order.delivery_signature_url && (
+          {(order.delivery_signature_url || order.delivery_photo_url) && (
             <div className="flex items-center justify-between pt-2 border-t border-emerald-100">
               <span className="text-zinc-400 font-bold">Proof of Delivery</span>
-              <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1"><Check className="h-3.5 w-3.5" /> Signature Saved</span>
+              <span className="text-[10px] font-black text-emerald-600 flex items-center gap-1"><Check className="h-3.5 w-3.5" /> POD Saved</span>
             </div>
           )}
           {order.items && order.items.length > 0 && (

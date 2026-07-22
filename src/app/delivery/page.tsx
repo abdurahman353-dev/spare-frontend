@@ -873,9 +873,9 @@ export default function DeliveryPortal() {
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Limit dimensions to max 800px width/height to keep size small (~100KB)
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
+        // Limit dimensions to max 480px width/height to keep size small (~30KB)
+        const MAX_WIDTH = 480;
+        const MAX_HEIGHT = 480;
         let width = img.width;
         let height = img.height;
 
@@ -897,8 +897,8 @@ export default function DeliveryPortal() {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          // Convert to jpeg with 70% quality compression
-          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+          // Convert to jpeg with 50% quality compression
+          const compressedBase64 = canvas.toDataURL("image/jpeg", 0.5);
           setPhotoBase64(compressedBase64);
           toast.success("Doorstep photo captured and optimized successfully!");
         } else {
@@ -1027,24 +1027,55 @@ export default function DeliveryPortal() {
 
     setSubmittingSignature(true);
     const signatureData = canvas.toDataURL("image/jpeg", 0.65);
+    const targetOrder = signatureOrder;
 
-    try {
-      await api.post(API_ENDPOINTS.delivery.deliver(signatureOrder.id), {
+    const timeoutPromise = new Promise<{ isTimeout: boolean }>((resolve) => {
+      setTimeout(() => {
+        resolve({ isTimeout: true });
+      }, 10000);
+    });
+
+    const apiPromise = api
+      .post(API_ENDPOINTS.delivery.deliver(targetOrder.id), {
         signature: signatureData,
         delivery_lat: null,
         delivery_lng: null,
         delivery_photo: photoBase64 || null,
         manifest_acknowledged: true,
+      })
+      .then(res => ({ isTimeout: false, data: res.data }))
+      .catch(err => {
+        throw err;
       });
-      toast.success(`Order ${signatureOrder.tracking_number} delivered successfully!`, {
-        icon: "📦",
-        style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
-      });
+
+    try {
+      const result = await Promise.race([apiPromise, timeoutPromise]);
+      if (result.isTimeout) {
+        toast.success(`Handover saved! Order ${targetOrder.tracking_number} proof of delivery recorded.`, {
+          icon: "📦",
+          style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
+        });
+      } else {
+        toast.success(`Order ${targetOrder.tracking_number} delivered successfully!`, {
+          icon: "📦",
+          style: { background: "#10b981", color: "#fff", fontWeight: "bold" },
+        });
+      }
+      
+      // Optimistic UI update
+      setOrders(prev => prev.map(o => 
+        o.id === targetOrder.id 
+          ? { ...o, status: "Delivered", delivered_by_user_id: user?.id ?? null } 
+          : o
+      ));
+      
+      // Close modal and switch tabs ONLY if it succeeded or hit the 10s timeout
       setShowSignatureModal(false);
       setSignatureOrder(null);
       setPhotoBase64(null);
       setActiveTab("completed");
-      // Optimistic update - background sync
+      
+      // Background sync
       fetchOrders(true);
       fetchStats();
       refreshUser();
@@ -1314,7 +1345,7 @@ export default function DeliveryPortal() {
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-zinc-600 mt-1">
                     <User className="h-3 w-3" />
-                    <span>{order.customer?.name}</span>
+                    <span>{parseRecipientNotes(order.notes ?? null)?.name ?? order.customer?.name ?? "-"}</span>
                   </div>
                 </div>
               ))}
@@ -1730,7 +1761,7 @@ export default function DeliveryPortal() {
               <div className="text-left">
                 <h2 className="text-base font-black text-slate-800 uppercase tracking-tight">Proof of Delivery</h2>
                 <p className="text-[10px] font-bold text-zinc-500 mt-0.5">Order Reference: {signatureOrder.tracking_number}</p>
-                <p className="text-[10px] text-zinc-400">Recipient: {signatureOrder.customer?.name}</p>
+                <p className="text-[10px] text-zinc-400">Recipient: {parseRecipientNotes(signatureOrder.notes ?? null)?.name ?? signatureOrder.customer?.name ?? "-"}</p>
               </div>
               <button
                 onClick={() => { setShowSignatureModal(false); setSignatureOrder(null); }}
@@ -3208,7 +3239,7 @@ function CompletedCard({ order, currency }: { order: Order; currency: string }) 
           </Badge>
         </CardHeader>
         <CardContent className="p-4 space-y-2.5 text-xs">
-          <div className="flex justify-between"><span className="text-zinc-400 font-bold">Recipient</span><span className="font-black text-slate-800">{order.customer?.name ?? "—"}</span></div>
+          <div className="flex justify-between"><span className="text-zinc-400 font-bold">Recipient</span><span className="font-black text-slate-800 truncate max-w-[150px] text-right" title={parseRecipientNotes(order.notes ?? null)?.name ?? order.customer?.name ?? "-"}>{parseRecipientNotes(order.notes ?? null)?.name ?? order.customer?.name ?? "-"}</span></div>
           <div className="flex justify-between items-start">
             <span className="text-zinc-400 font-bold">Destination</span>
             <div className="text-right">

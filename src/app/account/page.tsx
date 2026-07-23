@@ -305,16 +305,18 @@ function AccountPortalInner() {
     // Load returns
     fetchReturns();
 
-    // 15-second silent polling in background
+    // 30-second silent polling in background (only when tab is active)
     const interval = setInterval(() => {
-      api.get("/my-orders")
-        .then(res => setOrders(res.data))
-        .catch(err => console.error("Silent orders update failed:", err));
-      fetchReturns();
-    }, 15000);
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        api.get("/my-orders")
+          .then(res => setOrders(res.data))
+          .catch(err => console.error("Silent orders update failed:", err));
+        fetchReturns();
+      }
+    }, 30000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchReturns]);
 
   // Refresh live user profile on mount so loyalty badge is real-time
   useEffect(() => { refreshUser(); }, []);

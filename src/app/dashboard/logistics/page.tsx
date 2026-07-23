@@ -588,8 +588,12 @@ export default function AdminLogisticsPage() {
 
   useEffect(() => {
     fetchActiveTabData();
-    // 30-second auto polling
-    const interval = setInterval(() => fetchActiveTabData(true), 30000);
+    // 30-second auto polling (only when tab is active)
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchActiveTabData(true);
+      }
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchActiveTabData]);
 

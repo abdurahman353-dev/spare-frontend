@@ -833,7 +833,11 @@ function AdminOrdersPageInner() {
   useEffect(() => {
     fetchOrders();
     setSelectedOrderIds([]); // Reset selection on filter change
-    const interval = setInterval(() => fetchOrders(true), 30000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchOrders(true);
+      }
+    }, 30000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
 

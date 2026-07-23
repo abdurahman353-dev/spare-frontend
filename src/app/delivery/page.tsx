@@ -327,11 +327,15 @@ export default function DeliveryPortal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, availableCountries, availableCities]);
 
-  // 30-second polling
+  // 30-second polling (only when tab is active)
   useEffect(() => {
     if (!user) return;
     pollingRef.current = setInterval(() => {
-      if (isOnline) { fetchOrders(true); fetchStats(); fetchNotifications(); }
+      if (isOnline && typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchOrders(true);
+        fetchStats();
+        fetchNotifications();
+      }
     }, 30000);
     secondsRef.current = setInterval(() => setSecondsSinceSync(s => s + 1), 1000);
     return () => {

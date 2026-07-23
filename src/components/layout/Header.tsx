@@ -27,7 +27,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const pathname = usePathname();
 
   const pathSegments = pathname ? pathname.split("/").filter(Boolean) : [];
-  
+
   const getSegmentTitle = (segment: string) => {
     const titleMap: Record<string, string> = {
       dashboard: "Overview",
@@ -56,7 +56,11 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        fetchNotifications();
+      }
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -134,7 +138,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 <span className="text-xs font-black text-purple-900 uppercase tracking-wider">Returns</span>
                 <div className="flex items-center gap-3">
                   {returnUnreadCount > 0 && (
-                    <button 
+                    <button
                       onClick={handleMarkAllReturnsRead}
                       className="text-[10px] font-black text-purple-750 hover:text-purple-900 transition-colors uppercase tracking-wider cursor-pointer outline-none border-none bg-transparent"
                     >
@@ -162,8 +166,8 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
                 ))}
               </div>
               <div className="p-3 bg-zinc-50 border-t border-zinc-100 text-center">
-                <Link 
-                  href="/dashboard/returns" 
+                <Link
+                  href="/dashboard/returns"
                   className="inline-flex items-center justify-center w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all"
                 >
                   Open Return Manager
@@ -191,7 +195,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
               <span className="text-xs font-black text-zinc-900 uppercase tracking-wider">Alert Center</span>
               <div className="flex items-center gap-3">
                 {generalUnreadCount > 0 && (
-                  <button 
+                  <button
                     onClick={handleMarkAllGeneralRead}
                     className="text-[10px] font-black text-[#0052cc] hover:text-[#0052cc]/85 transition-colors uppercase tracking-wider cursor-pointer outline-none border-none bg-transparent"
                   >
@@ -236,7 +240,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
-        
+
         <div className="h-8 w-px bg-zinc-200 mx-1" />
 
         <DropdownMenu>
@@ -277,7 +281,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <div className="p-2">
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => logout()}
                 className="cursor-pointer rounded-lg flex items-center gap-3 py-2.5 px-3 text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors font-bold text-xs"
               >

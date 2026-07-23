@@ -384,7 +384,7 @@ function ProductCard({ product, priority = false }: { product: Product, priority
                   offer_price: activeProduct.offer_price,
                   brand: { name: activeProduct.brandName }
                 };
-                addToCart(cartProduct, inv.warehouse_id, inv.warehouse.name);
+                addToCart(cartProduct, inv.warehouse_id, inv.warehouse.name, 1, inv.quantity);
                 toast.success(`${product.name} (${activeProduct.brandName}) added to cart!`, {
                   style: {
                     background: '#22c55e',

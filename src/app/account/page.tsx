@@ -671,7 +671,7 @@ function AccountPortalInner() {
                 <Link
                   id="tour-shop"
                   href="/products"
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-md text-[#0052cc] hover:bg-[#eff6ff] text-[14px] font-medium transition-all border border-[#0052cc]/20"
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-md bg-[#0052cc] hover:bg-[#0747a6] active:bg-[#053d8a] text-white text-[13px] font-bold tracking-wide transition-all shadow-sm hover:shadow-md"
                 >
                   <ShoppingBag className="h-4 w-4" />
                   Continue Shopping

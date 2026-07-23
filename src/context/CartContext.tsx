@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { toast } from "react-hot-toast";
 
 interface Product {
   id: number;
@@ -20,11 +21,12 @@ interface CartItem extends Product {
   quantity: number;
   warehouse_id: number;
   warehouse_name: string;
+  stock_quantity?: number;
 }
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product, warehouseId: number, warehouseName: string, quantity?: number) => void;
+  addToCart: (product: Product, warehouseId: number, warehouseName: string, quantity?: number, stockQuantity?: number) => void;
   removeFromCart: (productId: number, warehouseId: number) => void;
   updateQuantity: (productId: number, warehouseId: number, quantity: number) => void;
   clearCart: () => void;
@@ -50,7 +52,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("spare_cart", JSON.stringify(cart));
   }, [cart]);
 
-  const addToCart = (product: Product, warehouseId: number, warehouseName: string, quantity: number = 1) => {
+  const addToCart = (product: Product, warehouseId: number, warehouseName: string, quantity: number = 1, stockQuantity?: number) => {
     const activePrice = (product.is_on_offer && product.offer_price)
       ? Number(product.offer_price)
       : Number(product.price);
@@ -63,12 +65,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id && item.warehouse_id === warehouseId);
       if (existing) {
+        if (existing.stock_quantity !== undefined && existing.quantity + quantity > existing.stock_quantity) {
+          toast.error(`Cannot add more. Only ${existing.stock_quantity} available in stock!`, {
+            style: { background: '#ef4444', color: '#fff', fontWeight: 'bold', fontSize: '12px' }
+          });
+          return prev;
+        }
         return prev.map(item => 
           (item.id === product.id && item.warehouse_id === warehouseId) 
             ? { ...item, quantity: item.quantity + quantity } : item
         );
       }
-      return [...prev, { ...cartProduct, quantity, warehouse_id: warehouseId, warehouse_name: warehouseName }];
+      
+      if (stockQuantity !== undefined && quantity > stockQuantity) {
+        toast.error(`Only ${stockQuantity} available in stock!`, {
+          style: { background: '#ef4444', color: '#fff', fontWeight: 'bold', fontSize: '12px' }
+        });
+        return prev;
+      }
+      return [...prev, { ...cartProduct, quantity, warehouse_id: warehouseId, warehouse_name: warehouseName, stock_quantity: stockQuantity }];
     });
   };
 
@@ -78,9 +93,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const updateQuantity = (productId: number, warehouseId: number, quantity: number) => {
     if (quantity < 1) return;
-    setCart(prev => prev.map(item => 
-      (item.id === productId && item.warehouse_id === warehouseId) ? { ...item, quantity } : item
-    ));
+    setCart(prev => prev.map(item => {
+      if (item.id === productId && item.warehouse_id === warehouseId) {
+        if (item.stock_quantity !== undefined && quantity > item.stock_quantity) {
+          toast.error(`Stock limit reached! Only ${item.stock_quantity} available.`, {
+            style: { background: '#ef4444', color: '#fff', fontWeight: 'bold', fontSize: '12px' }
+          });
+          return item;
+        }
+        return { ...item, quantity };
+      }
+      return item;
+    }));
   };
 
   const clearCart = () => setCart([]);

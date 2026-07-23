@@ -748,6 +748,59 @@ export default function ReturnsManagementPage() {
               </div>
             )}
 
+            {/* ── Refund Breakdown ── same calculation as the detail panel */}
+            {selectedReturn?.order && (
+              <div className="rounded-lg border border-zinc-200 bg-zinc-50 overflow-hidden text-xs">
+                <div className="px-3 py-2 bg-zinc-100 border-b border-zinc-200 flex items-center justify-between">
+                  <span className="font-black text-zinc-500 uppercase tracking-widest text-[10px]">Refund Breakdown</span>
+                  <span className="font-bold text-zinc-700">{selectedReturn.order.tracking_number || `#ORD-${selectedReturn.order_id}`}</span>
+                </div>
+                <div className="px-3 py-2 space-y-1.5">
+                  {(() => {
+                    const allItems     = selectedReturn.order?.items ?? [];
+                    const returnItemIds = (selectedReturn.return_items ?? []).map((ri: any) => ri.order_item_id);
+                    // If no specific items listed → full order return
+                    const returnedItems = returnItemIds.length > 0
+                      ? allItems.filter((i: any) => returnItemIds.includes(i.id))
+                      : allItems;
+
+                    let productCost = 0;
+                    let shippingShare = 0;
+                    returnedItems.forEach((i: any) => {
+                      const qty = selectedReturn.return_items?.find((ri: any) => ri.order_item_id === i.id)?.quantity ?? i.quantity;
+                      productCost   += parseFloat(i.price ?? 0) * qty;
+                      shippingShare += parseFloat(i.shipping_fee_per_unit ?? 0) * qty;
+                    });
+                    const refundTotal = productCost + shippingShare;
+
+                    return (
+                      <>
+                        <div className="flex justify-between text-zinc-600">
+                          <span>Product cost</span>
+                          <span className="font-semibold">Ksh {productCost.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        {shippingShare > 0 && (
+                          <div className="flex justify-between text-zinc-600">
+                            <span>Shipping fee share</span>
+                            <span className="font-semibold">Ksh {shippingShare.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between border-t border-zinc-200 pt-1.5 mt-1">
+                          <span className="font-black text-zinc-800">Total Refund Amount</span>
+                          <span className={`font-black text-sm ${actionType === 'reject' ? 'text-red-500 line-through opacity-60' : 'text-emerald-600'}`}>
+                            Ksh {refundTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        {actionType === 'reject' && (
+                          <p className="text-[10px] text-red-400 font-medium text-right">No refund will be issued</p>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
             {actionType === "approve" && (
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700 font-medium leading-relaxed">
                 ⚡ {selectedReturn?.order?.status === "Delivered"

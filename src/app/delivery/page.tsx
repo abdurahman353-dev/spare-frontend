@@ -824,6 +824,10 @@ export default function DeliveryPortal() {
       toast.error(releaseType === "failure" ? "Please select a failure reason" : "Please select an operational reason");
       return;
     }
+    if (!releaseNotes || !releaseNotes.trim()) {
+      toast.error("Please provide a short explanation note.");
+      return;
+    }
 
     setReleasingId(releaseModalOrder.id);
     try {

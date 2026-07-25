@@ -851,7 +851,9 @@ function AccountPortalInner() {
                             ) : orders.length === 0 ? (
                               <tr><td colSpan={9} className="p-10 text-center text-[#64748b]">No order history found.</td></tr>
                             ) : (
-                              orders.map((order: any) => (
+                              orders.map((order: any) => {
+                                const validItems = order.items?.filter((item: any) => item.cancellation_status !== "Cancelled") || [];
+                                return (
                                 <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                   <td className="px-6 py-4">
                                     <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
@@ -867,16 +869,16 @@ function AccountPortalInner() {
                                   <td className="px-6 py-4">
                                     <div className="space-y-0.5 max-w-[200px]">
                                       <p className="text-[13px] font-bold text-[#1e293b] truncate">
-                                        {order.items?.[0]?.product?.name || "Genuine Spare Part"}
+                                        {validItems[0]?.product?.name || "Genuine Spare Part"}
                                       </p>
-                                      {order.items && order.items.length > 1 && (
-                                        <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
+                                      {validItems.length > 1 && (
+                                        <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{validItems.length - 1} more items</p>
                                       )}
                                     </div>
                                   </td>
                                   <td className="px-6 py-4">
                                     <div className="flex flex-col gap-0.5">
-                                      {order.items?.map((item: any, i: number) => (
+                                      {validItems.map((item: any, i: number) => (
                                         <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
                                           {item.product?.part_number || "—"}
                                         </span>
@@ -885,7 +887,7 @@ function AccountPortalInner() {
                                   </td>
                                   <td className="px-6 py-4">
                                     <div className="flex flex-col gap-0.5">
-                                      {order.items?.map((item: any, i: number) => (
+                                      {validItems.map((item: any, i: number) => (
                                         <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
                                           {item.product?.engine_model || "—"}
                                         </span>
@@ -1123,7 +1125,9 @@ function AccountPortalInner() {
                                   <button onClick={() => { setOrderSearch(""); setOrderStatusFilter("All"); }} className="text-[12px] text-[#0052cc] font-bold hover:underline mt-1">Clear filters</button>
                                 </div>
                               </td></tr>
-                            ) : filteredOrders.map((order: any) => (
+                            ) : filteredOrders.map((order: any) => {
+                              const validItems = order.items?.filter((item: any) => item.cancellation_status !== "Cancelled") || [];
+                              return (
                               <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                 <td className="px-6 py-4">
                                   <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
@@ -1139,16 +1143,16 @@ function AccountPortalInner() {
                                 <td className="px-6 py-4">
                                   <div className="space-y-0.5 max-w-[200px]">
                                     <p className="text-[13px] font-bold text-[#1e293b] truncate">
-                                      {order.items?.[0]?.product?.name || "Genuine Spare Part"}
+                                      {validItems[0]?.product?.name || "Genuine Spare Part"}
                                     </p>
-                                    {order.items && order.items.length > 1 && (
-                                      <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{order.items.length - 1} more items</p>
+                                    {validItems.length > 1 && (
+                                      <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{validItems.length - 1} more items</p>
                                     )}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col gap-0.5">
-                                    {order.items?.map((item: any, i: number) => (
+                                    {validItems.map((item: any, i: number) => (
                                       <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
                                         {item.product?.part_number || "—"}
                                       </span>
@@ -1157,7 +1161,7 @@ function AccountPortalInner() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col gap-0.5">
-                                    {order.items?.map((item: any, i: number) => (
+                                    {validItems.map((item: any, i: number) => (
                                       <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
                                         {item.product?.engine_model || "—"}
                                       </span>

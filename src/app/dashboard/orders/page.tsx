@@ -1600,19 +1600,18 @@ function AdminOrdersPageInner() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
-            className="bg-zinc-100 text-zinc-900 p-4 rounded-xl flex items-center justify-between border border-zinc-200 shadow-sm mb-6"
+            className="bg-zinc-100 text-zinc-900 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 border border-zinc-200 shadow-sm mb-6"
           >
             <div className="flex items-center gap-4 ml-2">
               <Badge className="bg-zinc-900 text-white border-none rounded-full px-3">{selectedOrderIds.length} Selected</Badge>
               <p className="text-sm font-semibold text-zinc-700">Batch Dispatch Operations</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 w-full sm:w-auto">
               <Button
                 size="sm"
                 disabled={isBulkProcessing}
                 onClick={() => handleBulkStatusChange('Processing')}
-                variant="outline"
-                className="bg-white hover:bg-zinc-50 font-bold text-[10px] uppercase tracking-wider border-zinc-200 min-w-[140px]"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[130px]"
               >
                 {isBulkProcessing ? (
                   <><Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating...</>
@@ -1636,10 +1635,9 @@ function AdminOrdersPageInner() {
                   Delivery portal handles Arrived → Delivered via PIN confirmation. */}
               <Button
                 size="sm"
-                variant="ghost"
                 onClick={() => setSelectedOrderIds([])}
                 disabled={isBulkProcessing}
-                className="text-zinc-500 hover:text-zinc-900 font-bold text-[10px] uppercase tracking-wider"
+                className="bg-rose-500 hover:bg-rose-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-sm min-w-[80px]"
               >
                 Cancel
               </Button>

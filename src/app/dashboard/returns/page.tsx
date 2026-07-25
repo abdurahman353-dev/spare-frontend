@@ -300,7 +300,8 @@ export default function ReturnsManagementPage() {
           >
             <option value="">All Statuses</option>
             <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
+            <option value="Approved">Awaiting Return</option>
+            <option value="Completed">Refunded / Returned</option>
             <option value="Rejected">Rejected</option>
           </select>
         </div>

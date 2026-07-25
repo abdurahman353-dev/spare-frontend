@@ -969,7 +969,8 @@ function AccountPortalInner() {
                                     </button>
                                   </td>
                                 </tr>
-                              ))
+                                );
+                              })
                             )}
                           </tbody>
                         </table>
@@ -1245,7 +1246,8 @@ function AccountPortalInner() {
                                     </Button>
                                   </td>
                                 </tr>
-                              ))
+                                );
+                              })
                             }
                           </tbody>
                         </table>

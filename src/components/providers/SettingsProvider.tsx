@@ -25,7 +25,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await api.get(API_ENDPOINTS.settings.public);
+      const response = await api.get(`${API_ENDPOINTS.settings.public}?t=${new Date().getTime()}`);
       setSettings(response.data);
     } catch (error) {
       console.error("Failed to load global settings:", error);

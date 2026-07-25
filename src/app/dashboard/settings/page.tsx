@@ -12,6 +12,7 @@ import api from "@/lib/axios";
 import { API_ENDPOINTS } from "@/lib/apis";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { useSettings } from "@/components/providers/SettingsProvider";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Dialog,
@@ -24,6 +25,7 @@ import {
 
 export default function AdminSettingsPage() {
   const { logout, user } = useAuth();
+  const { refreshSettings } = useSettings();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [hubsList, setHubsList] = useState<Array<{ name: string; lat: number; lng: number; desc: string }>>([]);
@@ -450,6 +452,7 @@ export default function AdminSettingsPage() {
         map_hubs: JSON.stringify(hubsList)
       };
       await api.post(API_ENDPOINTS.settings.base, payload);
+      await refreshSettings();
       showAlert("Changes Saved", "Your enterprise platform settings have been successfully updated.", "success");
     } catch (error) {
       console.error("Failed to save settings:", error);

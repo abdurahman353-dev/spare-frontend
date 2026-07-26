@@ -143,6 +143,9 @@ function isLocalDelivery(order: Order): boolean {
   // Pickup = in-store, treat as local
   if (order.shipping_method === "Pickup") return true;
 
+  // Containerized shipment orders are strictly cross-city — never local
+  if ((order as any).shipment_id || (order as any).shipment) return false;
+
   // Compare warehouse origin city to destination city
   const warehouseLocation = (order.items?.[0]?.warehouse?.location ?? "").trim().toLowerCase();
   const warehouseName     = (order.items?.[0]?.warehouse?.name     ?? "").trim().toLowerCase();

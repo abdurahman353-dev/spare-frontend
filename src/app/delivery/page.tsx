@@ -511,17 +511,6 @@ export default function DeliveryPortal() {
       // Exclude orders with pending assignments (they're locked to another driver)
       if (o.pending_assignment_driver_id !== null) return false;
 
-      // ── 24-Hour Re-claim Restriction for the Releasing Driver ──
-      // If the current driver released this order within the last 24 hours, hide it from their open pool so other drivers can claim it
-      if (o.last_released_by_user_id === myId && o.last_released_at) {
-        const releasedTime = new Date(o.last_released_at).getTime();
-        const now = Date.now();
-        const hoursPassed = (now - releasedTime) / (1000 * 60 * 60);
-        if (hoursPassed < 24) {
-          return false;
-        }
-      }
-
       const isLocal = isLocalDelivery(o);
 
       if (isLocal) {

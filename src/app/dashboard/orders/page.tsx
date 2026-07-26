@@ -812,20 +812,24 @@ function AdminOrdersPageInner() {
 
     // New customer validation
     if (selectedCustomerId === "new") {
-      if (!newCustomerData.name) {
+      if (!newCustomerData.name?.trim()) {
         toast.error("Customer Name is required.");
         return;
       }
-      if (!newCustomerData.email) {
-        toast.error("Email is required for the customer login account.");
+      // For dispatch/delivery, Phone Number is required
+      if (shippingMethod !== "Pickup" && !newCustomerData.phone?.trim()) {
+        toast.error("Phone Number is required for dispatch/delivery orders.");
         return;
       }
-      const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRx.test(newCustomerData.email)) {
-        toast.error("Please enter a valid email address.");
-        return;
+      // Email is optional, validate if provided
+      if (newCustomerData.email?.trim()) {
+        const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRx.test(newCustomerData.email.trim())) {
+          toast.error("Please enter a valid email address.");
+          return;
+        }
       }
-      if (newCustomerData.phone) {
+      if (newCustomerData.phone?.trim()) {
         const cleanedPhone = newCustomerData.phone.replace(/[\s\-\(\)]/g, "");
         const phoneRx = /^\+?[0-9]{7,15}$/;
         if (!phoneRx.test(cleanedPhone)) {
@@ -833,17 +837,16 @@ function AdminOrdersPageInner() {
           return;
         }
       }
-      if (!newCustomerData.password) {
-        toast.error("Password is required so the customer can log in.");
-        return;
-      }
-      if (newCustomerData.password.length < 8) {
-        toast.error("Password must be at least 8 characters.");
-        return;
-      }
-      if (newCustomerData.password !== newCustomerData.confirmPassword) {
-        toast.error("Passwords do not match.");
-        return;
+      // Password is optional, validate if provided
+      if (newCustomerData.password) {
+        if (newCustomerData.password.length < 8) {
+          toast.error("Password must be at least 8 characters.");
+          return;
+        }
+        if (newCustomerData.password !== newCustomerData.confirmPassword) {
+          toast.error("Passwords do not match.");
+          return;
+        }
       }
     }
 

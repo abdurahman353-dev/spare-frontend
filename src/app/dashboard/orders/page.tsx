@@ -2537,10 +2537,8 @@ function AdminOrdersPageInner() {
               </div>
             </div>
 
-            {/* ── Delivery PIN — walk-in dispatch only, hidden by default ── */}
-            {(currentSelectedOrder?.tracking_number || "").startsWith("WK-") &&
-              currentSelectedOrder?.shipping_method === "Local Delivery" &&
-              currentSelectedOrder?.delivery_pin && (
+            {/* ── Delivery PIN — hidden by default, reveal toggle for admin ── */}
+            {currentSelectedOrder?.delivery_pin && (
                 <div className="mb-6">
                   <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                     🔑 Delivery Verification PIN

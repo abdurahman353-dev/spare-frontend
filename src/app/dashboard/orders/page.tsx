@@ -810,43 +810,42 @@ function AdminOrdersPageInner() {
       return;
     }
 
-    // New customer validation
+    // New customer registration validation — Name, Phone, Email, Password are COMPULSORY
     if (selectedCustomerId === "new") {
       if (!newCustomerData.name?.trim()) {
         toast.error("Customer Name is required.");
         return;
       }
-      // For dispatch/delivery, Phone Number is required
-      if (shippingMethod !== "Pickup" && !newCustomerData.phone?.trim()) {
-        toast.error("Phone Number is required for dispatch/delivery orders.");
+      if (!newCustomerData.phone?.trim()) {
+        toast.error("Phone Number is required.");
         return;
       }
-      // Email is optional, validate if provided
-      if (newCustomerData.email?.trim()) {
-        const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRx.test(newCustomerData.email.trim())) {
-          toast.error("Please enter a valid email address.");
-          return;
-        }
+      const cleanedPhone = newCustomerData.phone.replace(/[\s\-\(\)]/g, "");
+      const phoneRx = /^\+?[0-9]{7,15}$/;
+      if (!phoneRx.test(cleanedPhone)) {
+        toast.error("Phone number must be valid (e.g., +254 7XXXXXXXX or 07XXXXXXXX).");
+        return;
       }
-      if (newCustomerData.phone?.trim()) {
-        const cleanedPhone = newCustomerData.phone.replace(/[\s\-\(\)]/g, "");
-        const phoneRx = /^\+?[0-9]{7,15}$/;
-        if (!phoneRx.test(cleanedPhone)) {
-          toast.error("Phone number must be valid (e.g., +254 7XXXXXXXX or 07XXXXXXXX).");
-          return;
-        }
+      if (!newCustomerData.email?.trim()) {
+        toast.error("Email Address is required for new customer registration.");
+        return;
       }
-      // Password is optional, validate if provided
-      if (newCustomerData.password) {
-        if (newCustomerData.password.length < 8) {
-          toast.error("Password must be at least 8 characters.");
-          return;
-        }
-        if (newCustomerData.password !== newCustomerData.confirmPassword) {
-          toast.error("Passwords do not match.");
-          return;
-        }
+      const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRx.test(newCustomerData.email.trim())) {
+        toast.error("Please enter a valid email address.");
+        return;
+      }
+      if (!newCustomerData.password) {
+        toast.error("Password is required for new customer registration.");
+        return;
+      }
+      if (newCustomerData.password.length < 8) {
+        toast.error("Password must be at least 8 characters.");
+        return;
+      }
+      if (newCustomerData.password !== newCustomerData.confirmPassword) {
+        toast.error("Passwords do not match.");
+        return;
       }
     }
 
@@ -2989,7 +2988,7 @@ function AdminOrdersPageInner() {
                           value={newCustomerData.email} onChange={(e) => setNewCustomerData({ ...newCustomerData, email: e.target.value })} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-500">Phone <span className="text-zinc-400">(07XXXXXXXX)</span></label>
+                        <label className="text-xs font-semibold text-zinc-500">Phone Number <span className="text-red-500">*</span> <span className="text-zinc-400">(07XXXXXXXX)</span></label>
                         <Input placeholder="0712345678" className="h-10 border-zinc-200 rounded-lg bg-white"
                           value={newCustomerData.phone} onChange={(e) => setNewCustomerData({ ...newCustomerData, phone: e.target.value })} />
                       </div>

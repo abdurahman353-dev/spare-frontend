@@ -868,13 +868,13 @@ function AdminOrdersPageInner() {
       } else if (selectedCustomerId === "new") {
         const customerPayload: any = {
           name: newCustomerData.name,
-          email: newCustomerData.email,
-          phone: newCustomerData.phone,
-          address: newCustomerData.address,
-          company_name: newCustomerData.company_name,
-          type: newCustomerData.type,
-          password: newCustomerData.password,
-          password_confirmation: newCustomerData.confirmPassword,
+          email: newCustomerData.email?.trim() || undefined,
+          phone: newCustomerData.phone?.trim() || undefined,
+          address: newCustomerData.address?.trim() || undefined,
+          company_name: newCustomerData.company_name?.trim() || undefined,
+          type: newCustomerData.type || "Retail",
+          password: newCustomerData.password || undefined,
+          password_confirmation: newCustomerData.confirmPassword || undefined,
         };
         const res = await api.post(API_ENDPOINTS.customers.base, customerPayload);
         targetCustomerId = res.data.id;

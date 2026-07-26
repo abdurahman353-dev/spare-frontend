@@ -143,17 +143,22 @@ function isLocalDelivery(order: Order): boolean {
   // Pickup = in-store, treat as local
   if (order.shipping_method === "Pickup") return true;
 
-  // Compare warehouse origin city to destination city (same logic as admin orders page)
+  // Compare warehouse origin city to destination city
   const warehouseLocation = (order.items?.[0]?.warehouse?.location ?? "").trim().toLowerCase();
   const warehouseName     = (order.items?.[0]?.warehouse?.name     ?? "").trim().toLowerCase();
   const destination       = (order.shipping_city ?? "").trim().toLowerCase();
 
   if (!destination) return false;
 
-  return warehouseLocation.includes(destination) ||
-         destination.includes(warehouseLocation) ||
-         warehouseName.includes(destination)     ||
-         destination.includes(warehouseName);
+  const locMatch = Boolean(warehouseLocation) && (
+    warehouseLocation.includes(destination) || destination.includes(warehouseLocation)
+  );
+
+  const nameMatch = Boolean(warehouseName) && (
+    warehouseName.includes(destination) || destination.includes(warehouseName)
+  );
+
+  return locMatch || nameMatch;
 }
 
 function getStatusBadge(order: Order, myId: number) {

@@ -945,7 +945,7 @@ export default function AdminSettingsPage() {
                               </div>
                               {/* Description input */}
                               <div className="flex-[2] space-y-1">
-                                <Label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Overlay / Description</Label>
+                                <Label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Overlay / Description / Destination Point</Label>
                                 <Input
                                   value={hub.desc}
                                   onChange={(e) => {
@@ -953,7 +953,7 @@ export default function AdminSettingsPage() {
                                     if (absoluteIdx !== -1) updated[absoluteIdx].desc = e.target.value;
                                     setHubsList(updated);
                                   }}
-                                  placeholder="e.g. Main Distribution Center & HQ, Mombasa Road..."
+                                  placeholder="e.g. Buscar, Nyali Branch / Destination Pickup Point..."
                                   className="bg-white border-zinc-200 font-medium text-zinc-700 h-9 text-sm"
                                 />
                               </div>

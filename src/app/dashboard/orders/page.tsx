@@ -1310,7 +1310,8 @@ function AdminOrdersPageInner() {
           (walkInPayStatusFilter === "Cancelled / Refunded"
             ? isOrderVoided(order)
             : order.payment_status === walkInPayStatusFilter);
-        const matchesOrderStatus = walkInOrderStatusFilter === "All Status" || order.status === walkInOrderStatusFilter;
+        const matchesOrderStatus = walkInOrderStatusFilter === "All Status" || 
+          (walkInOrderStatusFilter === "Refunded" ? (order.status === "Refunded" || order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" || getOrderRefundedTotal(order) > 0) : order.status === walkInOrderStatusFilter);
         const matchesWarehouse = walkInWarehouseFilter === "all" ||
           order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
         const matchesDest = walkInDestFilter === "all" ||
@@ -1355,7 +1356,8 @@ function AdminOrdersPageInner() {
         order.shipping_country?.toLowerCase() === countryFilter.toLowerCase();
       const matchesCity = cityFilter === "all" ||
         order.shipping_city?.toLowerCase() === cityFilter.toLowerCase();
-      const matchesStatus = statusFilter === "All Status" || order.status === statusFilter;
+      const matchesStatus = statusFilter === "All Status" || 
+        (statusFilter === "Refunded" ? (order.status === "Refunded" || order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" || getOrderRefundedTotal(order) > 0) : order.status === statusFilter);
       const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
       const matchesDateFrom = !shipmentDateFrom || orderDate >= new Date(shipmentDateFrom).setHours(0, 0, 0, 0);
       const matchesDateTo = !shipmentDateTo || orderDate <= new Date(shipmentDateTo).setHours(0, 0, 0, 0);
@@ -1381,7 +1383,7 @@ function AdminOrdersPageInner() {
     return filteredOrders.slice(startIndex, startIndex + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
 
-  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Arrived", "Delivered", "Returned", "Cancelled", "Cancellation Requested"];
+  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Arrived", "Delivered", "Returned", "Cancelled", "Cancellation Requested", "Refunded"];
 
   return (
     <div className="space-y-4 p-3 sm:p-6">
@@ -1599,6 +1601,7 @@ function AdminOrdersPageInner() {
               <option value="Shipped">Shipped</option>
               <option value="Arrived">Arrived</option>
               <option value="Delivered">Delivered</option>
+              <option value="Refunded">Refunded</option>
             </select>
           </div>
           {/* Date Range — always side by side */}

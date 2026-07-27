@@ -381,6 +381,7 @@ function AdminOrdersPageInner() {
   const [isVoiding, setIsVoiding] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [voidTransactionId, setVoidTransactionId] = useState("");
+  const [refundPaymentMethod, setRefundPaymentMethod] = useState("M-Pesa Express");
   const [walkInPayStatusFilter, setWalkInPayStatusFilter] = useState("All");
   // PIN reveal toggle in order details modal
   const [showDeliveryPin, setShowDeliveryPin] = useState(false);
@@ -742,6 +743,7 @@ function AdminOrdersPageInner() {
       const res = await api.post(API_ENDPOINTS.orders.voidRefund(voidOrderTarget.id), {
         reason: voidReason,
         refund_transaction_id: voidTransactionId,
+        refund_payment_method: refundPaymentMethod,
         cancel_item_ids: selectedVoidItemIds,
         cancel_items: selectedVoidItemIds.map(id => ({
           id,
@@ -3464,6 +3466,19 @@ function AdminOrdersPageInner() {
             )}
 
             <div className="space-y-3">
+              <div className="space-y-1 text-left">
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Refund Payment Method *</label>
+                <select
+                  value={refundPaymentMethod}
+                  onChange={(e) => setRefundPaymentMethod(e.target.value)}
+                  className="w-full h-9 rounded-md border border-zinc-200 bg-white px-3 text-xs font-semibold text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                >
+                  <option value="M-Pesa Express">M-Pesa Express</option>
+                  <option value="M-Pesa Paybill / Till">M-Pesa Paybill / Till</option>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cash / Over-The-Counter">Cash / Over-The-Counter</option>
+                </select>
+              </div>
               <div className="space-y-1 text-left">
                 <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Refund Reason *</label>
                 <textarea

@@ -3,8 +3,9 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
+import { getSiteUrl } from "@/lib/site-url";
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://autospare-eastafrica.com";
+const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
   title: "Our Trusted Brands",

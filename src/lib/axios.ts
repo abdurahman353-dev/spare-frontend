@@ -1,8 +1,22 @@
 import axios from "axios";
 import { API_ENDPOINTS } from "@/lib/apis";
 
+export function getApiUrl(): string {
+  const url = process.env.NEXT_PUBLIC_API_URL;
+  if (url) {
+    return url.replace(/\/$/, "");
+  }
+  if (process.env.NODE_ENV === "development") {
+    return "http://localhost:8000/api";
+  }
+  throw new Error(
+    "[Config Error] NEXT_PUBLIC_API_URL is not defined in environment variables. " +
+      "Please specify NEXT_PUBLIC_API_URL in your deployment configuration."
+  );
+}
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api",
+  baseURL: getApiUrl(),
   timeout: 60000, // 60 seconds timeout for single-threaded dev server concurrency
   headers: {
     "Content-Type": "application/json",

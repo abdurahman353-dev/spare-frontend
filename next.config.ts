@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Reserved for domain migration 301 redirects.
+  async redirects() {
+    return [];
+  },
   images: {
     remotePatterns: [
       {

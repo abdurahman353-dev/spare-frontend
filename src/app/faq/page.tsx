@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { FaqAccordion, type FaqItem } from "./FaqAccordion";
+import { getSiteUrl } from "@/lib/site-url";
 
-const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://autospare-eastafrica.com";
+const siteUrl = getSiteUrl();
 
 // ── Per-page metadata ────────────────────────────────────────────────────────
 export const metadata: Metadata = {

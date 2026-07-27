@@ -98,11 +98,18 @@ export default function ReturnsManagementPage() {
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      const res = await api.get(API_ENDPOINTS.returns.allPages);
-      setReturns(Array.isArray(res.data) ? res.data : res.data.data ?? []);
-    } catch (err) {
+      let res;
+      try {
+        res = await api.get(API_ENDPOINTS.returns.allPages);
+      } catch (firstErr) {
+        // Fallback to base /returns endpoint if per_page query parameter encounters network issue
+        res = await api.get(API_ENDPOINTS.returns.base);
+      }
+      const data = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
+      setReturns(data);
+    } catch (err: any) {
       console.error("Failed to fetch returns:", err);
-      toast.error("Failed to load return requests");
+      toast.error(err?.response?.data?.message || "Failed to load return requests. Please check network connection.");
     } finally {
       setLoading(false);
     }

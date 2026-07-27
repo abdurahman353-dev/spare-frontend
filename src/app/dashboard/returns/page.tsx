@@ -545,15 +545,25 @@ export default function ReturnsManagementPage() {
               {/* Calculate Refund Breakdown for Admin */}
               {(() => {
                 const items = selectedReturn.order?.items ?? [];
-                const returnItemIds = (selectedReturn.return_items ?? []).map((ri: any) => ri.order_item_id);
-                const returnedItems = returnItemIds.length > 0
-                  ? items.filter((i: any) => returnItemIds.includes(i.id))
-                  : items;
+                let rawReturnItems = selectedReturn.return_items;
+                if (typeof rawReturnItems === "string") {
+                  try { rawReturnItems = JSON.parse(rawReturnItems); } catch (e) { rawReturnItems = []; }
+                }
+                const returnItemIds = (rawReturnItems ?? []).map((ri: any) => Number(ri.order_item_id));
+                let returnedItems = items;
+                if (returnItemIds.length > 0) {
+                  returnedItems = items.filter((i: any) => returnItemIds.includes(Number(i.id)));
+                } else {
+                  const cancelledItems = items.filter((i: any) => i.cancellation_status === "Cancelled");
+                  if (cancelledItems.length > 0 && cancelledItems.length < items.length) {
+                    returnedItems = cancelledItems;
+                  }
+                }
 
                 let productCostTotal = 0;
                 let shippingShareTotal = 0;
                 returnedItems.forEach((i: any) => {
-                  const qty = selectedReturn.return_items?.find((ri: any) => ri.order_item_id === i.id)?.quantity ?? i.quantity;
+                  const qty = (Array.isArray(rawReturnItems) ? rawReturnItems : [])?.find((ri: any) => Number(ri.order_item_id) === Number(i.id))?.quantity ?? i.quantity;
                   productCostTotal += parseFloat(i.price ?? 0) * qty;
                   shippingShareTotal += parseFloat(i.shipping_fee_per_unit ?? 0) * qty;
                 });

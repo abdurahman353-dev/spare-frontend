@@ -1428,10 +1428,14 @@ function AccountPortalInner() {
                           )}
                           {myReturns.map((ret: any) => {
                             const items = ret.order?.items ?? [];
-                            const returnItemIds: number[] = (ret.return_items ?? []).map((ri: any) => ri.order_item_id);
+                            let rawReturnItems = ret.return_items;
+                            if (typeof rawReturnItems === "string") {
+                              try { rawReturnItems = JSON.parse(rawReturnItems); } catch (e) { rawReturnItems = []; }
+                            }
+                            const returnItemIds: number[] = (rawReturnItems ?? []).map((ri: any) => Number(ri.order_item_id));
                             let returnedItems = items;
                             if (returnItemIds.length > 0) {
-                              returnedItems = items.filter((i: any) => returnItemIds.includes(i.id));
+                              returnedItems = items.filter((i: any) => returnItemIds.includes(Number(i.id)));
                             } else {
                               const cancelledItems = items.filter((i: any) => i.cancellation_status === "Cancelled");
                               if (cancelledItems.length > 0 && cancelledItems.length < items.length) {
@@ -1441,12 +1445,17 @@ function AccountPortalInner() {
                             let productCostTotal = 0;
                             let shippingShareTotal = 0;
                             returnedItems.forEach((i: any) => {
-                              const qty = ret.return_items?.find((ri: any) => ri.order_item_id === i.id)?.quantity ?? i.quantity;
+                              const qty = (Array.isArray(rawReturnItems) ? rawReturnItems : [])?.find((ri: any) => Number(ri.order_item_id) === Number(i.id))?.quantity ?? i.quantity;
                               productCostTotal += parseFloat(i.price ?? 0) * qty;
                               shippingShareTotal += parseFloat(i.shipping_fee_per_unit ?? 0) * qty;
                             });
                             const refundTotal = productCostTotal + shippingShareTotal;
-                            const isPartial = (ret.return_items && ret.return_items.length > 0) || (returnedItems.length > 0 && returnedItems.length < items.length);
+                            const totalOrderUnits = items.reduce((acc: number, item: any) => acc + Number(item.quantity || 1), 0);
+                            const returnedUnits = returnedItems.reduce((acc: number, item: any) => {
+                              const qty = (Array.isArray(rawReturnItems) ? rawReturnItems : [])?.find((ri: any) => Number(ri.order_item_id) === Number(item.id))?.quantity ?? item.quantity;
+                              return acc + Number(qty || 1);
+                            }, 0);
+                            const isPartial = (returnedItems.length > 0 && returnedItems.length < items.length) || (returnedUnits > 0 && returnedUnits < totalOrderUnits);
 
                             return (
                               <div key={ret.id} className="p-4 sm:p-5 hover:bg-zinc-50/40 transition-colors">

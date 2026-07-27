@@ -1,9 +1,25 @@
-"use client";
-
+import type { Metadata } from "next";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { motion } from "framer-motion";
 import { ShieldCheck, Users, Globe, Award } from "lucide-react";
+
+const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://autospare-eastafrica.com";
+
+export const metadata: Metadata = {
+  title: "About Us",
+  description:
+    "Learn about AutoSpare East Africa — the region's leading distributor of genuine Mercedes-Benz and commercial vehicle spare parts, with over 22 years of specialized service and 850+ active partners across Kenya, Uganda, Tanzania, Rwanda, and Burundi.",
+  alternates: {
+    canonical: `${siteUrl}/about`,
+  },
+};
+
+const stats = [
+  { icon: ShieldCheck, label: "Genuine Parts Only", value: "100%" },
+  { icon: Users,       label: "Active Partners",    value: "850+" },
+  { icon: Globe,       label: "Regional Hubs",      value: "5"    },
+  { icon: Award,       label: "Years Experience",   value: "22"   },
+];
 
 export default function AboutPage() {
   return (
@@ -12,7 +28,9 @@ export default function AboutPage() {
       <main className="flex-1">
         <section className="py-20 bg-black text-white">
           <div className="container mx-auto px-4 text-center">
-            <h1 className="text-4xl md:text-6xl font-bold mb-6">Our Legacy in <span className="text-primary">Excellence</span></h1>
+            <h1 className="text-4xl md:text-6xl font-bold mb-6">
+              Our Legacy in <span className="text-primary">Excellence</span>
+            </h1>
             <p className="text-xl text-gray-400 max-w-3xl mx-auto">
               AutoSpare East Africa is the leading distributor of genuine Mercedes-Benz parts, bridging the gap between German engineering and African roads.
             </p>
@@ -32,12 +50,7 @@ export default function AboutPage() {
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-6">
-                {[
-                  { icon: ShieldCheck, label: "Genuine Parts Only", value: "100%" },
-                  { icon: Users, label: "Active Partners", value: "850+" },
-                  { icon: Globe, label: "Regional Hubs", value: "5" },
-                  { icon: Award, label: "Years Experience", value: "22" },
-                ].map((stat, idx) => (
+                {stats.map((stat, idx) => (
                   <div key={idx} className="bg-secondary p-8 rounded-2xl text-center">
                     <stat.icon className="h-8 w-8 text-primary mx-auto mb-4" />
                     <div className="text-3xl font-bold mb-1">{stat.value}</div>

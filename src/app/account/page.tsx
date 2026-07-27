@@ -1622,6 +1622,30 @@ function AccountPortalInner() {
                                   </div>
                                 )}
 
+                                {/* Contact Support CTA for Rejected Requests */}
+                                {ret.status === "Rejected" && (
+                                  <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-50/80 border border-red-200 rounded-lg p-3.5">
+                                    <div className="space-y-0.5">
+                                      <p className="text-xs font-bold text-red-900 flex items-center gap-1.5">
+                                        <AlertCircle className="h-4 w-4 text-red-600 shrink-0" />
+                                        Return Request Rejected
+                                      </p>
+                                      <p className="text-[11px] font-medium text-red-700">
+                                        Have questions or need assistance? Contact support team directly.
+                                      </p>
+                                    </div>
+                                    <a
+                                      href={`mailto:${settings?.store_email || settings?.contact_email || "support@autospare.com"}?subject=Return Request Dispute — Order #${ret.order?.tracking_number || ret.order_id}`}
+                                      className="inline-flex items-center justify-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-md border border-red-300 text-red-800 bg-white hover:bg-red-100 transition-colors shadow-sm shrink-0"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                      </svg>
+                                      Contact Support
+                                    </a>
+                                  </div>
+                                )}
+
                                 {/* Refund payment method + reference display */}
                                 {ret.refund_payment_method && (
                                   <div className="mt-3 bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-3 space-y-2">
@@ -2025,7 +2049,7 @@ function AccountPortalInner() {
               )}
               {selectedOrder && myReturns.some((r: any) => r.order_id === selectedOrder.id && r.status === "Rejected") && (
                 <a
-                  href={`mailto:support@spare.com?subject=Return Request Dispute — Order #${selectedOrder?.id}`}
+                  href={`mailto:${settings?.store_email || settings?.contact_email || "support@autospare.com"}?subject=Return Request Dispute — Order #${selectedOrder?.tracking_number || selectedOrder?.id}`}
                   className="inline-flex items-center gap-1.5 text-[12px] font-bold h-9 px-3 rounded-md border border-red-200 text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

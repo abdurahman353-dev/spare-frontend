@@ -29,17 +29,25 @@ import {
 const STATUS_COLORS: Record<string, string> = {
   Pending: "#f59e0b", // amber-500
   Processing: "#3b82f6", // blue-500
-  Shipped: "#3b82f6", // blue-500
+  Shipped: "#2563eb", // blue-600
+  "In Transit": "#0284c7", // sky-600
+  Arrived: "#8b5cf6", // purple-500
   Delivered: "#10b981", // emerald-500
   Cancelled: "#ef4444", // red-500
+  "Cancellation Requested": "#f97316", // orange-500
+  Returned: "#64748b", // slate-500
 };
 
 const STATUS_STYLES: Record<string, string> = {
   Pending: "bg-amber-50 text-amber-700 border-amber-200",
   Processing: "bg-blue-50 text-blue-700 border-blue-200",
   Shipped: "bg-blue-50 text-blue-700 border-blue-200",
+  "In Transit": "bg-sky-50 text-sky-700 border-sky-200 font-bold",
+  Arrived: "bg-purple-50 text-purple-700 border-purple-200 font-bold",
   Delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
   Cancelled: "bg-red-50 text-red-700 border-red-200",
+  "Cancellation Requested": "bg-orange-50 text-orange-700 border-orange-200",
+  Returned: "bg-slate-50 text-slate-700 border-slate-200",
 };
 
 function DocumentHeader({ title, subtitle, period, storeName }: { title: string; subtitle: string; period: string; storeName?: string }) {
@@ -240,8 +248,11 @@ export default function AdminReportsPage() {
   const statusData = useMemo(() => {
     const map = new Map<string, number>();
     channelFilteredOrders.forEach(o => {
-      const st = o.status || "Unknown";
-      map.set(st, (map.get(st) || 0) + 1);
+      let st = o.status || "Unknown";
+      if (st === "Completed") st = "Delivered";
+      if (st !== "Unknown") {
+        map.set(st, (map.get(st) || 0) + 1);
+      }
     });
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
   }, [channelFilteredOrders]);

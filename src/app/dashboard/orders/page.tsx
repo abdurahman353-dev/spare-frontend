@@ -1378,7 +1378,7 @@ function AdminOrdersPageInner() {
     return filteredOrders.slice(startIndex, startIndex + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
 
-  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Arrived", "Delivered", "Returned", "Cancelled", "Cancellation Requested"];
+  const statuses = ["All Status", "Pending", "Processing", "Shipped", "In Transit", "Arrived", "Delivered", "Returned", "Cancelled", "Cancellation Requested"];
 
   return (
     <div className="space-y-4 p-3 sm:p-6">

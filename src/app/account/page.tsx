@@ -1429,9 +1429,15 @@ function AccountPortalInner() {
                           {myReturns.map((ret: any) => {
                             const items = ret.order?.items ?? [];
                             const returnItemIds: number[] = (ret.return_items ?? []).map((ri: any) => ri.order_item_id);
-                            const returnedItems = returnItemIds.length > 0
-                              ? items.filter((i: any) => returnItemIds.includes(i.id))
-                              : items;
+                            let returnedItems = items;
+                            if (returnItemIds.length > 0) {
+                              returnedItems = items.filter((i: any) => returnItemIds.includes(i.id));
+                            } else {
+                              const cancelledItems = items.filter((i: any) => i.cancellation_status === "Cancelled");
+                              if (cancelledItems.length > 0 && cancelledItems.length < items.length) {
+                                returnedItems = cancelledItems;
+                              }
+                            }
                             let productCostTotal = 0;
                             let shippingShareTotal = 0;
                             returnedItems.forEach((i: any) => {
@@ -1440,7 +1446,7 @@ function AccountPortalInner() {
                               shippingShareTotal += parseFloat(i.shipping_fee_per_unit ?? 0) * qty;
                             });
                             const refundTotal = productCostTotal + shippingShareTotal;
-                            const isPartial = ret.return_items && ret.return_items.length > 0;
+                            const isPartial = (ret.return_items && ret.return_items.length > 0) || (returnedItems.length > 0 && returnedItems.length < items.length);
 
                             return (
                               <div key={ret.id} className="p-4 sm:p-5 hover:bg-zinc-50/40 transition-colors">

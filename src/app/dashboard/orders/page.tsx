@@ -383,6 +383,7 @@ function AdminOrdersPageInner() {
   const [voidTransactionId, setVoidTransactionId] = useState("");
   const [refundPaymentMethod, setRefundPaymentMethod] = useState("M-Pesa Express");
   const [walkInPayStatusFilter, setWalkInPayStatusFilter] = useState("All");
+  const [walkInOrderStatusFilter, setWalkInOrderStatusFilter] = useState("All Status");
   // PIN reveal toggle in order details modal
   const [showDeliveryPin, setShowDeliveryPin] = useState(false);
 
@@ -1246,6 +1247,7 @@ function AdminOrdersPageInner() {
   const handleClearWalkInFilters = () => {
     setWalkInSearchQuery("");
     setWalkInPayStatusFilter("All");
+    setWalkInOrderStatusFilter("All Status");
     setWalkInWarehouseFilter("all");
     setWalkInDestFilter("all");
     setWalkInDateFrom("");
@@ -1308,6 +1310,7 @@ function AdminOrdersPageInner() {
           (walkInPayStatusFilter === "Cancelled / Refunded"
             ? isOrderVoided(order)
             : order.payment_status === walkInPayStatusFilter);
+        const matchesOrderStatus = walkInOrderStatusFilter === "All Status" || order.status === walkInOrderStatusFilter;
         const matchesWarehouse = walkInWarehouseFilter === "all" ||
           order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
         const matchesDest = walkInDestFilter === "all" ||
@@ -1315,7 +1318,7 @@ function AdminOrdersPageInner() {
         const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
         const matchesDateFrom = !walkInDateFrom || orderDate >= new Date(walkInDateFrom).setHours(0, 0, 0, 0);
         const matchesDateTo = !walkInDateTo || orderDate <= new Date(walkInDateTo).setHours(0, 0, 0, 0);
-        return matchesSearch && matchesPayStatus && matchesWarehouse && matchesDest && matchesDateFrom && matchesDateTo;
+        return matchesSearch && matchesPayStatus && matchesOrderStatus && matchesWarehouse && matchesDest && matchesDateFrom && matchesDateTo;
       });
     }
 
@@ -1361,7 +1364,7 @@ function AdminOrdersPageInner() {
   }, [
     activeOrdersTab,
     shipmentOrders, shipmentSearchQuery, localShipmentOrders, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
-    walkInOrders, walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInDateFrom, walkInDateTo,
+    walkInOrders, walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInOrderStatusFilter, walkInDateFrom, walkInDateTo,
   ]);
 
   useEffect(() => {
@@ -1369,7 +1372,7 @@ function AdminOrdersPageInner() {
   }, [
     activeOrdersTab,
     shipmentSearchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
-    walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInDateFrom, walkInDateTo,
+    walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInOrderStatusFilter, walkInDateFrom, walkInDateTo,
   ]);
 
   const totalPages = Math.ceil(filteredOrders.length / pageSize);
@@ -1378,7 +1381,7 @@ function AdminOrdersPageInner() {
     return filteredOrders.slice(startIndex, startIndex + pageSize);
   }, [filteredOrders, currentPage, pageSize]);
 
-  const statuses = ["All Status", "Pending", "Processing", "Shipped", "In Transit", "Arrived", "Delivered", "Returned", "Cancelled", "Cancellation Requested"];
+  const statuses = ["All Status", "Pending", "Processing", "Shipped", "Arrived", "Delivered", "Returned", "Cancelled", "Cancellation Requested"];
 
   return (
     <div className="space-y-4 p-3 sm:p-6">
@@ -1581,6 +1584,21 @@ function AdminOrdersPageInner() {
               <option value="Pending">Pending</option>
               <option value="Refunded">Refunded</option>
               <option value="Cancelled / Refunded">Cancelled / Refunded</option>
+            </select>
+          </div>
+          {/* Package / Order Status */}
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[150px] shrink-0">
+            <select
+              className="h-9 px-2.5 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-emerald-200 w-full text-zinc-600 cursor-pointer"
+              value={walkInOrderStatusFilter}
+              onChange={(e) => setWalkInOrderStatusFilter(e.target.value)}
+            >
+              <option value="All Status">All Package Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Processing">Processing</option>
+              <option value="Shipped">Shipped</option>
+              <option value="Arrived">Arrived</option>
+              <option value="Delivered">Delivered</option>
             </select>
           </div>
           {/* Date Range — always side by side */}

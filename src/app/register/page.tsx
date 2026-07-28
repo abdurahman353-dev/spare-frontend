@@ -72,7 +72,7 @@ function RegisterPageInner() {
   const cleanedPhone = phoneVal.replace(/\s+/g, "");
   const isValidPhone = selectedCountry.pattern.test(cleanedPhone);
 
-  const brandName = settings.store_name || "Portal";
+  const brandName = settings.store_name || "AutoSpare East Africa";
 
   const filteredCountries = countries.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

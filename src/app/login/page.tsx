@@ -23,8 +23,8 @@ function LoginPageInner() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "";
  
-  const brandName = settings.store_name || "Portal";
- 
+  const brandName = settings.store_name || "AutoSpare East Africa";
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -38,7 +38,7 @@ function LoginPageInner() {
       setLoading(false);
     }
   };
- 
+
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 relative overflow-hidden font-sans">
       {/* Background patterns */}
@@ -52,7 +52,7 @@ function LoginPageInner() {
           <rect width="100%" height="100%" fill="url(#grid)" />
         </svg>
       </div>
- 
+
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -61,29 +61,32 @@ function LoginPageInner() {
         <Card className="border-none shadow-[0_20px_60px_rgba(0,0,0,0.1)] bg-white overflow-hidden rounded-2xl">
           <div className="h-2 bg-primary w-full" />
           <CardHeader className="space-y-4 text-center pt-8 sm:pt-12 pb-6 sm:pb-8">
-            {/* Clickable brand badge — navigates back to landing page */}
+            {/* Clickable brand badge — navigates back to home */}
             <Link href="/" className="mx-auto flex flex-col items-center gap-2 group">
               {settings.store_logo ? (
                 <img
                   src={settings.store_logo}
                   alt={brandName}
-                  className="h-16 w-auto max-w-[160px] object-contain rounded-lg group-hover:opacity-80 transition-opacity"
+                  className="h-14 w-auto max-w-[200px] object-contain rounded-lg group-hover:opacity-80 transition-opacity"
                 />
               ) : (
-                <div className="h-16 w-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/30 group-hover:shadow-primary/50 transition-all group-hover:scale-105">
-                  <span className="text-white text-2xl font-black">
-                    {brandName.charAt(0).toUpperCase()}
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-zinc-900 text-white shadow-xl shadow-zinc-900/10 group-hover:scale-105 transition-transform">
+                  <div className="h-9 w-9 bg-primary flex items-center justify-center text-white font-black text-xl rounded-xl shadow-md">
+                    A
+                  </div>
+                  <span className="text-xl font-black tracking-tighter text-white">
+                    AUTOSPARE<span className="text-primary italic">.</span>
                   </span>
                 </div>
               )}
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 group-hover:text-primary transition-colors">
-                ← Back to {brandName}
+                ← Back to Store
               </span>
             </Link>
             <div className="space-y-1">
               <CardTitle className="text-4xl font-black tracking-tighter text-zinc-900 uppercase">Secure Login</CardTitle>
               <CardDescription className="text-zinc-500 text-lg font-medium">
-                Access your personalized {brandName} portal
+                Access your secure account
               </CardDescription>
             </div>
           </CardHeader>
@@ -104,7 +107,7 @@ function LoginPageInner() {
                   />
                 </div>
               </div>
- 
+
               <div className="space-y-2">
                 <div className="flex justify-between items-center ml-1">
                   <label className="text-sm font-bold text-zinc-700">Password</label>
@@ -129,7 +132,7 @@ function LoginPageInner() {
                   </button>
                 </div>
               </div>
- 
+
               <div className="flex items-center space-x-2 ml-1">
                 <input 
                   type="checkbox" 
@@ -142,7 +145,7 @@ function LoginPageInner() {
                   Remember me for 30 days
                 </label>
               </div>
- 
+
               <Button 
                 type="submit" 
                 disabled={loading}
@@ -152,14 +155,14 @@ function LoginPageInner() {
                   <Loader2 className="h-6 w-6 animate-spin" />
                 ) : (
                   <>
-                    SIGN IN TO PORTAL
+                    SIGN IN
                     <ArrowRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </Button>
             </form>
           </CardContent>
- 
+
           <CardFooter className="flex flex-col space-y-6 pb-8 sm:pb-12 pt-6">
             <div className="text-sm text-zinc-500 text-center space-y-3 font-medium">
               <div>

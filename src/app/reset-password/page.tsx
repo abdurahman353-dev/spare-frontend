@@ -185,7 +185,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   const { settings } = useSettings();
-  const brandName = settings.store_name || "Portal";
+  const brandName = settings.store_name || "AutoSpare East Africa";
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 relative overflow-hidden font-sans">

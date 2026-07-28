@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const brandName = settings.store_name || "Portal";
+  const brandName = settings.store_name || "AutoSpare East Africa";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

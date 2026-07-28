@@ -325,11 +325,10 @@ export default function CheckoutPage() {
       if (attempts >= maxAttempts) {
         clearInterval(pollIntervalRef.current!);
         clearInterval(countdownIntervalRef.current!);
-        // Do NOT delete pending orders on timeout — if Safaricom already confirmed payment,
-        // the backend callback will still create the order even if the frontend timed out.
-        // We only show a timeout message — the backend is the source of truth.
-        setPaymentStatus("timeout");
-        setPaymentError("The payment window has expired on this screen. If you completed the M-Pesa PIN entry, your payment was processed by Safaricom and your order will appear in your account automatically. If you did NOT enter your PIN, please try again.");
+        // STK Push session expired on Safaricom's end — no transaction possible.
+        // Treat exactly the same as a failure: customer must initiate a new STK Push.
+        setPaymentStatus("failed");
+        setPaymentError("Payment was declined or cancelled. Your cart has been kept — please try again.");
         setIsProcessing(false);
       }
     }, 4000);
@@ -379,6 +378,8 @@ export default function CheckoutPage() {
         return;
       }
       setPhoneError("");
+      await initiateStkPush();
+      return;
     }
 
     setIsProcessing(true);
@@ -386,42 +387,6 @@ export default function CheckoutPage() {
     setPaymentError("");
 
     try {
-      if (paymentMethod === "mpesa_stk") {
-        // ── NEW FLOW: single call — no order created until payment confirmed ──
-        // POST /mpesa/checkout validates cart server-side, initiates STK push,
-        // and stores cart data. The order is created ONLY by the Safaricom callback.
-        const formattedPhone = formatKenyanPhone(mpesaPhone);
-        const stkResponse = await api.post(API_ENDPOINTS.payments.mpesaCheckout, {
-          phone: formattedPhone,
-          shipping: {
-            first_name: sanitizeText(shippingDetails.firstName),
-            last_name:  sanitizeText(shippingDetails.lastName),
-            phone:      shippingDetails.phone,
-            address:    sanitizeText(shippingDetails.address),
-            city:       shippingDetails.city,
-            country:    shippingDetails.country,
-          },
-          items: cart.map(item => ({
-            id:           item.id,
-            quantity:     item.quantity,
-            warehouse_id: item.warehouse_id,
-          })),
-          shipping_method: shippingMethod === "express" ? "Express Logistics" : "Standard Delivery",
-        });
-
-        const reqId: string = stkResponse.data.checkout_request_id;
-        setCheckoutRequestId(reqId);
-
-        if (reqId) {
-          startPolling(reqId, []);
-        } else {
-          setPaymentStatus("failed");
-          setPaymentError(stkResponse.data.message || "Could not initiate payment. Please try again.");
-          setIsProcessing(false);
-        }
-        return;
-      }
-
       // ── PAYBILL FLOW: still creates order first (customer needs tracking number) ──
       const checkoutResponse = await api.post(API_ENDPOINTS.payments.checkout, {
         shipping: {
@@ -476,15 +441,87 @@ export default function CheckoutPage() {
     }
   };
 
+  /**
+   * Sends a new M-Pesa STK Push and starts polling.
+   * Called both on first payment attempt AND when customer clicks "Try Again".
+   * Each call creates a brand-new Safaricom session with a fresh 60-second window.
+   */
+  const initiateStkPush = async () => {
+    // Clear any previous polling intervals
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    setIsProcessing(true);
+    setPaymentStatus("pending");
+    setPaymentError("");
+    setCheckoutRequestId(null);
+
+    try {
+      // Single API call — no order created here. Order is created ONLY after
+      // Safaricom sends ResultCode=0 via callback.
+      const formattedPhone = formatKenyanPhone(mpesaPhone);
+      const stkResponse = await api.post(API_ENDPOINTS.payments.mpesaCheckout, {
+        phone: formattedPhone,
+        shipping: {
+          first_name: sanitizeText(shippingDetails.firstName),
+          last_name:  sanitizeText(shippingDetails.lastName),
+          phone:      shippingDetails.phone,
+          address:    sanitizeText(shippingDetails.address),
+          city:       shippingDetails.city,
+          country:    shippingDetails.country,
+        },
+        items: cart.map(item => ({
+          id:           item.id,
+          quantity:     item.quantity,
+          warehouse_id: item.warehouse_id,
+        })),
+        shipping_method: shippingMethod === "express" ? "Express Logistics" : "Standard Delivery",
+      });
+
+      const reqId: string = stkResponse.data.checkout_request_id;
+      setCheckoutRequestId(reqId);
+
+      if (reqId) {
+        startPolling(reqId, []);
+      } else {
+        setPaymentStatus("failed");
+        setPaymentError(stkResponse.data.message || "Could not initiate payment. Please try again.");
+        setIsProcessing(false);
+      }
+    } catch (error: any) {
+      console.error("STK Push failed:", error);
+      setPaymentError(error?.response?.data?.message || "Could not send payment request. Please try again.");
+      setPaymentStatus("failed");
+      setIsProcessing(false);
+    }
+  };
+
+  /**
+   * Resets state then immediately fires a brand-new STK Push.
+   * The customer does NOT need to click Initiate Payment again.
+   */
   const handleRetry = () => {
-    setPaymentStatus("idle");
     setPaymentError("");
     setMpesaCodeError("");
     setCheckoutRequestId(null);
-    setIsProcessing(false);
     setCountdown(0);
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    if (paymentMethod === "mpesa_stk") {
+      const phoneErr = validatePaymentPhone(mpesaPhone);
+      if (phoneErr) {
+        setPhoneError(phoneErr);
+        setPaymentStatus("idle");
+        setIsProcessing(false);
+        return;
+      }
+      // Immediately send a new STK Push — fresh Safaricom session
+      initiateStkPush();
+    } else {
+      setPaymentStatus("idle");
+      setIsProcessing(false);
+    }
   };
 
   const handleVerifyMpesaCode = async () => {
@@ -875,7 +912,7 @@ export default function CheckoutPage() {
                             </motion.div>
                           )}
 
-                          {/* Failed / timeout */}
+                          {/* Failed / timeout — always shows same Payment Failed UI */}
                           {(paymentStatus === "failed" || paymentStatus === "timeout") && (
                             <motion.div
                               initial={{ opacity: 0 }}
@@ -884,7 +921,7 @@ export default function CheckoutPage() {
                             >
                               <div className="flex items-center gap-2 text-red-700">
                                 <AlertCircle className="h-5 w-5 shrink-0" />
-                                <p className="font-bold">{paymentStatus === "timeout" ? "Payment Timed Out" : "Payment Failed"}</p>
+                                <p className="font-bold">Payment Failed</p>
                               </div>
                               <p className="text-sm text-red-600">{paymentError}</p>
                               <Button

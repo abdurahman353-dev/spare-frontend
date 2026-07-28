@@ -46,10 +46,13 @@ export function Navbar() {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {settings.store_logo ? (
-            <Link href="/" className="flex items-center hover:opacity-90 transition-opacity">
+            <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
               <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 border border-zinc-200/60">
                 <img src={settings.store_logo} alt="Logo" className="h-full w-full object-cover" />
               </div>
+              {brandName && (
+                <span className="text-xl font-black tracking-tighter text-zinc-900">{brandName.toUpperCase()}<span className="text-primary italic">.</span></span>
+              )}
             </Link>
           ) : null}
         </div>

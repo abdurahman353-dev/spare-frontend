@@ -61,6 +61,23 @@ function isWithinReturnPeriod(order: any): boolean {
   return ["Pending", "Processing"].includes(order.status);
 }
 
+/**
+ * Validates that a string is a genuine Safaricom M-Pesa receipt code.
+ * Real codes look like: UGR2B10EHE, SJL49A3B8K (10–12 uppercase alphanumeric chars).
+ * Rejects: phone numbers, placeholder codes (MPESA-..., MPESA ...), pure digits, short codes.
+ */
+function isRealMpesaReceipt(code: string | null | undefined): boolean {
+  if (!code) return false;
+  const trimmed = code.trim().toUpperCase();
+  // Must not start with 'MPESA' (placeholder prefix used internally)
+  if (trimmed.startsWith('MPESA')) return false;
+  // Must not be purely numeric (phone numbers like 45621159)
+  if (/^\d+$/.test(trimmed)) return false;
+  // Must be alphanumeric, 8–16 chars (real Safaricom codes are ~10 chars)
+  if (!/^[A-Z0-9]{8,16}$/.test(trimmed)) return false;
+  return true;
+}
+
 
 /**
  * Determines if an order is a same-city (local) shipment by comparing
@@ -163,7 +180,7 @@ function AccountPortalInner() {
       target: "#tour-stepper",
       placement: "top" as const,
       title: "🚚 Logistics Lifecycle — How Your Order Moves",
-      content: `Your order moves through 4 key stages: Pending → Hub Processing → Shipped → Delivered. Note that an order that is in pending or processing will only be cancelled and nothing else. ${bizName} sends you automated email notifications at each stage (Processing, Shipped, and Delivered) to keep you fully informed.${bizHours ? ` Our team operates: ${bizHours}.` : ""}`,
+      content: `Your order moves through key stages: Pending → Processing → Shipped → Arrived → Delivered. ${bizName} sends you automated SMS and email notifications when your order arrives at our hub (with your secure 4-digit Delivery PIN) and again once it's been delivered to you. Keep your phone number up to date to receive these alerts.${bizHours ? ` Our team operates: ${bizHours}.` : ""}`,
     },
     {
       target: "#tour-table",
@@ -188,6 +205,12 @@ function AccountPortalInner() {
       placement: "top" as const,
       title: "📍 Verified Shipping Destinations",
       content: `Save your frequently used delivery addresses${bizCountry ? ` in ${bizCountry}` : ""}. Saved addresses can be selected during checkout to instantly prefill your delivery details and compute accurate ${bizName} logistics fees.${bizPhone ? ` Need help? Call us: ${bizPhone}.` : ""}${bizWA ? ` WhatsApp: ${bizWA}.` : ""}${bizAddress ? ` We are located at: ${bizAddress}.` : ""}`,
+    },
+    {
+      target: "#tour-table",
+      placement: "top" as const,
+      title: "↩️ Return Requests — Eligibility Policy",
+      content: `You may raise a return request from the Inspect modal on any eligible order. Returns are accepted for orders in Pending or Processing status (before dispatch) and for orders that are Delivered (received) where a genuine issue exists — such as a damaged, incorrect, or defective part. Orders that have already been Shipped or are In Transit cannot be recalled. Approved returns are subject to verification by our team before any refund or replacement is issued.`,
     },
   ];
 
@@ -857,7 +880,7 @@ function AccountPortalInner() {
                                 <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                   <td className="px-6 py-4">
                                     <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
-                                    {order.payment_ref_code && (
+                                    {isRealMpesaReceipt(order.payment_ref_code) && (
                                       <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
                                         M-Pesa: {order.payment_ref_code}
                                       </p>
@@ -1132,7 +1155,7 @@ function AccountPortalInner() {
                               <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                 <td className="px-6 py-4">
                                   <p className="text-[14px] font-bold text-[#1e293b]">{order.tracking_number || `#ORD-${order.id}`}</p>
-                                  {order.payment_ref_code && (
+                                  {isRealMpesaReceipt(order.payment_ref_code) && (
                                     <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
                                       M-Pesa: {order.payment_ref_code}
                                     </p>
@@ -2032,10 +2055,10 @@ function AccountPortalInner() {
                   <span className="text-[#1e293b] font-semibold text-[13px]">{selectedOrder.payment_method}</span>
                 </div>
               )}
-              {selectedOrder?.payment_ref_code && (
+              {isRealMpesaReceipt(selectedOrder?.payment_ref_code) && (
                 <div className="flex justify-between items-center text-[#64748b] text-[12px] font-bold uppercase tracking-wider">
-                  <span>Payment Ref Code</span>
-                  <span className="text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 font-bold">{selectedOrder.payment_ref_code}</span>
+                  <span>M-Pesa Receipt</span>
+                  <span className="text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 font-bold tracking-widest">{selectedOrder.payment_ref_code}</span>
                 </div>
               )}
               <div className="flex justify-between items-center">

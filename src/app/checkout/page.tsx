@@ -325,10 +325,11 @@ export default function CheckoutPage() {
       if (attempts >= maxAttempts) {
         clearInterval(pollIntervalRef.current!);
         clearInterval(countdownIntervalRef.current!);
-        // Payment timed out — clean up the pending order
-        await cleanupPendingOrders(orderIds);
+        // Do NOT delete pending orders on timeout — if Safaricom already confirmed payment,
+        // the backend callback will still create the order even if the frontend timed out.
+        // We only show a timeout message — the backend is the source of truth.
         setPaymentStatus("timeout");
-        setPaymentError("Payment timed out. If you completed the payment, check your orders page.");
+        setPaymentError("The payment window has expired on this screen. If you completed the M-Pesa PIN entry, your payment was processed by Safaricom and your order will appear in your account automatically. If you did NOT enter your PIN, please try again.");
         setIsProcessing(false);
       }
     }, 4000);

@@ -85,6 +85,20 @@ function isOrderVoided(order: { status?: string; payment_status?: string }): boo
   return order.status === "Cancelled" || order.payment_status === "Refunded";
 }
 
+/**
+ * Validates that a string is a genuine Safaricom M-Pesa receipt code.
+ * Real codes: 10–12 uppercase alphanumeric like "UGR2B10EHE".
+ * Rejects: phone numbers (pure digits), placeholder "MPESA-..." / "MPESA ...", short codes.
+ */
+function isRealMpesaReceipt(code: string | null | undefined): boolean {
+  if (!code) return false;
+  const trimmed = code.trim().toUpperCase();
+  if (trimmed.startsWith('MPESA')) return false;
+  if (/^\d+$/.test(trimmed)) return false;
+  if (!/^[A-Z0-9]{8,16}$/.test(trimmed)) return false;
+  return true;
+}
+
 /** Parses recipient name, phone, and optional email from walk-in order notes field */
 function parseRecipientNotes(notes: string | null) {
   if (!notes) return null;
@@ -2045,7 +2059,7 @@ function AdminOrdersPageInner() {
                           <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">
                             {order.payment_status === "Pending" ? "— (Pending Payment)" : (order.payment_method || "Cash")}
                           </p>
-                          {order.payment_ref_code && (
+                          {isRealMpesaReceipt(order.payment_ref_code) && (
                             <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
                               {order.payment_ref_code}
                             </p>
@@ -2224,7 +2238,7 @@ function AdminOrdersPageInner() {
                       </TableCell>
                       <TableCell className="px-4 py-4">
                         <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
-                        {order.payment_ref_code && (
+                        {isRealMpesaReceipt(order.payment_ref_code) && (
                           <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
                             M-Pesa: {order.payment_ref_code}
                           </p>

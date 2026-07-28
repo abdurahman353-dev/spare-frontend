@@ -80,6 +80,9 @@ export default function CheckoutPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Tracks every checkout_request_id attempted this session so we can check
+  // old sessions for late Safaricom confirmations after a retry.
+  const previousSessionIds = useRef<string[]>([]);
 
   // Form validation errors
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -278,7 +281,10 @@ export default function CheckoutPage() {
   // ── Polling for STK Push result ──────────────────────────────────────────────
   const startPolling = (reqId: string, orderIds: number[]) => {
     let attempts = 0;
-    const maxAttempts = 25; // 25 × 4s = 100 seconds (gives user full 90+ seconds to enter PIN!)
+    const maxAttempts = 25; // 25 × 4s = 100 seconds
+
+    // Track this session ID so we can check it even after a retry
+    previousSessionIds.current = [reqId, ...previousSessionIds.current].slice(0, 10);
 
     setCountdown(90);
     countdownIntervalRef.current = setInterval(() => {
@@ -291,6 +297,44 @@ export default function CheckoutPage() {
       });
     }, 1000);
 
+    /** Resolves the polling as success — sets order refs and clears cart */
+    const resolveSuccess = (data: any) => {
+      clearInterval(pollIntervalRef.current!);
+      clearInterval(countdownIntervalRef.current!);
+      if (data.tracking_numbers?.length > 0) {
+        setOrderRefs(data.tracking_numbers);
+      } else if (data.tracking_number) {
+        setOrderRefs([data.tracking_number]);
+      }
+      setPaymentStatus("success");
+      setCompleted(true);
+      clearCart();
+    };
+
+    /**
+     * Grace period: after polling stops, do up to 3 extra checks spaced 5s apart.
+     * This catches late Safaricom callbacks that arrive after our 100s polling window.
+     */
+    const gracePeriodCheck = async (graceAttempts = 3) => {
+      for (let i = 0; i < graceAttempts; i++) {
+        await new Promise(r => setTimeout(r, 5000));
+        try {
+          const res = await api.post(API_ENDPOINTS.payments.mpesaQuery, { checkout_request_id: reqId });
+          if (res.data.status === "success") {
+            resolveSuccess(res.data);
+            return;
+          }
+          if (res.data.status === "failed" || res.data.status === "cancelled") {
+            break; // Confirmed failed — stop grace checks
+          }
+        } catch { /* keep trying */ }
+      }
+      // All grace checks exhausted — show failure
+      setPaymentStatus("failed");
+      setPaymentError("Payment was declined or cancelled. Your cart has been kept — please try again.");
+      setIsProcessing(false);
+    };
+
     pollIntervalRef.current = setInterval(async () => {
       attempts++;
       try {
@@ -298,22 +342,10 @@ export default function CheckoutPage() {
         const { status } = res.data;
 
         if (status === "success") {
-          clearInterval(pollIntervalRef.current!);
-          clearInterval(countdownIntervalRef.current!);
-          // Set order reference from server response (order was created by the callback)
-          if (res.data.tracking_numbers && Array.isArray(res.data.tracking_numbers) && res.data.tracking_numbers.length > 0) {
-            setOrderRefs(res.data.tracking_numbers);
-          } else if (res.data.tracking_number) {
-            setOrderRefs([res.data.tracking_number]);
-          }
-          setPaymentStatus("success");
-          setCompleted(true);
-          clearCart();
+          resolveSuccess(res.data);
         } else if (status === "failed" || status === "cancelled") {
           clearInterval(pollIntervalRef.current!);
           clearInterval(countdownIntervalRef.current!);
-          // Backend callback already deleted orders; this is a safety net
-          await cleanupPendingOrders(orderIds);
           setPaymentStatus("failed");
           setPaymentError("Payment was declined or cancelled. Your cart has been kept — please try again.");
           setIsProcessing(false);
@@ -325,11 +357,9 @@ export default function CheckoutPage() {
       if (attempts >= maxAttempts) {
         clearInterval(pollIntervalRef.current!);
         clearInterval(countdownIntervalRef.current!);
-        // STK Push session expired on Safaricom's end — no transaction possible.
-        // Treat exactly the same as a failure: customer must initiate a new STK Push.
-        setPaymentStatus("failed");
-        setPaymentError("Payment was declined or cancelled. Your cart has been kept — please try again.");
-        setIsProcessing(false);
+        // Don't immediately show failure — run grace period checks first
+        // in case Safaricom's callback arrives slightly late.
+        gracePeriodCheck();
       }
     }, 4000);
   };
@@ -450,6 +480,28 @@ export default function CheckoutPage() {
     // Clear any previous polling intervals
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+    // ⚠️ CRITICAL SAFETY CHECK: Before sending a new STK Push, verify that
+    // none of the previous sessions for this checkout already succeeded.
+    // This catches the exact scenario where Safaricom confirmed the payment
+    // but the frontend had already stopped polling and showed "Payment Failed".
+    for (const oldId of previousSessionIds.current) {
+      try {
+        const check = await api.post(API_ENDPOINTS.payments.mpesaQuery, { checkout_request_id: oldId });
+        if (check.data.status === "success") {
+          // A previous session was confirmed by Safaricom! Don't charge again.
+          if (check.data.tracking_numbers?.length > 0) {
+            setOrderRefs(check.data.tracking_numbers);
+          } else if (check.data.tracking_number) {
+            setOrderRefs([check.data.tracking_number]);
+          }
+          setPaymentStatus("success");
+          setCompleted(true);
+          clearCart();
+          return; // Stop — order already exists, do NOT send new STK Push
+        }
+      } catch { /* network error — skip this check and proceed */ }
+    }
 
     setIsProcessing(true);
     setPaymentStatus("pending");

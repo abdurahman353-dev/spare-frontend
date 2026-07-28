@@ -364,9 +364,9 @@ export default function ReturnsManagementPage() {
                   </TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium text-sm text-zinc-700 max-w-[220px] leading-tight">{ret.reason}</p>
+                      <p className="font-medium text-sm text-zinc-700 max-w-[180px] truncate leading-tight" title={ret.reason}>{ret.reason}</p>
                       {ret.explanation && (
-                        <p className="text-xs text-zinc-400 mt-0.5 line-clamp-1" title={ret.explanation}>
+                        <p className="text-xs text-zinc-400 mt-0.5 truncate max-w-[180px]" title={ret.explanation}>
                           {ret.explanation}
                         </p>
                       )}

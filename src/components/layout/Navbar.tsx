@@ -45,20 +45,11 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          {(settings.store_logo || brandName) ? (
-            <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-              {settings.store_logo ? (
-                <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 border border-zinc-200/60">
-                  <img src={settings.store_logo} alt={brandName || "Logo"} className="h-full w-full object-cover" />
-                </div>
-              ) : (
-                <div className="h-9 w-9 bg-primary flex items-center justify-center text-white font-black text-xl rounded-sm shadow-lg shadow-primary/20">
-                  {brandName[0]?.toUpperCase() || "A"}
-                </div>
-              )}
-              {brandName && (
-                <span className="text-xl font-black tracking-tighter text-zinc-900">{brandName.toUpperCase()}<span className="text-primary italic">.</span></span>
-              )}
+          {settings.store_logo ? (
+            <Link href="/" className="flex items-center hover:opacity-90 transition-opacity">
+              <div className="h-9 w-9 rounded-full overflow-hidden shrink-0 border border-zinc-200/60">
+                <img src={settings.store_logo} alt="Logo" className="h-full w-full object-cover" />
+              </div>
             </Link>
           ) : null}
         </div>

@@ -105,9 +105,9 @@ function parseRecipientNotes(notes: string | null) {
   const nameMatch = notes.match(/Recipient:\s*([^|]+)/);
   const phoneMatch = notes.match(/Phone:\s*([^|]+)/);
   const emailMatch = notes.match(/Email:\s*([^|]+)/);
-  
+
   if (!nameMatch && !phoneMatch) return null;
-  
+
   return {
     name: nameMatch ? nameMatch[1].trim() : "",
     phone: phoneMatch ? phoneMatch[1].trim() : "",
@@ -546,18 +546,18 @@ function AdminOrdersPageInner() {
       id: p.id.toString(),
       name: `${p.name} — Ksh ${Number((p.is_on_offer && p.offer_price) ? p.offer_price : p.price).toLocaleString()}${p.is_on_offer && p.offer_price ? ' 🏷️' : ''}`
     })),
-  [products]);
+    [products]);
 
   const warehouseDropdownItems = useMemo(() =>
     (selectedProductDetails?.inventories || []).map((inv: any) => ({
       id: inv.warehouse_id.toString(),
       name: `${inv.warehouse?.name} (Stock: ${inv.quantity})`
     })),
-  [selectedProductDetails]);
+    [selectedProductDetails]);
 
   const countryDropdownItems = useMemo(() =>
     countriesData.map((c: any) => ({ id: c.name, name: c.name })),
-  [countriesData]);
+    [countriesData]);
 
   const cityDropdownItems = useMemo(() => {
     if (!shippingCountry) return [];
@@ -570,7 +570,7 @@ function AdminOrdersPageInner() {
 
   const editCountryDropdownItems = useMemo(() =>
     countriesData.map((c: any) => ({ id: c.name, name: c.name })),
-  [countriesData]);
+    [countriesData]);
 
   const editCityDropdownItems = useMemo(() => {
     if (!editWalkInForm.shipping_country) return [];
@@ -1324,7 +1324,7 @@ function AdminOrdersPageInner() {
           (walkInPayStatusFilter === "Cancelled / Refunded"
             ? isOrderVoided(order)
             : order.payment_status === walkInPayStatusFilter);
-        const matchesOrderStatus = walkInOrderStatusFilter === "All Status" || 
+        const matchesOrderStatus = walkInOrderStatusFilter === "All Status" ||
           (walkInOrderStatusFilter === "Refunded" ? (order.status === "Refunded" || order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" || getOrderRefundedTotal(order) > 0) : order.status === walkInOrderStatusFilter);
         const matchesWarehouse = walkInWarehouseFilter === "all" ||
           order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
@@ -1370,7 +1370,7 @@ function AdminOrdersPageInner() {
         order.shipping_country?.toLowerCase() === countryFilter.toLowerCase();
       const matchesCity = cityFilter === "all" ||
         order.shipping_city?.toLowerCase() === cityFilter.toLowerCase();
-      const matchesStatus = statusFilter === "All Status" || 
+      const matchesStatus = statusFilter === "All Status" ||
         (statusFilter === "Refunded" ? (order.status === "Refunded" || order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" || getOrderRefundedTotal(order) > 0) : order.status === statusFilter);
       const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
       const matchesDateFrom = !shipmentDateFrom || orderDate >= new Date(shipmentDateFrom).setHours(0, 0, 0, 0);
@@ -1732,8 +1732,8 @@ function AdminOrdersPageInner() {
             {/* Filter pills */}
             <div className="flex gap-2 shrink-0">
               {([
-                { key: "all",    label: "All",            count: activeIncidents.length },
-                { key: "locked", label: "🔒 Locked",      count: activeIncidents.filter(o => !!o.pin_locked).length },
+                { key: "all", label: "All", count: activeIncidents.length },
+                { key: "locked", label: "🔒 Locked", count: activeIncidents.filter(o => !!o.pin_locked).length },
                 { key: "failed", label: "⚠️ Failed Attempts", count: activeIncidents.filter(o => !o.pin_locked && o.failed_attempts_count > 0).length },
               ] as { key: "all" | "locked" | "failed"; label: string; count: number }[]).map(f => (
                 <button
@@ -1781,169 +1781,490 @@ function AdminOrdersPageInner() {
               >Clear filters</button>
             </div>
           ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredIncidents.map((inc: any) => (
-              <div
-                key={inc.id}
-                className={cn(
-                  "bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between gap-4 text-left",
-                  inc.pin_locked
-                    ? "border-red-200 bg-gradient-to-br from-white to-red-50/10"
-                    : "border-amber-200 bg-gradient-to-br from-white to-amber-50/10"
-                )}
-              >
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                      {inc.tracking_number}
-                    </span>
-                    <Badge
-                      className={cn(
-                        "rounded-full text-[9px] font-bold tracking-wider uppercase border-none px-2.5 py-0.5 shrink-0",
-                        inc.pin_locked ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                      )}
-                    >
-                      {inc.pin_locked ? "🔒 Locked" : "⚠️ Failed Attempt"}
-                    </Badge>
-                  </div>
-                  <p className="font-extrabold text-slate-800 text-xs truncate">
-                    Cust: {inc.customer?.name || "Retail Customer"}
-                  </p>
-                  <p className="text-[11px] text-zinc-500 font-semibold leading-snug">
-                    {inc.pin_locked ? (
-                      <span className="text-red-600">Locked after 3 wrong PIN attempts. Delivery blocked.</span>
-                    ) : (
-                      <span className="text-amber-600">
-                        {inc.failed_attempts_count} failed attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredIncidents.map((inc: any) => (
+                <div
+                  key={inc.id}
+                  className={cn(
+                    "bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between gap-4 text-left",
+                    inc.pin_locked
+                      ? "border-red-200 bg-gradient-to-br from-white to-red-50/10"
+                      : "border-amber-200 bg-gradient-to-br from-white to-amber-50/10"
+                  )}
+                >
+                  <div className="space-y-1.5 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                        {inc.tracking_number}
                       </span>
-                    )}
-                  </p>
-                  {inc.driver ? (
-                    <div className="flex items-center gap-1.5">
-                      <Truck className="h-3 w-3 text-zinc-400 shrink-0" />
-                      <span className="text-[10px] text-zinc-500 font-bold truncate">{inc.driver.name}</span>
-                      {inc.driver.phone && (
-                        <span className="text-[10px] text-zinc-400 font-semibold ml-auto shrink-0">{inc.driver.phone}</span>
+                      <Badge
+                        className={cn(
+                          "rounded-full text-[9px] font-bold tracking-wider uppercase border-none px-2.5 py-0.5 shrink-0",
+                          inc.pin_locked ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                        )}
+                      >
+                        {inc.pin_locked ? "🔒 Locked" : "⚠️ Failed Attempt"}
+                      </Badge>
+                    </div>
+                    <p className="font-extrabold text-slate-800 text-xs truncate">
+                      Cust: {inc.customer?.name || "Retail Customer"}
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-semibold leading-snug">
+                      {inc.pin_locked ? (
+                        <span className="text-red-600">Locked after 3 wrong PIN attempts. Delivery blocked.</span>
+                      ) : (
+                        <span className="text-amber-600">
+                          {inc.failed_attempts_count} failed attempt{inc.failed_attempts_count > 1 ? "s" : ""} logged.
+                        </span>
                       )}
-                    </div>
-                  ) : (
-                    <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide">No driver assigned</p>
-                  )}
+                    </p>
+                    {inc.driver ? (
+                      <div className="flex items-center gap-1.5">
+                        <Truck className="h-3 w-3 text-zinc-400 shrink-0" />
+                        <span className="text-[10px] text-zinc-500 font-bold truncate">{inc.driver.name}</span>
+                        {inc.driver.phone && (
+                          <span className="text-[10px] text-zinc-400 font-semibold ml-auto shrink-0">{inc.driver.phone}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-wide">No driver assigned</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setSelectedOrder(inc); setIsOrderModalOpen(true); }}
+                      className="text-xs font-bold h-9 flex-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg transition-colors"
+                    >
+                      Inspect Logs
+                    </Button>
+                    {!!inc.pin_locked && (
+                      <div className="flex gap-1.5 flex-1">
+                        <Button
+                          size="sm"
+                          disabled={isIncidentActionLoading[inc.id]}
+                          onClick={() => handleUnlockPin(inc.id)}
+                          className="text-xs font-bold h-9 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm border-none transition-colors"
+                        >
+                          Unlock
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={isIncidentActionLoading[inc.id]}
+                          onClick={() => handleRegeneratePin(inc.id)}
+                          className="text-xs font-bold h-9 flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm border-none transition-colors"
+                        >
+                          New PIN
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 pt-2 border-t border-zinc-100">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { setSelectedOrder(inc); setIsOrderModalOpen(true); }}
-                    className="text-xs font-bold h-9 flex-1 border border-zinc-200 hover:bg-zinc-50 text-zinc-700 rounded-lg transition-colors"
-                  >
-                    Inspect Logs
-                  </Button>
-                  {!!inc.pin_locked && (
-                    <div className="flex gap-1.5 flex-1">
-                      <Button
-                        size="sm"
-                        disabled={isIncidentActionLoading[inc.id]}
-                        onClick={() => handleUnlockPin(inc.id)}
-                        className="text-xs font-bold h-9 flex-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm border-none transition-colors"
-                      >
-                        Unlock
-                      </Button>
-                      <Button
-                        size="sm"
-                        disabled={isIncidentActionLoading[inc.id]}
-                        onClick={() => handleRegeneratePin(inc.id)}
-                        className="text-xs font-bold h-9 flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm border-none transition-colors"
-                      >
-                        New PIN
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
           )}
         </div>
       ) : (
-      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          {activeOrdersTab === "WalkIn" ? (
-            <Table>
-              <TableHeader className="bg-emerald-50/60">
-                <TableRow>
-                  <TableHead className="px-4 font-semibold text-zinc-900">WK Reference</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Customer Profile / Recipient</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
-                  <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Source Warehouse</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Destination / Address</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Fulfillment</TableHead>
-                  <TableHead className="font-semibold text-zinc-900 text-center">Pay Status</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Payment / Ref</TableHead>
-                  <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
-                  <TableHead className="px-6 w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow><TableCell colSpan={11} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
-                ) : filteredOrders.length === 0 ? (
-                  <TableRow><TableCell colSpan={11} className="h-32 text-center text-zinc-400 font-medium">No walk-in orders found.</TableCell></TableRow>
-                ) : (
-                  paginatedOrders.map((order) => {
-                    const isGuest = order.customer?.name?.toLowerCase() === "walk-in customer";
-                    const sourceWarehouse = order.items?.[0]?.warehouse?.name || "—";
-                    return (
-                      <TableRow key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
-                         <TableCell className="px-4 py-3">
-                           <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                             {order.tracking_number}
-                           </span>
-                         </TableCell>
-                         <TableCell>
-                           {(() => {
-                             const recipient = parseRecipientNotes(order.notes);
-                             if (recipient) {
-                               return (
-                                 <div className="space-y-1">
-                                   <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider text-[9px]">Recipient Info</p>
-                                   <p className="text-sm font-bold text-zinc-800 leading-tight">{recipient.name}</p>
-                                   <p className="text-[10px] text-indigo-700 font-bold bg-indigo-50 border border-indigo-150 px-1 py-0.5 rounded inline-block">{recipient.phone}</p>
-                                   {recipient.email && <p className="text-[10px] text-zinc-400 font-medium">{recipient.email}</p>}
-                                 </div>
-                               );
-                             }
-                             return (
-                               <div className="space-y-0.5">
-                                 <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
-                                 {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
-                                 {!isGuest && order.customer?.phone && (
-                                   <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded inline-block">{order.customer.phone}</p>
-                                 )}
-                                 {isGuest ? (
-                                   <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
-                                 ) : (
-                                   <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Registered</span>
-                                 )}
-                               </div>
-                             );
-                           })()}
-                         </TableCell>
-                        <TableCell>
-                          <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
-                          <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+        <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            {activeOrdersTab === "WalkIn" ? (
+              <Table>
+                <TableHeader className="bg-emerald-50/60">
+                  <TableRow>
+                    <TableHead className="px-4 font-semibold text-zinc-900">WK Reference</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Customer Profile / Recipient</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Items Purchased</TableHead>
+                    <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Source Warehouse</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Destination / Address</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Fulfillment</TableHead>
+                    <TableHead className="font-semibold text-zinc-900 text-center">Pay Status</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Payment / Ref</TableHead>
+                    <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
+                    <TableHead className="px-6 w-[50px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow><TableCell colSpan={11} className="h-32 text-center"><Loader2 className="h-6 w-6 animate-spin text-emerald-600 mx-auto" /></TableCell></TableRow>
+                  ) : filteredOrders.length === 0 ? (
+                    <TableRow><TableCell colSpan={11} className="h-32 text-center text-zinc-400 font-medium">No walk-in orders found.</TableCell></TableRow>
+                  ) : (
+                    paginatedOrders.map((order) => {
+                      const isGuest = order.customer?.name?.toLowerCase() === "walk-in customer";
+                      const sourceWarehouse = order.items?.[0]?.warehouse?.name || "—";
+                      return (
+                        <TableRow key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
+                          <TableCell className="px-4 py-3">
+                            <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                              {order.tracking_number}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const recipient = parseRecipientNotes(order.notes);
+                              if (recipient) {
+                                return (
+                                  <div className="space-y-1">
+                                    <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider text-[9px]">Recipient Info</p>
+                                    <p className="text-sm font-bold text-zinc-800 leading-tight">{recipient.name}</p>
+                                    <p className="text-[10px] text-indigo-700 font-bold bg-indigo-50 border border-indigo-150 px-1 py-0.5 rounded inline-block">{recipient.phone}</p>
+                                    {recipient.email && <p className="text-[10px] text-zinc-400 font-medium">{recipient.email}</p>}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className="space-y-0.5">
+                                  <p className="text-sm font-semibold text-zinc-800">{order.customer?.name || "Walk-In Guest"}</p>
+                                  {!isGuest && <p className="text-[10px] text-zinc-400 font-medium">{order.customer?.email}</p>}
+                                  {!isGuest && order.customer?.phone && (
+                                    <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded inline-block">{order.customer.phone}</p>
+                                  )}
+                                  {isGuest ? (
+                                    <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">Quick Walk-In</span>
+                                  ) : (
+                                    <span className="text-[9px] font-black uppercase text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Registered</span>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p>
+                            <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{order.items?.[0]?.product?.name || "Spare Part"}</p>
+                              {order.items?.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{order.items.length - 1} more</p>}
+                              <p className="text-[10px] text-zinc-500">{order.items?.length || 0} item(s)</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-0.5">
+                              {order.items?.map((item: any, i: number) => (
+                                <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                  {item.product?.part_number || "—"}
+                                </span>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-0.5">
+                              {order.items?.map((item: any, i: number) => (
+                                <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                  {item.product?.engine_model || "—"}
+                                </span>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-0.5">
+                              {order.items?.map((item: any, i: number) => (
+                                <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                  {item.product?.suitable_vehicle || "—"}
+                                </span>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              <div className="h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" />
+                              <p className="text-xs font-bold text-indigo-700">{sourceWarehouse}</p>
+                            </div>
+                          </TableCell>
+                          {/* Destination / Address column */}
+                          <TableCell>
+                            {order.shipping_method === "Pickup" ? (
+                              <span className="text-xs text-zinc-400 font-medium italic">In-Store — No Delivery</span>
+                            ) : (
+                              <div className="space-y-1 text-left">
+                                <p className="text-xs font-bold text-zinc-900">{order.shipping_city || "—"}</p>
+                                <p className="text-xs font-bold text-zinc-700 max-w-[160px] truncate">{order.shipping_address || "—"}</p>
+                                {order.shipment ? (
+                                  <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                                    🚛 Container: {order.shipment.waybill}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
+                                    📦 Local Hub Direct
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              {updatingOrderIds[order.id] && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 shrink-0" />}
+                              {order.shipping_method === "Pickup" ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
+                                </span>
+                              ) : (
+                                <div className="space-y-1">
+                                  {(() => {
+                                    let badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200";
+                                    let dotClass = "bg-yellow-500";
+                                    let label = "Pending";
+
+                                    if (order.status === "Processing") {
+                                      badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
+                                      dotClass = "bg-indigo-500";
+                                      label = "Processing";
+                                    } else if (order.status === "Shipped" || order.status === "In Transit") {
+                                      badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
+                                      dotClass = "bg-blue-500";
+                                      label = "Shipped";
+                                    } else if (order.status === "Arrived") {
+                                      badgeClass = "bg-purple-50 text-purple-700 border-purple-200";
+                                      dotClass = "bg-purple-500";
+                                      label = "Arrived";
+                                    } else if (order.status === "Delivered") {
+                                      badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                                      dotClass = "bg-emerald-500";
+                                      label = "Delivered";
+                                    } else if (order.status === "Cancelled" || isOrderVoided(order)) {
+                                      badgeClass = "bg-red-50 text-red-700 border-red-200";
+                                      dotClass = "bg-red-500";
+                                      label = "Cancelled";
+                                    }
+
+                                    return (
+                                      <span className={cn("inline-flex items-center gap-1 text-[10px] font-black border px-2 py-0.5 rounded-full uppercase tracking-wider", badgeClass)}>
+                                        <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", dotClass)}></span>
+                                        Dispatch — {label}
+                                      </span>
+                                    );
+                                  })()}
+                                  <p className="text-[10px] font-bold text-zinc-500 ml-1">{order.shipping_city}</p>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {(() => {
+                              const pay = getWalkInPayStatusDisplay(order);
+                              return (
+                                <Badge className={cn("rounded-full px-2 text-[10px] font-bold border-none", pay.className)}>
+                                  {pay.label}
+                                </Badge>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell>
+                            <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">
+                              {order.payment_status === "Pending" ? "— (Pending Payment)" : (order.payment_method || "Cash")}
+                            </p>
+                            {isRealMpesaReceipt(order.payment_ref_code) && (
+                              <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                                {order.payment_ref_code}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {(() => {
+                              const refundedTotal = getOrderRefundedTotal(order);
+                              const hasCancelledItems = order.items?.some((i: any) => i.cancellation_status === "Cancelled");
+                              const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+
+                              if (isOrderVoided(order) || allCancelled) {
+                                return (
+                                  <>
+                                    <p className="text-sm font-black text-red-500 line-through opacity-75">
+                                      Ksh {refundedTotal.toLocaleString()}
+                                    </p>
+                                    <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
+                                  </>
+                                );
+                              }
+
+                              return (
+                                <>
+                                  <p className="text-sm font-black text-zinc-900">
+                                    Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
+                                  </p>
+                                  {refundedTotal > 0 && (
+                                    <p className="text-[9px] font-bold text-red-500 uppercase">
+                                      Ksh {refundedTotal.toLocaleString()} Refunded
+                                    </p>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </TableCell>
+                          <TableCell className="px-6 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-emerald-100")}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56 rounded-xl border-zinc-200 shadow-xl p-1">
+                                <DropdownMenuGroup>
+                                  <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Walk-In Actions</DropdownMenuLabel>
+                                  <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
+                                    <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
+                                  </DropdownMenuItem>
+
+                                  {!isOrderVoided(order) && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleOpenEditWalkIn(order)}
+                                      className="cursor-pointer rounded-lg font-bold text-sm text-zinc-650"
+                                    >
+                                      <Pencil className="mr-2 h-4 w-4 text-zinc-400" /> Edit Order
+                                    </DropdownMenuItem>
+                                  )}
+
+                                  {/* ── Payment Controls ── */}
+                                  {order.payment_status !== "Paid" && !isOrderVoided(order) ? (
+                                    <DropdownMenuItem
+                                      onClick={() => handleMarkWalkInPaid(order)}
+                                      className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"
+                                    >
+                                      <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Paid
+                                    </DropdownMenuItem>
+                                  ) : order.payment_status === "Paid" && !isOrderVoided(order) ? (
+                                    <DropdownMenuItem
+                                      onClick={() => handleMarkWalkInPending(order)}
+                                      className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
+                                    >
+                                      <RefreshCw className="mr-2 h-4 w-4" /> Mark Payment as Pending
+                                    </DropdownMenuItem>
+                                  ) : null}
+
+                                  {/* ── Refund / Return — only visible when Pending, Processing, or Delivered ── */}
+                                  {!isOrderVoided(order) && (order.status === "Pending" || order.status === "Processing" || order.status === "Delivered") && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleOpenVoidDialog(order)}
+                                      className="cursor-pointer rounded-lg font-bold text-sm text-red-650"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4 text-red-400" /> Refund/Return Order
+                                    </DropdownMenuItem>
+                                  )}
+
+                                  {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
+                                      <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
+                                        <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+
+                                  {/* ── Delivery Status Progression (Local Delivery only, admin caps at Shipped) ── */}
+                                  {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Shipped" && order.status !== "Arrived" && order.status !== "Delivered" && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
+                                      {order.status === "Pending" && (
+                                        <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                          <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
+                                        </DropdownMenuItem>
+                                      )}
+                                      {(order.status === "Pending" || order.status === "Processing") && (
+                                        <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
+                                          <Truck className="mr-2 h-4 w-4" /> Mark Shipped
+                                        </DropdownMenuItem>
+                                      )}
+                                      {/* Arrived & Delivered are delivery-guy only — not shown to admin */}
+                                    </>
+                                  )}
+                                  {/* Show read-only label when already with delivery guy */}
+                                  {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && (order.status === "Arrived" || order.status === "Shipped") && order.status !== "Delivered" && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Delivery Status</DropdownMenuLabel>
+                                      <DropdownMenuItem disabled className="cursor-not-allowed rounded-lg font-bold text-sm text-zinc-400 opacity-60">
+                                        <Truck className="mr-2 h-4 w-4" /> With Delivery Guy
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </DropdownMenuGroup>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            ) : (
+              <Table>
+                <TableHeader className="bg-zinc-50/50">
+                  <TableRow>
+                    <TableHead className="w-[50px] px-6 text-center">
+                      <button onClick={() => {
+                        if (selectedOrderIds.length === filteredOrders.length) setSelectedOrderIds([]);
+                        else setSelectedOrderIds(filteredOrders.map(o => o.id));
+                      }} className="text-zinc-400 hover:text-zinc-900 transition-colors">
+                        {selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </button>
+                    </TableHead>
+                    <TableHead className="px-4 font-semibold text-zinc-900">Order Ref</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Customer</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Main Products</TableHead>
+                    <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
+                    <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Products Costs</TableHead>
+                    <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
+                    <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
+                    <TableHead className="font-semibold text-zinc-900 text-center">Status</TableHead>
+                    <TableHead className="px-6 w-[70px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow><TableCell colSpan={12} className="h-48 text-center"><div className="flex flex-col items-center justify-center gap-2"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="text-sm text-zinc-500 font-medium">Synchronizing orders...</p></div></TableCell></TableRow>
+                  ) : filteredOrders.length === 0 ? (
+                    <TableRow><TableCell colSpan={12} className="h-48 text-center text-zinc-500">No shipment orders found.</TableCell></TableRow>
+                  ) : (
+                    paginatedOrders.map((order) => (
+                      <TableRow key={order.id} className={cn("hover:bg-zinc-50/50 transition-colors group", selectedOrderIds.includes(order.id) && "bg-zinc-50/50")}>
+                        <TableCell className="px-6 text-center">
+                          <button onClick={() => {
+                            if (selectedOrderIds.includes(order.id)) setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id));
+                            else setSelectedOrderIds([...selectedOrderIds, order.id]);
+                          }} className={cn("transition-colors", selectedOrderIds.includes(order.id) ? "text-[#0052cc]" : "text-zinc-200 group-hover:text-zinc-400")}>
+                            {selectedOrderIds.includes(order.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                          </button>
+                        </TableCell>
+                        <TableCell className="px-4 py-4">
+                          <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
+                          {isRealMpesaReceipt(order.payment_ref_code) && (
+                            <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                              M-Pesa: {order.payment_ref_code}
+                            </p>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="space-y-0.5">
-                            <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{order.items?.[0]?.product?.name || "Spare Part"}</p>
-                            {order.items?.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{order.items.length - 1} more</p>}
-                            <p className="text-[10px] text-zinc-500">{order.items?.length || 0} item(s)</p>
+                            <p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p>
+                            {order.customer?.email && <p className="text-[10px] text-zinc-400 font-medium">{order.customer.email}</p>}
+                            {order.customer?.phone && (
+                              <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded inline-block">{order.customer.phone}</p>
+                            )}
                           </div>
                         </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name || "Origin"}</div>
+                            <span className="text-[10px] font-black text-zinc-400 italic">TO</span>
+                            <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
+                              {order.shipping_city}
+                              {order.shipping_country ? `, ${order.shipping_country}` : ""}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
+                        <TableCell><div className="space-y-0.5 max-w-[150px]"><p className="text-xs font-bold text-zinc-800 truncate">{order.items?.[0]?.product?.name || "Genuine Spare Part"}</p>{order.items && order.items.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>}</div></TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5">
                             {order.items?.map((item: any, i: number) => (
@@ -1971,110 +2292,18 @@ function AdminOrdersPageInner() {
                             ))}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            <div className="h-2 w-2 rounded-full bg-indigo-400 flex-shrink-0" />
-                            <p className="text-xs font-bold text-indigo-700">{sourceWarehouse}</p>
-                          </div>
-                        </TableCell>
-                        {/* Destination / Address column */}
-                        <TableCell>
-                          {order.shipping_method === "Pickup" ? (
-                            <span className="text-xs text-zinc-400 font-medium italic">In-Store — No Delivery</span>
-                          ) : (
-                            <div className="space-y-1 text-left">
-                              <p className="text-xs font-bold text-zinc-900">{order.shipping_city || "—"}</p>
-                              <p className="text-xs font-bold text-zinc-700 max-w-[160px] truncate">{order.shipping_address || "—"}</p>
-                              {order.shipment ? (
-                                <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
-                                  🚛 Container: {order.shipment.waybill}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 uppercase tracking-wide">
-                                  📦 Local Hub Direct
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1.5">
-                            {updatingOrderIds[order.id] && <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 shrink-0" />}
-                            {order.shipping_method === "Pickup" ? (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-full">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>In-Store
-                              </span>
-                            ) : (
-                              <div className="space-y-1">
-                                {(() => {
-                                  let badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200";
-                                  let dotClass = "bg-yellow-500";
-                                  let label = "Pending";
-
-                                  if (order.status === "Processing") {
-                                    badgeClass = "bg-indigo-50 text-indigo-700 border-indigo-200";
-                                    dotClass = "bg-indigo-500";
-                                    label = "Processing";
-                                  } else if (order.status === "Shipped" || order.status === "In Transit") {
-                                    badgeClass = "bg-blue-50 text-blue-700 border-blue-200";
-                                    dotClass = "bg-blue-500";
-                                    label = "Shipped";
-                                  } else if (order.status === "Arrived") {
-                                    badgeClass = "bg-purple-50 text-purple-700 border-purple-200";
-                                    dotClass = "bg-purple-500";
-                                    label = "Arrived";
-                                  } else if (order.status === "Delivered") {
-                                    badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                                    dotClass = "bg-emerald-500";
-                                    label = "Delivered";
-                                  } else if (order.status === "Cancelled" || isOrderVoided(order)) {
-                                    badgeClass = "bg-red-50 text-red-700 border-red-200";
-                                    dotClass = "bg-red-500";
-                                    label = "Cancelled";
-                                  }
-
-                                  return (
-                                    <span className={cn("inline-flex items-center gap-1 text-[10px] font-black border px-2 py-0.5 rounded-full uppercase tracking-wider", badgeClass)}>
-                                      <span className={cn("h-1.5 w-1.5 rounded-full animate-pulse", dotClass)}></span>
-                                      Dispatch — {label}
-                                    </span>
-                                  );
-                                })()}
-                                <p className="text-[10px] font-bold text-zinc-500 ml-1">{order.shipping_city}</p>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {(() => {
-                            const pay = getWalkInPayStatusDisplay(order);
-                            return (
-                              <Badge className={cn("rounded-full px-2 text-[10px] font-bold border-none", pay.className)}>
-                                {pay.label}
-                              </Badge>
-                            );
-                          })()}
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-xs font-semibold text-zinc-700 max-w-[130px] leading-snug">
-                            {order.payment_status === "Pending" ? "— (Pending Payment)" : (order.payment_method || "Cash")}
-                          </p>
-                          {isRealMpesaReceipt(order.payment_ref_code) && (
-                            <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
-                              {order.payment_ref_code}
-                            </p>
-                          )}
-                        </TableCell>
+                        <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
+                        <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
+                        <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           {(() => {
                             const refundedTotal = getOrderRefundedTotal(order);
-                            const hasCancelledItems = order.items?.some((i: any) => i.cancellation_status === "Cancelled");
                             const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
 
-                            if (isOrderVoided(order) || allCancelled) {
+                            if (order.status === "Cancelled" || allCancelled) {
                               return (
                                 <>
-                                  <p className="text-sm font-black text-red-500 line-through opacity-75">
+                                  <p className="text-xs font-black text-red-500 line-through opacity-75">
                                     Ksh {refundedTotal.toLocaleString()}
                                   </p>
                                   <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
@@ -2084,7 +2313,7 @@ function AdminOrdersPageInner() {
 
                             return (
                               <>
-                                <p className="text-sm font-black text-zinc-900">
+                                <p className="text-xs font-black text-zinc-900">
                                   Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
                                 </p>
                                 {refundedTotal > 0 && (
@@ -2096,53 +2325,99 @@ function AdminOrdersPageInner() {
                             );
                           })()}
                         </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex flex-col items-center justify-center gap-1">
+                            <div className="flex items-center justify-center gap-1.5">
+                              {updatingOrderIds[order.id] && <Loader2 className="h-3 w-3 animate-spin text-[#0052cc] shrink-0" />}
+                              <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
+                                order.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
+                                  order.status === "Processing" ? "bg-orange-500 text-white" :
+                                    (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
+                                      order.status === "Arrived" ? "bg-indigo-600 text-white" :
+                                        order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                                          order.status === "Returned" ? "bg-red-600 text-white" :
+                                            (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
+                              )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
+                            </div>
+                            <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",
+                              (order.payment_status === "Paid" || !isOrderVoided(order)) ? "bg-emerald-100 text-emerald-800" :
+                                order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "bg-red-100 text-red-800" :
+                                  "bg-amber-100 text-amber-800"
+                            )}>
+                              {(order.payment_status === "Paid" || !isOrderVoided(order)) ? "✓ M-Pesa Paid" :
+                                order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "Refunded" :
+                                  "Payment Pending"}
+                            </Badge>
+                            {/* Driver badge for Shipped/Arrived/Delivered orders */}
+                            {(order.status === "Shipped" || order.status === "Arrived" || order.status === "Delivered") && (() => {
+                              const assignedDriver = order.driver ?? (order.delivered_by_user_id ? drivers.find((d: any) => d.id === order.delivered_by_user_id) : null);
+                              const reservingDriver = order.reserved_by_driver ?? (order.reserved_by_user_id ? drivers.find((d: any) => d.id === order.reserved_by_user_id) : null);
+                              const releasingDriver = order.last_released_by_driver ?? (order.last_released_by_user_id ? drivers.find((d: any) => d.id === order.last_released_by_user_id) : null);
+
+                              if (reservingDriver && !assignedDriver) {
+                                return (
+                                  <div className="flex flex-col gap-0.5 items-center">
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                                      <Truck className="h-2.5 w-2.5 shrink-0 animate-pulse text-amber-500" />
+                                      <span>Has Package: {releasingDriver ? releasingDriver.name.split(" ")[0] : "Warehouse"}</span>
+                                    </span>
+                                    <span className="text-[8px] font-bold text-zinc-400 shrink-0">
+                                      (Reserved: {reservingDriver.name.split(" ")[0]})
+                                    </span>
+                                  </div>
+                                );
+                              }
+
+                              if (releasingDriver && !assignedDriver && !reservingDriver) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full shrink-0">
+                                    <Truck className="h-2.5 w-2.5 shrink-0 text-rose-500" />
+                                    <span>Has Package: {releasingDriver.name.split(" ")[0]} (Released)</span>
+                                  </span>
+                                );
+                              }
+
+                              return assignedDriver ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                  <Truck className="h-2.5 w-2.5 shrink-0" />
+                                  <span>{assignedDriver.name.split(" ")[0]}</span>
+                                  {(assignedDriver.city || assignedDriver.country) && (
+                                    <span className="text-indigo-400 font-bold">
+                                      ({assignedDriver.city || assignedDriver.country})
+                                    </span>
+                                  )}
+                                </span>
+                              ) : (order.status === "Shipped" || order.status === "Arrived") ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
+                                  No Driver
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+                        </TableCell>
                         <TableCell className="px-6 text-right">
                           <DropdownMenu>
-                            <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-emerald-100")}>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56 rounded-xl border-zinc-200 shadow-xl p-1">
+                            <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-zinc-100")}><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">
                               <DropdownMenuGroup>
-                                <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Walk-In Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm">
-                                  <Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details
-                                </DropdownMenuItem>
-
-                                {!isOrderVoided(order) && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenEditWalkIn(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-zinc-650"
-                                  >
-                                    <Pencil className="mr-2 h-4 w-4 text-zinc-400" /> Edit Order
+                                <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Options</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm"><Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details</DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {order.status === "Pending" && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
+                                    <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
                                   </DropdownMenuItem>
                                 )}
-
-                                {/* ── Payment Controls ── */}
-                                {order.payment_status !== "Paid" && !isOrderVoided(order) ? (
-                                  <DropdownMenuItem
-                                    onClick={() => handleMarkWalkInPaid(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-emerald-600"
-                                  >
-                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Paid
-                                  </DropdownMenuItem>
-                                ) : order.payment_status === "Paid" && !isOrderVoided(order) ? (
-                                  <DropdownMenuItem
-                                    onClick={() => handleMarkWalkInPending(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-amber-600"
-                                  >
-                                    <RefreshCw className="mr-2 h-4 w-4" /> Mark Payment as Pending
-                                  </DropdownMenuItem>
-                                ) : null}
-
-                                {/* ── Refund / Return — only visible when Pending, Processing, or Delivered ── */}
-                                {!isOrderVoided(order) && (order.status === "Pending" || order.status === "Processing" || order.status === "Delivered") && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenVoidDialog(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-red-650"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4 text-red-400" /> Refund/Return Order
+                                {(order.status === "Pending" || order.status === "Processing") && (
+                                  <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
+                                    <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                   </DropdownMenuItem>
                                 )}
+                                {/* Mark Arrived: NOT available for Shipment/Local tabs — only via waybill bulk in Logistics */}
+                                {/* Mark Delivered: NOT available for Shipment/Local tabs — only done by delivery guy via PIN */}
+
+
+
 
                                 {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
                                   <>
@@ -2154,31 +2429,29 @@ function AdminOrdersPageInner() {
                                   </>
                                 )}
 
-                                {/* ── Delivery Status Progression (Local Delivery only, admin caps at Shipped) ── */}
-                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Shipped" && order.status !== "Arrived" && order.status !== "Delivered" && (
+                                {/* ── Refund / Return — only visible when Pending, Processing, or Delivered ── */}
+                                {!isOrderVoided(order) && (order.status === "Pending" || order.status === "Processing" || order.status === "Delivered") && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
-                                    {order.status === "Pending" && (
-                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
-                                        <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
-                                      </DropdownMenuItem>
-                                    )}
-                                    {(order.status === "Pending" || order.status === "Processing") && (
-                                      <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
-                                        <Truck className="mr-2 h-4 w-4" /> Mark Shipped
-                                      </DropdownMenuItem>
-                                    )}
-                                    {/* Arrived & Delivered are delivery-guy only — not shown to admin */}
+                                    <DropdownMenuItem
+                                      onClick={() => handleOpenVoidDialog(order)}
+                                      className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
+                                    </DropdownMenuItem>
                                   </>
                                 )}
-                                {/* Show read-only label when already with delivery guy */}
-                                {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && (order.status === "Arrived" || order.status === "Shipped") && order.status !== "Delivered" && (
+                                {/* Assign Driver — visible for Shipped or Arrived orders */}
+                                {(order.status === "Shipped" || order.status === "Arrived") && (
                                   <>
                                     <DropdownMenuSeparator />
-                                    <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Delivery Status</DropdownMenuLabel>
-                                    <DropdownMenuItem disabled className="cursor-not-allowed rounded-lg font-bold text-sm text-zinc-400 opacity-60">
-                                      <Truck className="mr-2 h-4 w-4" /> With Delivery Guy
+                                    <DropdownMenuLabel className="text-[10px] font-black text-indigo-400 uppercase px-2 py-1.5">Delivery Assignment</DropdownMenuLabel>
+                                    <DropdownMenuItem
+                                      onClick={() => handleOpenAssignDriver(order)}
+                                      className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600"
+                                    >
+                                      <UserPlus className="mr-2 h-4 w-4" />
+                                      {order.delivered_by_user_id ? "Reassign Driver" : "Assign Driver"}
                                     </DropdownMenuItem>
                                   </>
                                 )}
@@ -2187,295 +2460,22 @@ function AdminOrdersPageInner() {
                           </DropdownMenu>
                         </TableCell>
                       </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          ) : (
-            <Table>
-              <TableHeader className="bg-zinc-50/50">
-                <TableRow>
-                  <TableHead className="w-[50px] px-6 text-center">
-                    <button onClick={() => {
-                      if (selectedOrderIds.length === filteredOrders.length) setSelectedOrderIds([]);
-                      else setSelectedOrderIds(filteredOrders.map(o => o.id));
-                    }} className="text-zinc-400 hover:text-zinc-900 transition-colors">
-                      {selectedOrderIds.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                    </button>
-                  </TableHead>
-                  <TableHead className="px-4 font-semibold text-zinc-900">Order Ref</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Customer</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Route (Origin → Dest)</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Order Date</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Main Products</TableHead>
-                  <TableHead className="font-semibold text-[#0052cc]">Part No (OEM)</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Engine</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Suitable Vehicle</TableHead>
-                  <TableHead className="font-semibold text-zinc-900 text-center">Items</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Products Costs</TableHead>
-                  <TableHead className="font-semibold text-zinc-900">Shipment Fee</TableHead>
-                  <TableHead className="font-semibold text-zinc-900 text-right">Total</TableHead>
-                  <TableHead className="font-semibold text-zinc-900 text-center">Status</TableHead>
-                  <TableHead className="px-6 w-[70px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow><TableCell colSpan={12} className="h-48 text-center"><div className="flex flex-col items-center justify-center gap-2"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="text-sm text-zinc-500 font-medium">Synchronizing orders...</p></div></TableCell></TableRow>
-                ) : filteredOrders.length === 0 ? (
-                  <TableRow><TableCell colSpan={12} className="h-48 text-center text-zinc-500">No shipment orders found.</TableCell></TableRow>
-                ) : (
-                  paginatedOrders.map((order) => (
-                    <TableRow key={order.id} className={cn("hover:bg-zinc-50/50 transition-colors group", selectedOrderIds.includes(order.id) && "bg-zinc-50/50")}>
-                      <TableCell className="px-6 text-center">
-                        <button onClick={() => {
-                          if (selectedOrderIds.includes(order.id)) setSelectedOrderIds(selectedOrderIds.filter(id => id !== order.id));
-                          else setSelectedOrderIds([...selectedOrderIds, order.id]);
-                        }} className={cn("transition-colors", selectedOrderIds.includes(order.id) ? "text-[#0052cc]" : "text-zinc-200 group-hover:text-zinc-400")}>
-                          {selectedOrderIds.includes(order.id) ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-                        </button>
-                      </TableCell>
-                      <TableCell className="px-4 py-4">
-                        <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
-                        {isRealMpesaReceipt(order.payment_ref_code) && (
-                          <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
-                            M-Pesa: {order.payment_ref_code}
-                          </p>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <p className="text-sm font-semibold text-zinc-700">{order.customer?.name || "Guest"}</p>
-                          {order.customer?.email && <p className="text-[10px] text-zinc-400 font-medium">{order.customer.email}</p>}
-                          {order.customer?.phone && (
-                            <p className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded inline-block">{order.customer.phone}</p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">{order.items?.[0]?.warehouse?.name || "Origin"}</div>
-                          <span className="text-[10px] font-black text-zinc-400 italic">TO</span>
-                          <div className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 uppercase">
-                            {order.shipping_city}
-                            {order.shipping_country ? `, ${order.shipping_country}` : ""}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
-                      <TableCell><div className="space-y-0.5 max-w-[150px]"><p className="text-xs font-bold text-zinc-800 truncate">{order.items?.[0]?.product?.name || "Genuine Spare Part"}</p>{order.items && order.items.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>}</div></TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          {order.items?.map((item: any, i: number) => (
-                            <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
-                              {item.product?.part_number || "—"}
-                            </span>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          {order.items?.map((item: any, i: number) => (
-                            <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
-                              {item.product?.engine_model || "—"}
-                            </span>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          {order.items?.map((item: any, i: number) => (
-                            <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
-                              {item.product?.suitable_vehicle || "—"}
-                            </span>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
-                      <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
-                      <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        {(() => {
-                          const refundedTotal = getOrderRefundedTotal(order);
-                          const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
-
-                          if (order.status === "Cancelled" || allCancelled) {
-                            return (
-                              <>
-                                <p className="text-xs font-black text-red-500 line-through opacity-75">
-                                  Ksh {refundedTotal.toLocaleString()}
-                                </p>
-                                <p className="text-[9px] font-bold text-red-500 uppercase">Refunded</p>
-                              </>
-                            );
-                          }
-
-                          return (
-                            <>
-                              <p className="text-xs font-black text-zinc-900">
-                                Ksh {parseFloat(order.total_amount || 0).toLocaleString()}
-                              </p>
-                              {refundedTotal > 0 && (
-                                <p className="text-[9px] font-bold text-red-500 uppercase">
-                                  Ksh {refundedTotal.toLocaleString()} Refunded
-                                </p>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex flex-col items-center justify-center gap-1">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {updatingOrderIds[order.id] && <Loader2 className="h-3 w-3 animate-spin text-[#0052cc] shrink-0" />}
-                            <Badge className={cn("rounded-full px-3 text-[10px] font-bold uppercase border-none tracking-wider",
-                              order.status === "Pending" ? "bg-yellow-400 text-yellow-950" :
-                                order.status === "Processing" ? "bg-orange-500 text-white" :
-                                  (order.status === "Shipped" || order.status === "In Transit") ? "bg-blue-600 text-white" :
-                                    order.status === "Arrived" ? "bg-indigo-600 text-white" :
-                                      order.status === "Delivered" ? "bg-emerald-500 text-white" :
-                                        order.status === "Returned" ? "bg-red-600 text-white" :
-                                          (order.status === "Cancelled" || order.status === "Cancellation Requested") ? "bg-red-600 text-white" : "bg-zinc-200 text-zinc-700"
-                            )}>{order.status === "In Transit" ? "SHIPPED" : order.status === "Cancellation Requested" ? "CANCEL REQ" : order.status}</Badge>
-                          </div>
-                          <Badge className={cn("rounded-full px-2 py-0.5 text-[9px] font-bold uppercase border-none tracking-wider",
-                            (order.payment_status === "Paid" || !isOrderVoided(order)) ? "bg-emerald-100 text-emerald-800" :
-                              order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "bg-red-100 text-red-800" :
-                                "bg-amber-100 text-amber-800"
-                          )}>
-                            {(order.payment_status === "Paid" || !isOrderVoided(order)) ? "✓ M-Pesa Paid" :
-                              order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" ? "Refunded" :
-                                "Payment Pending"}
-                          </Badge>
-                          {/* Driver badge for Shipped/Arrived/Delivered orders */}
-                          {(order.status === "Shipped" || order.status === "Arrived" || order.status === "Delivered") && (() => {
-                             const assignedDriver = order.driver ?? (order.delivered_by_user_id ? drivers.find((d: any) => d.id === order.delivered_by_user_id) : null);
-                             const reservingDriver = order.reserved_by_driver ?? (order.reserved_by_user_id ? drivers.find((d: any) => d.id === order.reserved_by_user_id) : null);
-                             const releasingDriver = order.last_released_by_driver ?? (order.last_released_by_user_id ? drivers.find((d: any) => d.id === order.last_released_by_user_id) : null);
-
-                             if (reservingDriver && !assignedDriver) {
-                               return (
-                                 <div className="flex flex-col gap-0.5 items-center">
-                                   <span className="inline-flex items-center gap-1 text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
-                                     <Truck className="h-2.5 w-2.5 shrink-0 animate-pulse text-amber-500" />
-                                     <span>Has Package: {releasingDriver ? releasingDriver.name.split(" ")[0] : "Warehouse"}</span>
-                                   </span>
-                                   <span className="text-[8px] font-bold text-zinc-400 shrink-0">
-                                     (Reserved: {reservingDriver.name.split(" ")[0]})
-                                   </span>
-                                 </div>
-                               );
-                             }
-
-                             if (releasingDriver && !assignedDriver && !reservingDriver) {
-                               return (
-                                 <span className="inline-flex items-center gap-1 text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full shrink-0">
-                                   <Truck className="h-2.5 w-2.5 shrink-0 text-rose-500" />
-                                   <span>Has Package: {releasingDriver.name.split(" ")[0]} (Released)</span>
-                                 </span>
-                               );
-                             }
-
-                             return assignedDriver ? (
-                               <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                 <Truck className="h-2.5 w-2.5 shrink-0" />
-                                 <span>{assignedDriver.name.split(" ")[0]}</span>
-                                 {(assignedDriver.city || assignedDriver.country) && (
-                                   <span className="text-indigo-400 font-bold">
-                                     ({assignedDriver.city || assignedDriver.country})
-                                   </span>
-                                 )}
-                               </span>
-                             ) : (order.status === "Shipped" || order.status === "Arrived") ? (
-                               <span className="inline-flex items-center gap-1 text-[9px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded-full">
-                                 No Driver
-                               </span>
-                             ) : null;
-                          })()}
-                        </div>
-                      </TableCell>
-                      <TableCell className="px-6 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0 rounded-full hover:bg-zinc-100")}><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 rounded-xl border-zinc-200 shadow-xl p-1">
-                            <DropdownMenuGroup>
-                              <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Options</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm"><Eye className="mr-2 h-4 w-4 text-zinc-400" /> View Details</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {order.status === "Pending" && (
-                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Processing')} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
-                                  <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
-                                </DropdownMenuItem>
-                              )}
-                              {(order.status === "Pending" || order.status === "Processing") && (
-                                <DropdownMenuItem onClick={() => handleStatusChange(order.id, 'Shipped')} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
-                                  <Truck className="mr-2 h-4 w-4" /> Mark Shipped
-                                </DropdownMenuItem>
-                              )}
-                              {/* Mark Arrived: NOT available for Shipment/Local tabs — only via waybill bulk in Logistics */}
-                              {/* Mark Delivered: NOT available for Shipment/Local tabs — only done by delivery guy via PIN */}
-
-
-
-
-                              {order.refund_status === "Pending" && order.items?.some((i: any) => i.cancellation_status === "Cancelled") && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuLabel className="text-[10px] font-black text-amber-400 uppercase px-2 py-1.5">Refund Processing</DropdownMenuLabel>
-                                  <DropdownMenuItem onClick={() => { setSelectedOrder(order); setIsCompleteRefundModalOpen(true); }} className="cursor-pointer rounded-lg font-bold text-sm text-amber-600">
-                                    <CreditCard className="mr-2 h-4 w-4" /> Complete Refund
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-
-                              {/* ── Refund / Return — only visible when Pending, Processing, or Delivered ── */}
-                              {!isOrderVoided(order) && (order.status === "Pending" || order.status === "Processing" || order.status === "Delivered") && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenVoidDialog(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-red-600"
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Void / Refund Order
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {/* Assign Driver — visible for Shipped or Arrived orders */}
-                              {(order.status === "Shipped" || order.status === "Arrived") && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuLabel className="text-[10px] font-black text-indigo-400 uppercase px-2 py-1.5">Delivery Assignment</DropdownMenuLabel>
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenAssignDriver(order)}
-                                    className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600"
-                                  >
-                                    <UserPlus className="mr-2 h-4 w-4" />
-                                    {order.delivered_by_user_id ? "Reassign Driver" : "Assign Driver"}
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuGroup>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <PaginationControls
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            pageSize={pageSize}
+            setPageSize={setPageSize}
+            totalItems={filteredOrders.length}
+            itemName="records"
+            pageSizeOptions={[15, 30, 50, 100]}
+          />
         </div>
-        <PaginationControls
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          pageSize={pageSize}
-          setPageSize={setPageSize}
-          totalItems={filteredOrders.length}
-          itemName="records"
-          pageSizeOptions={[15, 30, 50, 100]}
-        />
-      </div>
       )} {/* end Security ternary */}
 
       {/* Order Details Modal */}
@@ -2576,33 +2576,33 @@ function AdminOrdersPageInner() {
 
             {/* ── Delivery PIN — hidden by default, reveal toggle for admin ── */}
             {currentSelectedOrder?.delivery_pin && (
-                <div className="mb-6">
-                  <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                    🔑 Delivery Verification PIN
-                  </h4>
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Customer must share this PIN with the driver</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-2xl font-black tracking-[0.3em] text-amber-900 font-mono">
-                          {showDeliveryPin ? currentSelectedOrder.delivery_pin : "••••"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowDeliveryPin(p => !p)}
-                          className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-1.5 rounded-lg transition-colors"
-                        >
-                          {showDeliveryPin ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                          {showDeliveryPin ? "Hide" : "Reveal"}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="text-[10px] font-semibold text-amber-600 text-right max-w-[140px] leading-snug">
-                      Tell this PIN to the customer before they leave the store
+              <div className="mb-6">
+                <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                  🔑 Delivery Verification PIN
+                </h4>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Customer must share this PIN with the driver</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-2xl font-black tracking-[0.3em] text-amber-900 font-mono">
+                        {showDeliveryPin ? currentSelectedOrder.delivery_pin : "••••"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowDeliveryPin(p => !p)}
+                        className="flex items-center gap-1.5 text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        {showDeliveryPin ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        {showDeliveryPin ? "Hide" : "Reveal"}
+                      </button>
                     </div>
                   </div>
+                  <div className="text-[10px] font-semibold text-amber-600 text-right max-w-[140px] leading-snug">
+                    Tell this PIN to the customer before they leave the store
+                  </div>
                 </div>
-              )}
+              </div>
+            )}
 
             {(currentSelectedOrder?.driver || currentSelectedOrder?.delivery_signature_url || currentSelectedOrder?.delivery_photo_url) && (
               <div className="mb-6">
@@ -2751,7 +2751,7 @@ function AdminOrdersPageInner() {
                     {handoverHistory.map((log: any, idx: number) => {
                       let iconBg = "bg-zinc-200 text-zinc-700";
                       let actionText = log.action;
-                      
+
                       if (log.action.includes("RESERVED")) {
                         iconBg = "bg-amber-100 text-amber-700 border border-amber-250";
                       } else if (log.action.includes("SECURED")) {
@@ -3403,9 +3403,8 @@ function AdminOrdersPageInner() {
             <div className="bg-red-50 border border-red-100 rounded-xl p-4 space-y-2">
               <p className="text-xs font-bold text-red-700">What happens when you process this refund:</p>
               <ul className="space-y-1 text-[11px] text-red-600 font-medium">
-                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Selected items will be refunded to the customer</li>
+                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Selected items will be returned to their origin warehouse</li>
                 <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Their cost is deducted from your revenue records</li>
-                <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Returned items are restored to warehouse stock</li>
                 <li className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" />Order status is updated with refund completed</li>
               </ul>
             </div>

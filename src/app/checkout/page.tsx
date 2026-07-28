@@ -78,11 +78,14 @@ export default function CheckoutPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
+  const [mpesaReceipt, setMpesaReceipt] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  // Tracks every checkout_request_id attempted this session so we can check
-  // old sessions for late Safaricom confirmations after a retry.
+  // Tracks every checkout_request_id attempted this session
   const previousSessionIds = useRef<string[]>([]);
+  // Abort flag: set to true when a new session starts to kill any lingering grace period
+  // that would otherwise override the new session's success with a stale "failed" state.
+  const gracePeriodAbortRef = useRef(false);
 
   // Form validation errors
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -283,7 +286,8 @@ export default function CheckoutPage() {
     let attempts = 0;
     const maxAttempts = 25; // 25 × 4s = 100 seconds
 
-    // Track this session ID so we can check it even after a retry
+    // New session starting — abort any lingering grace period from a previous attempt
+    gracePeriodAbortRef.current = false;
     previousSessionIds.current = [reqId, ...previousSessionIds.current].slice(0, 10);
 
     setCountdown(90);
@@ -297,7 +301,7 @@ export default function CheckoutPage() {
       });
     }, 1000);
 
-    /** Resolves the polling as success — sets order refs and clears cart */
+    /** Resolves the polling as success — sets order refs, receipt code, and clears cart */
     const resolveSuccess = (data: any) => {
       clearInterval(pollIntervalRef.current!);
       clearInterval(countdownIntervalRef.current!);
@@ -306,6 +310,9 @@ export default function CheckoutPage() {
       } else if (data.tracking_number) {
         setOrderRefs([data.tracking_number]);
       }
+      // Capture the real Safaricom receipt code (e.g. UGS2B17C3W)
+      const receipt = data.mpesa_receipt ?? data.mpesa_receipt_number ?? null;
+      if (receipt) setMpesaReceipt(receipt);
       setPaymentStatus("success");
       setCompleted(true);
       clearCart();
@@ -313,26 +320,34 @@ export default function CheckoutPage() {
 
     /**
      * Grace period: after polling stops, do up to 3 extra checks spaced 5s apart.
-     * This catches late Safaricom callbacks that arrive after our 100s polling window.
+     * Catches late Safaricom callbacks that arrive just after our 100s window.
+     *
+     * CRITICAL: checks gracePeriodAbortRef before every step. If the customer has
+     * already retried and a new session is active, we exit silently WITHOUT calling
+     * setPaymentStatus(“failed”) — which would override the new session’s success.
      */
     const gracePeriodCheck = async (graceAttempts = 3) => {
       for (let i = 0; i < graceAttempts; i++) {
         await new Promise(r => setTimeout(r, 5000));
+        if (gracePeriodAbortRef.current) return; // New session started — silent exit
         try {
           const res = await api.post(API_ENDPOINTS.payments.mpesaQuery, { checkout_request_id: reqId });
+          if (gracePeriodAbortRef.current) return; // Check again after async call
           if (res.data.status === "success") {
             resolveSuccess(res.data);
             return;
           }
           if (res.data.status === "failed" || res.data.status === "cancelled") {
-            break; // Confirmed failed — stop grace checks
+            break;
           }
         } catch { /* keep trying */ }
       }
-      // All grace checks exhausted — show failure
-      setPaymentStatus("failed");
-      setPaymentError("Payment was declined or cancelled. Your cart has been kept — please try again.");
-      setIsProcessing(false);
+      // Only show failure if we haven't been aborted by a new session
+      if (!gracePeriodAbortRef.current) {
+        setPaymentStatus("failed");
+        setPaymentError("Payment was declined or cancelled. Your cart has been kept — please try again.");
+        setIsProcessing(false);
+      }
     };
 
     pollIntervalRef.current = setInterval(async () => {
@@ -357,8 +372,6 @@ export default function CheckoutPage() {
       if (attempts >= maxAttempts) {
         clearInterval(pollIntervalRef.current!);
         clearInterval(countdownIntervalRef.current!);
-        // Don't immediately show failure — run grace period checks first
-        // in case Safaricom's callback arrives slightly late.
         gracePeriodCheck();
       }
     }, 4000);
@@ -553,6 +566,7 @@ export default function CheckoutPage() {
    * The customer does NOT need to click Initiate Payment again.
    */
   const handleRetry = () => {
+    gracePeriodAbortRef.current = true; // Kill any lingering grace period from previous attempt
     setPaymentStatus("idle");
     setPaymentError("");
     setMpesaCodeError("");
@@ -629,10 +643,16 @@ export default function CheckoutPage() {
           <div className="flex flex-col gap-3 mb-8">
             {orderRefs.map((ref, idx) => (
               <div key={idx} className="bg-white border border-zinc-200 px-6 py-3 rounded-lg shadow-sm">
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Reference Number</p>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest text-center">Order Reference</p>
                 <p className="text-xl font-black text-zinc-900 tracking-tight text-center">{ref || "Processing..."}</p>
               </div>
             ))}
+            {mpesaReceipt && (
+              <div className="bg-green-50 border border-green-200 px-6 py-3 rounded-lg shadow-sm">
+                <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest text-center">M-Pesa STK Confirmation</p>
+                <p className="text-xl font-black text-green-800 tracking-tight text-center font-mono">{mpesaReceipt}</p>
+              </div>
+            )}
           </div>
           {paymentMethod === "paybill" && (
             <motion.div

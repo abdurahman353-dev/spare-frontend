@@ -240,6 +240,8 @@ function AccountPortalInner() {
   // Modals state
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  // Full order detail (fetched individually to include delivery_signature_url, delivery_photo_url)
+  const [fetchedOrderDetail, setFetchedOrderDetail] = useState<any>(null);
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
@@ -985,7 +987,14 @@ function AccountPortalInner() {
                                   </td>
                                   <td className="px-6 py-4 text-right">
                                     <button
-                                      onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }}
+                                      onClick={() => {
+                                        setSelectedOrder(order);
+                                        setIsOrderModalOpen(true);
+                                        // Fetch full detail for delivery evidence (signature/photo)
+                                        api.get(API_ENDPOINTS.orders.byId(order.id))
+                                          .then(res => setFetchedOrderDetail(res.data))
+                                          .catch(() => setFetchedOrderDetail(null));
+                                      }}
                                       className="text-[#0052cc] hover:text-[#0747a6] font-bold text-[13px] hover:underline"
                                     >
                                       Inspect
@@ -1262,7 +1271,14 @@ function AccountPortalInner() {
                                     <Button 
                                       variant="ghost" 
                                       size="sm" 
-                                      onClick={() => { setSelectedOrder(order); setIsOrderModalOpen(true); }}
+                                      onClick={() => {
+                                        setSelectedOrder(order);
+                                        setIsOrderModalOpen(true);
+                                        // Fetch full detail for delivery evidence (signature/photo)
+                                        api.get(API_ENDPOINTS.orders.byId(order.id))
+                                          .then(res => setFetchedOrderDetail(res.data))
+                                          .catch(() => setFetchedOrderDetail(null));
+                                      }}
                                       className="text-[#0052cc] hover:text-[#0747a6] font-bold text-[13px] hover:underline"
                                     >
                                       Inspect
@@ -1820,8 +1836,8 @@ function AccountPortalInner() {
               </div>
             )}
 
-            {/* ── DRIVER & DELIVERY PROOFS — shown when order is Shipped/Arrived/Delivered ── */}
-            {selectedOrder?.shipping_method !== "Pickup" && (selectedOrder?.driver || selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
+            {/* ── DRIVER & DELIVERY PROOFS — reads fetchedOrderDetail for signature/photo ── */}
+            {selectedOrder?.shipping_method !== "Pickup" && (selectedOrder?.driver || fetchedOrderDetail?.delivery_signature_url || fetchedOrderDetail?.delivery_photo_url || selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
               <div className="bg-[#f8fafc] p-4 rounded-lg border border-[#e2e8f0] space-y-3">
                 <h4 className="text-[11px] font-bold text-[#64748b] uppercase tracking-widest">Delivery &amp; Driver Details</h4>
                 {selectedOrder?.driver && (
@@ -1840,24 +1856,27 @@ function AccountPortalInner() {
                     </div>
                   </div>
                 )}
-                {(selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url) && (
-                  <div className="pt-3 border-t border-[#e2e8f0] grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {selectedOrder?.delivery_signature_url && (
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Recipient Signature (POD)</p>
-                        <div className="border border-zinc-200 rounded-lg p-2 bg-white inline-block">
-                          <img src={selectedOrder.delivery_signature_url} alt="Recipient Signature" className="h-16 max-w-full object-contain" />
+                {((fetchedOrderDetail?.delivery_signature_url || fetchedOrderDetail?.delivery_photo_url) || (selectedOrder?.delivery_signature_url || selectedOrder?.delivery_photo_url)) && (
+                  <div className="pt-3 border-t border-[#e2e8f0]">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">✅ Delivery Evidence (POD)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(fetchedOrderDetail?.delivery_signature_url || selectedOrder?.delivery_signature_url) && (
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Recipient Signature (POD)</p>
+                          <div className="border border-zinc-200 rounded-lg p-2 bg-white inline-block">
+                            <img src={fetchedOrderDetail?.delivery_signature_url || selectedOrder?.delivery_signature_url} alt="Recipient Signature" className="h-16 max-w-full object-contain" />
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {selectedOrder?.delivery_photo_url && (
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Doorstep Photo Proof</p>
-                        <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white max-w-[160px]">
-                          <img src={selectedOrder.delivery_photo_url} alt="Doorstep Photo" className="w-full h-auto object-cover max-h-[100px]" />
+                      )}
+                      {(fetchedOrderDetail?.delivery_photo_url || selectedOrder?.delivery_photo_url) && (
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Doorstep Photo Proof</p>
+                          <div className="border border-zinc-200 rounded-lg overflow-hidden bg-white max-w-[160px]">
+                            <img src={fetchedOrderDetail?.delivery_photo_url || selectedOrder?.delivery_photo_url} alt="Doorstep Photo" className="w-full h-auto object-cover max-h-[100px]" />
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

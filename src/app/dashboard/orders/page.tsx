@@ -321,6 +321,8 @@ function AdminOrdersPageInner() {
     return orders.find(o => o.id === selectedOrder.id) || selectedOrder;
   }, [orders, selectedOrder]);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  // Full order detail (fetched individually to include delivery_signature_url, delivery_photo_url)
+  const [fetchedOrderDetail, setFetchedOrderDetail] = useState<any>(null);
 
   // Handover History / Timeline state
   const [handoverHistory, setHandoverHistory] = useState<any[]>([]);
@@ -330,6 +332,10 @@ function AdminOrdersPageInner() {
     if (isOrderModalOpen && currentSelectedOrder?.id) {
       setLoadingHandoverHistory(true);
       setHandoverHistory([]);
+      // Fetch full order detail to get delivery_signature_url, delivery_photo_url, etc.
+      api.get(API_ENDPOINTS.orders.byId(currentSelectedOrder.id))
+        .then(res => setFetchedOrderDetail(res.data))
+        .catch(() => setFetchedOrderDetail(null));
       api.get(`/orders/${currentSelectedOrder.id}/handover-history`)
         .then(res => {
           setHandoverHistory(res.data || []);
@@ -2604,7 +2610,8 @@ function AdminOrdersPageInner() {
               </div>
             )}
 
-            {(currentSelectedOrder?.driver || currentSelectedOrder?.delivery_signature_url || currentSelectedOrder?.delivery_photo_url) && (
+            {/* Delivery & Driver — uses fetchedOrderDetail for signature/photo since list API omits those fields */}
+            {(currentSelectedOrder?.driver || fetchedOrderDetail?.delivery_signature_url || fetchedOrderDetail?.delivery_photo_url || currentSelectedOrder?.delivery_signature_url || currentSelectedOrder?.delivery_photo_url) && (
               <div className="mb-6">
                 <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Delivery &amp; Driver Details</h4>
                 <div className="bg-white p-4 rounded-xl border border-zinc-200 space-y-3">
@@ -2635,27 +2642,28 @@ function AdminOrdersPageInner() {
                       </div>
                     </div>
                   )}
-                  {(currentSelectedOrder?.delivery_signature_url || currentSelectedOrder?.delivery_photo_url) && (
+                  {((fetchedOrderDetail?.delivery_signature_url || fetchedOrderDetail?.delivery_photo_url) || (currentSelectedOrder?.delivery_signature_url || currentSelectedOrder?.delivery_photo_url)) && (
                     <div className="pt-2 border-t border-zinc-100">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-1.5">✅ Delivery Evidence (POD)</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {currentSelectedOrder?.delivery_signature_url && (
+                        {(fetchedOrderDetail?.delivery_signature_url || currentSelectedOrder?.delivery_signature_url) && (
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Recipient Signature (POD)</p>
                             <div className="border border-zinc-200 rounded-lg p-2 bg-zinc-50/50 inline-block">
                               <img
-                                src={currentSelectedOrder.delivery_signature_url}
+                                src={fetchedOrderDetail?.delivery_signature_url || currentSelectedOrder?.delivery_signature_url}
                                 alt="Customer Signature"
                                 className="h-20 max-w-full object-contain"
                               />
                             </div>
                           </div>
                         )}
-                        {currentSelectedOrder?.delivery_photo_url && (
+                        {(fetchedOrderDetail?.delivery_photo_url || currentSelectedOrder?.delivery_photo_url) && (
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Doorstep Photo Proof</p>
                             <div className="border border-zinc-200 rounded-lg overflow-hidden bg-zinc-50/50 max-w-[200px]">
                               <img
-                                src={currentSelectedOrder.delivery_photo_url}
+                                src={fetchedOrderDetail?.delivery_photo_url || currentSelectedOrder?.delivery_photo_url}
                                 alt="Doorstep Photo Proof"
                                 className="h-20 w-full object-cover"
                               />

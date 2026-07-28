@@ -684,8 +684,8 @@ export default function AdminLogisticsPage() {
   };
 
   const handleSaveShipment = async () => {
-    if (!formData.waybill || !formData.origin || !formData.destination) {
-      return toast.error("Please fill in all required fields.");
+    if (!formData.waybill || !formData.carrier || !formData.origin || !formData.destination) {
+      return toast.error("Please fill in all required fields (Waybill ID, Carrier, Origin, Destination).");
     }
 
     setIsSaving(true);
@@ -2012,9 +2012,9 @@ export default function AdminLogisticsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500">Carrier Partner *</label>
+                <label className="text-xs font-semibold text-zinc-500">Carrier Partner <span className="text-red-500">*</span></label>
                 <select
-                  className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none"
+                  className={`w-full h-10 px-3 border rounded-lg text-sm bg-white outline-none ${!formData.carrier ? "border-red-300 text-zinc-400" : "border-zinc-200 text-zinc-900"}`}
                   value={formData.carrier}
                   onChange={(e) => setFormData({ ...formData, carrier: e.target.value })}
                 >
@@ -2024,6 +2024,7 @@ export default function AdminLogisticsPage() {
                   <option>FedEx Express</option>
                   <option>Local Courier</option>
                 </select>
+                {!formData.carrier && <p className="text-[10px] text-red-500 font-semibold">Required — please select a carrier</p>}
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

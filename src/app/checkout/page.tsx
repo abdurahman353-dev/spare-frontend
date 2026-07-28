@@ -553,27 +553,14 @@ export default function CheckoutPage() {
    * The customer does NOT need to click Initiate Payment again.
    */
   const handleRetry = () => {
+    setPaymentStatus("idle");
     setPaymentError("");
     setMpesaCodeError("");
     setCheckoutRequestId(null);
+    setIsProcessing(false);
     setCountdown(0);
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-
-    if (paymentMethod === "mpesa_stk") {
-      const phoneErr = validatePaymentPhone(mpesaPhone);
-      if (phoneErr) {
-        setPhoneError(phoneErr);
-        setPaymentStatus("idle");
-        setIsProcessing(false);
-        return;
-      }
-      // Immediately send a new STK Push — fresh Safaricom session
-      initiateStkPush();
-    } else {
-      setPaymentStatus("idle");
-      setIsProcessing(false);
-    }
   };
 
   const handleVerifyMpesaCode = async () => {

@@ -61,23 +61,14 @@ function LoginPageInner() {
         <Card className="border-none shadow-[0_20px_60px_rgba(0,0,0,0.1)] bg-white overflow-hidden rounded-2xl">
           <div className="h-2 bg-primary w-full" />
           <CardHeader className="space-y-4 text-center pt-8 sm:pt-12 pb-6 sm:pb-8">
-            {/* Clickable brand badge — navigates back to home */}
+            {/* Clickable brand logo — navigates back to home. No text fallback to prevent flash. */}
             <Link href="/" className="mx-auto flex flex-col items-center gap-2 group">
-              {settings.store_logo ? (
+              {settings.store_logo && (
                 <img
                   src={settings.store_logo}
                   alt={brandName}
                   className="h-14 w-auto max-w-[200px] object-contain rounded-lg group-hover:opacity-80 transition-opacity"
                 />
-              ) : (
-                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-zinc-900 text-white shadow-xl shadow-zinc-900/10 group-hover:scale-105 transition-transform">
-                  <div className="h-9 w-9 bg-primary flex items-center justify-center text-white font-black text-xl rounded-xl shadow-md">
-                    A
-                  </div>
-                  <span className="text-xl font-black tracking-tighter text-white">
-                    AUTOSPARE<span className="text-primary italic">.</span>
-                  </span>
-                </div>
               )}
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 group-hover:text-primary transition-colors">
                 ← Back to Store

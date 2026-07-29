@@ -975,7 +975,9 @@ export default function DeliveryPortal() {
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Fill white so JPEG export never has a black background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
       ctx.strokeStyle = "#1e293b";
@@ -1016,7 +1018,12 @@ export default function DeliveryPortal() {
   const clearCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Re-fill white so next export stays clean
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     setStrokeCount(0);
   };
 
@@ -1038,7 +1045,17 @@ export default function DeliveryPortal() {
     }
 
     setSubmittingSignature(true);
-    const signatureData = canvas.toDataURL("image/jpeg", 0.65);
+    // Composite white background before JPEG export to prevent black canvas issue
+    const exportCanvas = document.createElement("canvas");
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const exportCtx = exportCanvas.getContext("2d");
+    if (exportCtx) {
+      exportCtx.fillStyle = "#ffffff";
+      exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      exportCtx.drawImage(canvas, 0, 0);
+    }
+    const signatureData = (exportCtx ? exportCanvas : canvas).toDataURL("image/jpeg", 0.65);
     const targetOrder = signatureOrder;
 
     const timeoutPromise = new Promise<{ isTimeout: boolean }>((resolve) => {
@@ -1830,7 +1847,7 @@ export default function DeliveryPortal() {
                     ref={canvasRef}
                     width={400}
                     height={180}
-                    className="w-full h-full touch-none cursor-crosshair relative z-10 bg-transparent"
+                    className="w-full h-full touch-none cursor-crosshair relative z-10 bg-white"
                     onMouseDown={startDraw}
                     onMouseUp={stopDraw}
                     onMouseLeave={stopDraw}

@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
     base: "/orders",
     bulkStatus: "/orders/bulk-status",
     byId: (id: ApiId) => `/orders/${id}`,
+    myOrderById: (id: ApiId) => `/my-orders/${id}`,   // customer-accessible, owns-only
     approveCancel: (id: ApiId) => `/orders/${id}/approve-cancel`,
     completeRefund: (id: ApiId) => `/orders/${id}/complete-refund`,
     requestCancel: (id: ApiId) => `/orders/${id}/request-cancel`,

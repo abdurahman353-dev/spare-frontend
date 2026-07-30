@@ -101,6 +101,62 @@ export default function AdminLogisticsPage() {
   const [shipmentDateFrom, setShipmentDateFrom] = useState("");
   const [shipmentDateTo, setShipmentDateTo] = useState("");
 
+  // Carrier Partners Management (Persisted in localStorage & dynamic from shipments)
+  const DEFAULT_CARRIERS = useMemo(() => ["DHL Global", "Maersk Logistics", "FedEx Express", "Local Courier"], []);
+  const [carrierPartners, setCarrierPartners] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("spare_carrier_partners");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {}
+      }
+    }
+    return DEFAULT_CARRIERS;
+  });
+
+  const updateCarrierPartners = useCallback((newList: string[]) => {
+    setCarrierPartners(newList);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("spare_carrier_partners", JSON.stringify(newList));
+    }
+  }, []);
+
+  const carrierModalItems = useMemo(() => {
+    return carrierPartners.map(c => ({ id: c, name: c }));
+  }, [carrierPartners]);
+
+  const handleAddCarrier = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (!carrierPartners.includes(trimmed)) {
+      const updated = [...carrierPartners, trimmed];
+      updateCarrierPartners(updated);
+      toast.success(`Carrier "${trimmed}" added successfully.`);
+    }
+    setFormData(prev => ({ ...prev, carrier: trimmed }));
+  }, [carrierPartners, updateCarrierPartners]);
+
+  const handleEditCarrier = useCallback(async (id: string | number, newName: string) => {
+    const oldName = id.toString();
+    const trimmed = newName.trim();
+    if (!trimmed || oldName === trimmed) return;
+
+    const updated = carrierPartners.map(c => c === oldName ? trimmed : c);
+    updateCarrierPartners(updated);
+    setFormData(prev => (prev.carrier === oldName ? { ...prev, carrier: trimmed } : prev));
+    toast.success(`Carrier updated to "${trimmed}".`);
+  }, [carrierPartners, updateCarrierPartners]);
+
+  const handleDeleteCarrier = useCallback(async (id: string | number) => {
+    const targetName = id.toString();
+    const updated = carrierPartners.filter(c => c !== targetName);
+    updateCarrierPartners(updated);
+    setFormData(prev => (prev.carrier === targetName ? { ...prev, carrier: "" } : prev));
+    toast.success(`Carrier "${targetName}" removed.`);
+  }, [carrierPartners, updateCarrierPartners]);
+
   // Unassigned Orders Filtering States
   const [searchQuery, setSearchQuery] = useState("");
   const [warehouseFilter, setWarehouseFilter] = useState("all");
@@ -161,9 +217,9 @@ export default function AdminLogisticsPage() {
   }, [warehousesData]);
 
   const filterCarrierOptions = useMemo(() => {
-    const uniqueCarriers = Array.from(new Set(shipments.map(s => s.carrier).filter(Boolean))).sort();
+    const uniqueCarriers = Array.from(new Set([...carrierPartners, ...shipments.map(s => s.carrier).filter(Boolean)])).sort();
     return [{ id: "all", name: "All Carriers" }, ...uniqueCarriers.map(c => ({ id: c as string, name: c as string }))];
-  }, [shipments]);
+  }, [shipments, carrierPartners]);
 
   const shipmentCountryOptions = useMemo(() => {
     let relevant = shipments;
@@ -2013,17 +2069,16 @@ export default function AdminLogisticsPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-zinc-500">Carrier Partner <span className="text-red-500">*</span></label>
-                <select
-                  className={`w-full h-10 px-3 border rounded-lg text-sm bg-white outline-none ${!formData.carrier ? "border-red-300 text-zinc-400" : "border-zinc-200 text-zinc-900"}`}
+                <SearchableDropdown
+                  items={carrierModalItems}
                   value={formData.carrier}
-                  onChange={(e) => setFormData({ ...formData, carrier: e.target.value })}
-                >
-                  <option value="">Select Carrier...</option>
-                  <option>DHL Global</option>
-                  <option>Maersk Logistics</option>
-                  <option>FedEx Express</option>
-                  <option>Local Courier</option>
-                </select>
+                  onChange={(val) => setFormData({ ...formData, carrier: val })}
+                  placeholder="Select Carrier..."
+                  onAdd={handleAddCarrier}
+                  onEdit={handleEditCarrier}
+                  onDelete={handleDeleteCarrier}
+                  className={!formData.carrier ? "border-red-300" : ""}
+                />
                 {!formData.carrier && <p className="text-[10px] text-red-500 font-semibold">Required — please select a carrier</p>}
               </div>
             </div>

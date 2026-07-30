@@ -38,7 +38,9 @@ import {
   UserPlus,
   CreditCard,
   Pencil,
-  Home
+  Home,
+  Minus,
+  Plus
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -3463,21 +3465,47 @@ function AdminOrdersPageInner() {
                             <span className="text-[11px] font-black text-zinc-700">= Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
                           </span>
                         </div>
-                        {isChecked && !isCancelled && item.quantity > 1 && (
-                          <div className="flex items-center gap-2 pl-6 mt-1 text-xs">
-                            <span className="text-[11px] font-medium text-zinc-500">Qty to Refund:</span>
-                            <input
-                              type="number"
-                              min={1}
-                              max={item.quantity}
-                              value={voidQuantities[item.id] || item.quantity}
-                              onChange={(e) => {
-                                const val = Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1));
-                                setVoidQuantities({ ...voidQuantities, [item.id]: val });
-                              }}
-                              className="w-16 px-1.5 py-0.5 rounded border border-zinc-300 text-xs text-center font-bold focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
-                            />
-                            <span className="text-[10px] text-zinc-400">of {item.quantity} max</span>
+                        {isChecked && !isCancelled && (
+                          <div className="flex items-center justify-between gap-2 pl-6 mt-1.5 pt-1.5 border-t border-dashed border-zinc-200 text-xs">
+                            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Qty to Refund:</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={qtyToCancel <= 1}
+                                onClick={() => {
+                                  const newQty = Math.max(1, qtyToCancel - 1);
+                                  setVoidQuantities({ ...voidQuantities, [item.id]: newQty });
+                                }}
+                                className="h-7 w-7 rounded-lg border border-zinc-300 bg-white flex items-center justify-center font-bold text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xs"
+                                title="Decrease quantity"
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                              <input
+                                type="number"
+                                min={1}
+                                max={item.quantity}
+                                value={qtyToCancel}
+                                onChange={(e) => {
+                                  const val = Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1));
+                                  setVoidQuantities({ ...voidQuantities, [item.id]: val });
+                                }}
+                                className="w-12 h-7 rounded-lg border border-zinc-300 text-xs text-center font-extrabold focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 bg-white shadow-xs"
+                              />
+                              <button
+                                type="button"
+                                disabled={qtyToCancel >= item.quantity}
+                                onClick={() => {
+                                  const newQty = Math.min(item.quantity, qtyToCancel + 1);
+                                  setVoidQuantities({ ...voidQuantities, [item.id]: newQty });
+                                }}
+                                className="h-7 w-7 rounded-lg border border-zinc-300 bg-white flex items-center justify-center font-bold text-zinc-700 hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-xs"
+                                title="Increase quantity"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="text-[10px] text-zinc-400 font-semibold ml-1">of {item.quantity} max</span>
+                            </div>
                           </div>
                         )}
                       </div>

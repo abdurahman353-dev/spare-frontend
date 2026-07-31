@@ -512,14 +512,34 @@ function AdminOrdersPageInner() {
 
   const handleOpenEditWalkIn = (order: any) => {
     setEditWalkInTarget(order);
+
+    let rawPaymentMethod = order.payment_method || "Cash";
+    let rawRefCode = order.payment_ref_code || "";
+
+    if (rawPaymentMethod.includes("(Ref: ")) {
+      const match = rawPaymentMethod.match(/^(.*?)\s*\(Ref:\s*(.*?)\)$/);
+      if (match) {
+        rawPaymentMethod = match[1].trim();
+        if (!rawRefCode) {
+          rawRefCode = match[2].trim();
+        }
+      }
+    }
+
+    const shippingMethod = order.shipping_method || "Pickup";
+    const shippingFee = parseFloat(order.shipping_fee || 0);
+    const shippingCountry = order.shipping_country || "";
+    const shippingCity = order.shipping_city === "In-Store" ? "" : (order.shipping_city || "");
+    const shippingAddress = order.shipping_address === "Walk-In Counter" ? "" : (order.shipping_address || "");
+
     setEditWalkInForm({
-      payment_method: order.payment_method || "Cash",
-      payment_ref_code: order.payment_ref_code || "",
-      shipping_method: order.shipping_method || "Pickup",
-      shipping_fee: parseFloat(order.shipping_fee || 0),
-      shipping_country: order.shipping_country || "",
-      shipping_city: order.shipping_city || "",
-      shipping_address: order.shipping_address || "",
+      payment_method: rawPaymentMethod,
+      payment_ref_code: rawRefCode,
+      shipping_method: shippingMethod,
+      shipping_fee: shippingFee,
+      shipping_country: shippingCountry,
+      shipping_city: shippingCity,
+      shipping_address: shippingAddress,
     });
     setIsEditWalkInModalOpen(true);
   };
@@ -528,7 +548,22 @@ function AdminOrdersPageInner() {
     if (!editWalkInTarget) return;
     setIsSavingEditWalkIn(true);
     try {
-      await api.put(API_ENDPOINTS.orders.byId(editWalkInTarget.id), editWalkInForm);
+      const isDigital = isDigitalPayment(editWalkInForm.payment_method);
+      const finalPaymentMethod = (isDigital && editWalkInForm.payment_ref_code.trim())
+        ? `${editWalkInForm.payment_method} (Ref: ${editWalkInForm.payment_ref_code.trim()})`
+        : editWalkInForm.payment_method;
+
+      const payload = {
+        ...editWalkInForm,
+        payment_method: finalPaymentMethod,
+        payment_ref_code: editWalkInForm.payment_ref_code.trim(),
+        shipping_country: editWalkInForm.shipping_method === "Pickup" ? "" : editWalkInForm.shipping_country,
+        shipping_city: editWalkInForm.shipping_method === "Pickup" ? "In-Store" : editWalkInForm.shipping_city,
+        shipping_address: editWalkInForm.shipping_method === "Pickup" ? "Walk-In Counter" : editWalkInForm.shipping_address,
+        shipping_fee: editWalkInForm.shipping_method === "Pickup" ? 0 : Number(editWalkInForm.shipping_fee || 0),
+      };
+
+      await api.put(API_ENDPOINTS.orders.byId(editWalkInTarget.id), payload);
       toast.success("Walk-In order updated successfully!");
       setIsEditWalkInModalOpen(false);
       setEditWalkInTarget(null);
@@ -3651,13 +3686,21 @@ function AdminOrdersPageInner() {
                       ...editWalkInForm,
                       shipping_method: val,
                       shipping_fee: 0,
-                      shipping_city: "",
-                      shipping_address: "",
+                      shipping_country: "",
+                      shipping_city: "In-Store",
+                      shipping_address: "Walk-In Counter",
                     });
                   } else {
+                    const defaultCountry = editWalkInForm.shipping_country || editCountryDropdownItems[0]?.id || "Kenya";
+                    const cleanCity = editWalkInForm.shipping_city === "In-Store" ? "" : editWalkInForm.shipping_city;
+                    const cleanAddress = editWalkInForm.shipping_address === "Walk-In Counter" ? "" : editWalkInForm.shipping_address;
+
                     setEditWalkInForm({
                       ...editWalkInForm,
                       shipping_method: val,
+                      shipping_country: defaultCountry,
+                      shipping_city: cleanCity,
+                      shipping_address: cleanAddress,
                     });
                   }
                 }}

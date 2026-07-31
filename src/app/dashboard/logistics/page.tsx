@@ -102,7 +102,45 @@ export default function AdminLogisticsPage() {
   const [shipmentDateTo, setShipmentDateTo] = useState("");
 
   // Carrier Partners Management (Persisted in localStorage & dynamic from shipments)
-  const DEFAULT_CARRIERS = useMemo(() => ["DHL Global", "Maersk Logistics", "FedEx Express", "Local Courier"], []);
+  const DEFAULT_CARRIERS = useMemo(() => ["DHL Global", "Maersk Logistics", "FedEx Express", "Local Courier", "Buscar Express"], []);
+
+  const getCarrierBadgeStyle = useCallback((carrier?: string): string => {
+    if (!carrier) return "bg-zinc-100 text-zinc-600";
+    const normalized = carrier.toLowerCase().trim();
+    const knownColors: Record<string, string> = {
+      dhl: "bg-blue-100 text-blue-700",
+      fedex: "bg-amber-100 text-amber-800",
+      maersk: "bg-cyan-100 text-cyan-800",
+      local: "bg-violet-100 text-violet-700",
+      buscar: "bg-orange-100 text-orange-700",
+      easycoach: "bg-emerald-100 text-emerald-800",
+      mash: "bg-rose-100 text-rose-700",
+      speedaf: "bg-sky-100 text-sky-700",
+      g4s: "bg-red-100 text-red-700",
+      tahmeed: "bg-teal-100 text-teal-700",
+      guardian: "bg-indigo-100 text-indigo-700",
+      coast: "bg-pink-100 text-pink-700",
+    };
+    for (const [key, value] of Object.entries(knownColors)) {
+      if (normalized.includes(key)) return value;
+    }
+    const fallbackPalettes = [
+      "bg-orange-100 text-orange-700",
+      "bg-emerald-100 text-emerald-800",
+      "bg-teal-100 text-teal-800",
+      "bg-sky-100 text-sky-800",
+      "bg-indigo-100 text-indigo-800",
+      "bg-fuchsia-100 text-fuchsia-800",
+      "bg-rose-100 text-rose-800",
+      "bg-purple-100 text-purple-800",
+    ];
+    let hash = 0;
+    for (let i = 0; i < carrier.length; i++) {
+      hash = carrier.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % fallbackPalettes.length;
+    return fallbackPalettes[index];
+  }, []);
   const [carrierPartners, setCarrierPartners] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("spare_carrier_partners");
@@ -1387,11 +1425,7 @@ export default function AdminLogisticsPage() {
                       <TableCell>
                         <Badge variant="secondary" className={cn(
                           "border-none px-2 py-0.5 text-[10px] font-bold uppercase",
-                          shipment.carrier?.toLowerCase().includes("dhl") ? "bg-blue-100 text-blue-700" :
-                            shipment.carrier?.toLowerCase().includes("fedex") ? "bg-amber-100 text-amber-700" :
-                              shipment.carrier?.toLowerCase().includes("maersk") ? "bg-cyan-100 text-cyan-700" :
-                                shipment.carrier?.toLowerCase().includes("local") ? "bg-violet-100 text-violet-700" :
-                                  "bg-zinc-100 text-zinc-600"
+                          getCarrierBadgeStyle(shipment.carrier)
                         )}>
                           {shipment.carrier}
                         </Badge>
@@ -1440,8 +1474,23 @@ export default function AdminLogisticsPage() {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 py-1.5">Change Status</DropdownMenuLabel>
-                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => updateShipmentStatus(shipment.id, "In Transit")}>In Transit</DropdownMenuItem>
-                              <DropdownMenuItem className="cursor-pointer font-bold text-xs" onClick={() => updateShipmentStatus(shipment.id, "Arrived")}>Arrived</DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={shipment.status === "In Transit" || shipment.status === "Arrived"}
+                                className={cn("cursor-pointer font-bold text-xs flex items-center justify-between", (shipment.status === "In Transit" || shipment.status === "Arrived") && "opacity-50 cursor-not-allowed")}
+                                onClick={() => updateShipmentStatus(shipment.id, "In Transit")}
+                              >
+                                <span>In Transit</span>
+                                {shipment.status === "In Transit" && <span className="text-blue-600 font-black">✓</span>}
+                                {shipment.status === "Arrived" && <span className="text-[9px] text-zinc-400 font-bold uppercase">Locked</span>}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={shipment.status === "Arrived"}
+                                className={cn("cursor-pointer font-bold text-xs flex items-center justify-between", shipment.status === "Arrived" && "opacity-50 cursor-not-allowed")}
+                                onClick={() => updateShipmentStatus(shipment.id, "Arrived")}
+                              >
+                                <span>Arrived</span>
+                                {shipment.status === "Arrived" && <span className="text-indigo-600 font-black">✓</span>}
+                              </DropdownMenuItem>
                             </DropdownMenuGroup>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -2115,13 +2164,22 @@ export default function AdminLogisticsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500">Initial Status</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-zinc-500">Status</label>
+                  {editingShipmentId !== null && shipments.find(s => s.id === editingShipmentId)?.status === "Arrived" && (
+                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-wider">Locked — Arrived</span>
+                  )}
+                </div>
                 <select
-                  className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none"
+                  disabled={editingShipmentId !== null && shipments.find(s => s.id === editingShipmentId)?.status === "Arrived"}
+                  className={cn(
+                    "w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none",
+                    editingShipmentId !== null && shipments.find(s => s.id === editingShipmentId)?.status === "Arrived" && "bg-zinc-100 cursor-not-allowed opacity-75"
+                  )}
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 >
-                  <option value="In Transit">In Transit</option>
+                  <option value="In Transit" disabled={editingShipmentId !== null && shipments.find(s => s.id === editingShipmentId)?.status === "Arrived"}>In Transit</option>
                   <option value="Arrived">Arrived</option>
                 </select>
               </div>

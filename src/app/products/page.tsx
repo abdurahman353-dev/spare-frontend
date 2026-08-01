@@ -19,7 +19,7 @@ async function getCategories(): Promise<Category[]> {
   console.log(`[RSC DEBUG] getCategories fetching from: ${targetUrl}`);
   try {
     const res = await fetch(targetUrl, {
-      next: { revalidate: 300 },
+      cache: 'no-store',
     });
     if (!res.ok) {
       console.error(`[RSC ERROR] getCategories failed with HTTP ${res.status}: ${res.statusText} at ${targetUrl}`);
@@ -40,7 +40,7 @@ async function getBrands(): Promise<Brand[]> {
   console.log(`[RSC DEBUG] getBrands fetching from: ${targetUrl}`);
   try {
     const res = await fetch(targetUrl, {
-      next: { revalidate: 300 },
+      cache: 'no-store',
     });
     if (!res.ok) {
       console.error(`[RSC ERROR] getBrands failed with HTTP ${res.status}: ${res.statusText} at ${targetUrl}`);
@@ -75,7 +75,7 @@ async function getProducts(params: {
 
   try {
     const res = await fetch(targetUrl, {
-      next: { revalidate: 300 },
+      cache: 'no-store',
     });
     if (!res.ok) {
       console.error(`[RSC ERROR] getProducts failed with HTTP ${res.status}: ${res.statusText} at ${targetUrl}`);

@@ -566,6 +566,15 @@ export function ProductsClient({
     }
   }, []);
 
+  // Auto-refresh product data (inventory, prices, stock) every 60 seconds so
+  // customers always see live quantities without needing to reload the page.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [router]);
+
   const bizName = settings.store_name || "our store";
   const bizTagline = settings.store_tagline || "";
   const bizCurrency = settings.currency || "Ksh";

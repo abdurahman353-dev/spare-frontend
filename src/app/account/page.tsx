@@ -1277,7 +1277,7 @@ function AccountPortalInner() {
                                         setSelectedOrder(order);
                                         setIsOrderModalOpen(true);
                                         // Fetch full detail for delivery evidence (signature/photo)
-                                        api.get(API_ENDPOINTS.orders.byId(order.id))
+                                        api.get(API_ENDPOINTS.orders.myOrderById(order.id))
                                           .then(res => setFetchedOrderDetail(res.data))
                                           .catch(() => setFetchedOrderDetail(null));
                                       }}

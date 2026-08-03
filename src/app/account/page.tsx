@@ -2369,9 +2369,7 @@ function AccountPortalInner() {
                   if (!item) return;
                   const qty = Number(qtyVal);
                   const pCost = Number(item.price) * qty;
-                  const feePerUnit = (item.shipping_fee_per_unit !== undefined && item.shipping_fee_per_unit !== null)
-                    ? Number(item.shipping_fee_per_unit)
-                    : (orderShippingFee > 0 ? orderShippingFee / totalActiveUnits : 0);
+                  const feePerUnit = Number(item.shipping_fee_per_unit ?? 0);
                   const sShare = feePerUnit * qty;
 
                   productCostTotal += pCost;

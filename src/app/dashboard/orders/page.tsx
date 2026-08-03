@@ -3532,10 +3532,8 @@ function AdminOrdersPageInner() {
                     const activeUnits = Math.max(1, (voidOrderTarget.items || []).filter((i: any) => i.cancellation_status !== "Cancelled").reduce((s: number, i: any) => s + (i.quantity || 1), 0));
                     const remainingShippingFee = Number(voidOrderTarget.shipping_fee || 0);
 
-                    // Use exact item.shipping_fee_per_unit if provided, else compute active share
-                    const itemFeePerUnit = (item.shipping_fee_per_unit !== undefined && item.shipping_fee_per_unit !== null)
-                      ? Number(item.shipping_fee_per_unit)
-                      : (activeUnits > 0 ? remainingShippingFee / activeUnits : 0);
+                    // Use exact item.shipping_fee_per_unit from backend model (strictly 0 if not set)
+                    const itemFeePerUnit = Number(item.shipping_fee_per_unit ?? 0);
 
                     const productCost = Number(item.price) * qtyToCancel;
                     const shippingShare = itemFeePerUnit * qtyToCancel;

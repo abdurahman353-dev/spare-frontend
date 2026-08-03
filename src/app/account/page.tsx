@@ -1420,20 +1420,25 @@ function AccountPortalInner() {
 
                     {/* ── Returns Ledger ────────────────────────────────────── */}
                     <div className="rounded-xl border border-[#e2e8f0] bg-white shadow-sm overflow-hidden">
-                      <div className="px-5 py-4 border-b border-[#f1f5f9] flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-bold text-[#1e293b]">My Return Requests</p>
-                          <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Track the status of all your submitted return requests below.</p>
+                      <div className="px-5 py-4 border-b border-[#f1f5f9] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center justify-between sm:block w-full sm:w-auto">
+                          <div>
+                            <p className="text-sm font-bold text-[#1e293b]">My Return Requests</p>
+                            <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Track the status of all your submitted return requests below.</p>
+                          </div>
+                          <span className="sm:hidden text-[10px] font-black bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full border border-purple-100 shrink-0">
+                            {returnsLoading ? "—" : `${myReturns.length} request${myReturns.length !== 1 ? "s" : ""}`}
+                          </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
                           <button
                             onClick={() => { setReturnOrderSearch(""); setIsReturnOrderPickerOpen(true); }}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm"
+                            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 text-[12px] font-bold px-4 py-2.5 sm:py-2 rounded-lg bg-purple-600 hover:bg-purple-700 active:scale-[0.98] text-white transition-all shadow-sm shrink-0 whitespace-nowrap"
                           >
                             <RotateCcw className="h-3.5 w-3.5" />
                             + Request a Return
                           </button>
-                          <span className="text-[11px] font-black bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 shadow-sm">
+                          <span className="hidden sm:inline-flex text-[11px] font-black bg-purple-50 text-purple-700 px-3 py-1.5 rounded-full border border-purple-100 shrink-0 whitespace-nowrap">
                             {returnsLoading ? "—" : `${myReturns.length} request${myReturns.length !== 1 ? "s" : ""}`}
                           </span>
                         </div>
@@ -2403,8 +2408,8 @@ function AccountPortalInner() {
             <DialogTitle className="font-bold text-white flex items-center gap-2 text-base">
               <RotateCcw className="h-4 w-4" /> Select Order to Return
             </DialogTitle>
-            <DialogDescription className="text-purple-100 text-xs font-medium mt-1">
-              Choose an eligible order below. You can only return orders within the return window.
+            <DialogDescription className="text-purple-100 text-xs font-medium mt-1 leading-relaxed">
+              Choose an eligible order below. Only <strong>Pending</strong>, <strong>Processing</strong>, and <strong>Delivered</strong> orders (within 14 days) are refundable.
             </DialogDescription>
           </DialogHeader>
 
@@ -2532,14 +2537,14 @@ function AccountPortalInner() {
             })()}
           </div>
 
-          <div className="px-5 py-3 bg-[#f8fafc] border-t border-[#f1f5f9] flex items-center justify-between">
-            <p className="text-[10px] text-zinc-400 font-medium">
-              Click an order to view details, then click <strong className="text-purple-600">Request Return</strong>
+          <div className="px-5 py-3 bg-[#f8fafc] border-t border-[#f1f5f9] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <p className="text-[10px] text-zinc-500 font-medium leading-normal">
+              💡 <strong>Refund Eligibility:</strong> Only Pending, Processing &amp; Delivered orders (within 14 days) are eligible for return. Click an order to view details, then click <strong className="text-purple-600">Request Return</strong>.
             </p>
             <Button
               variant="outline"
               size="sm"
-              className="font-bold text-[12px] border-[#e2e8f0] h-8"
+              className="font-bold text-[12px] border-[#e2e8f0] h-8 shrink-0 self-end sm:self-auto"
               onClick={() => setIsReturnOrderPickerOpen(false)}
             >
               Close

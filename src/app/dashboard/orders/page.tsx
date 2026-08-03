@@ -598,6 +598,63 @@ function AdminOrdersPageInner() {
     })),
     [selectedProductDetails]);
 
+  const extractCityFromWarehouse = useCallback((warehouse: any): string => {
+    if (!warehouse) return "";
+    const name = (warehouse.name || "").trim();
+    const loc = (warehouse.location || "").trim();
+    const knownCities = ["Nairobi", "Mombasa", "Kisumu", "Nakuru", "Eldoret", "Kampala", "Dar es Salaam", "Arusha", "Kigali"];
+    for (const city of knownCities) {
+      if (name.toLowerCase().includes(city.toLowerCase()) || loc.toLowerCase().includes(city.toLowerCase())) {
+        return city;
+      }
+    }
+    return loc || name;
+  }, []);
+
+  const activeOriginHubCity = useMemo(() => {
+    if (orderItems.length > 0) {
+      const warehouse = warehouses.find((w: any) => w.id === orderItems[0]?.warehouse_id);
+      if (warehouse) return extractCityFromWarehouse(warehouse);
+    }
+    if (selectedWarehouseId) {
+      const warehouse = warehouses.find((w: any) => w.id.toString() === selectedWarehouseId);
+      if (warehouse) return extractCityFromWarehouse(warehouse);
+    }
+    return "";
+  }, [orderItems, selectedWarehouseId, warehouses, extractCityFromWarehouse]);
+
+  useEffect(() => {
+    if (shippingMethod === "Local Delivery" && activeOriginHubCity) {
+      const country = activeOriginHubCity === "Kampala" ? "Uganda" : (activeOriginHubCity === "Kigali" ? "Rwanda" : "Kenya");
+      if (shippingCity !== activeOriginHubCity) {
+        setShippingCountry(country);
+        setShippingCity(activeOriginHubCity);
+      }
+    }
+  }, [shippingMethod, activeOriginHubCity, shippingCity]);
+
+  const editOriginHubCity = useMemo(() => {
+    if (editWalkInTarget?.items && editWalkInTarget.items.length > 0) {
+      const item = editWalkInTarget.items[0];
+      const warehouse = item.warehouse || warehouses.find((w: any) => w.id === item.warehouse_id);
+      if (warehouse) return extractCityFromWarehouse(warehouse);
+    }
+    return "";
+  }, [editWalkInTarget, warehouses, extractCityFromWarehouse]);
+
+  useEffect(() => {
+    if (editWalkInForm.shipping_method === "Local Delivery" && editOriginHubCity) {
+      const country = editOriginHubCity === "Kampala" ? "Uganda" : (editOriginHubCity === "Kigali" ? "Rwanda" : "Kenya");
+      if (editWalkInForm.shipping_city !== editOriginHubCity) {
+        setEditWalkInForm(prev => ({
+          ...prev,
+          shipping_country: prev.shipping_country || country,
+          shipping_city: editOriginHubCity,
+        }));
+      }
+    }
+  }, [editWalkInForm.shipping_method, editOriginHubCity]);
+
   const countryDropdownItems = useMemo(() =>
     countriesData.map((c: any) => ({ id: c.name, name: c.name })),
     [countriesData]);
@@ -3323,7 +3380,14 @@ function AdminOrdersPageInner() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-500">Destination City <span className="text-red-500">*</span></label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-zinc-500">Destination City <span className="text-red-500">*</span></label>
+                          {activeOriginHubCity && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              🔒 Local Dispatch (Hub: {activeOriginHubCity})
+                            </span>
+                          )}
+                        </div>
                         <SearchableDropdown
                           disabled={!shippingCountry}
                           items={cityDropdownItems}
@@ -3738,7 +3802,14 @@ function AdminOrdersPageInner() {
                 </div>
                 {/* Destination City */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
+                    {editOriginHubCity && (
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        🔒 Local Dispatch (Hub: {editOriginHubCity})
+                      </span>
+                    )}
+                  </div>
                   <SearchableDropdown
                     disabled={!editWalkInForm.shipping_country || editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
                     items={editCityDropdownItems}

@@ -827,7 +827,7 @@ function AdminOrdersPageInner() {
     setVoidTransactionId("");
     const activeItems = (order.items || [])
       .filter((item: any) => item.cancellation_status !== "Cancelled");
-    const activeItemIds = activeItems.map((item: any) => item.id);
+    const activeItemIds: number[] = [];
     setSelectedVoidItemIds(activeItemIds);
 
     const initialQuantities: Record<number, number> = {};

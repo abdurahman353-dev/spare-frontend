@@ -248,6 +248,8 @@ function AccountPortalInner() {
   const [selectedItemIdsToCancel, setSelectedItemIdsToCancel] = useState<number[]>([]);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDeleteAddressModalOpen, setIsDeleteAddressModalOpen] = useState(false);
+  const [isReturnOrderPickerOpen, setIsReturnOrderPickerOpen] = useState(false);
+  const [returnOrderSearch, setReturnOrderSearch] = useState("");
   const [hiddenAddresses, setHiddenAddresses] = useState<string[]>([]);
 
   const [destinations, setDestinations] = useState<any[]>([]);
@@ -1402,7 +1404,7 @@ function AccountPortalInner() {
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[#f1f5f9]">
                         {[
-                          { step: "1", icon: "📋", title: "Submit Request", desc: "Go to My Orders, find your order and click \"Request Return\"." },
+                          { step: "1", icon: "📋", title: "Submit Request", desc: "Click \"+ Request a Return\" above, select your eligible order, then click \"Request Return\" in the order details." },
                           { step: "2", icon: "🔍", title: "Admin Review", desc: "Our team reviews your request within 1–2 business days." },
                           { step: "3", icon: "📦", title: "Return Item", desc: "For delivered orders: return the part to our warehouse. Pending/processing orders: nothing to return — item is still with us." },
                           { step: "4", icon: "💰", title: "Receive Refund", desc: "Refund is sent to your M-Pesa once approved (immediate for pending orders, after receipt confirmation for delivered orders)." },
@@ -1423,9 +1425,18 @@ function AccountPortalInner() {
                           <p className="text-sm font-bold text-[#1e293b]">My Return Requests</p>
                           <p className="text-[11px] text-zinc-500 font-medium mt-0.5">Track the status of all your submitted return requests below.</p>
                         </div>
-                        <span className="text-[11px] font-black bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 shadow-sm">
-                          {returnsLoading ? "—" : `${myReturns.length} request${myReturns.length !== 1 ? "s" : ""}`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => { setReturnOrderSearch(""); setIsReturnOrderPickerOpen(true); }}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            + Request a Return
+                          </button>
+                          <span className="text-[11px] font-black bg-purple-50 text-purple-700 px-3 py-1 rounded-full border border-purple-100 shadow-sm">
+                            {returnsLoading ? "—" : `${myReturns.length} request${myReturns.length !== 1 ? "s" : ""}`}
+                          </span>
+                        </div>
                       </div>
 
                       {returnsLoading ? (
@@ -1450,8 +1461,15 @@ function AccountPortalInner() {
                           <RotateCcw className="h-8 w-8 opacity-30" />
                           <div>
                             <p className="text-sm font-bold text-zinc-500">No return requests yet</p>
-                            <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto">If you need to return a part, go to the <strong>My Orders</strong> tab, find the delivered order, and click <strong>"Request Return"</strong>.</p>
+                            <p className="text-xs text-zinc-400 mt-1 max-w-xs mx-auto">Click <strong>"+ Request a Return"</strong> above to select an eligible order and submit a return request.</p>
                           </div>
+                          <button
+                            onClick={() => { setReturnOrderSearch(""); setIsReturnOrderPickerOpen(true); }}
+                            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-sm"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            + Request a Return
+                          </button>
                         </div>
                       ) : (
                         <div
@@ -2374,6 +2392,159 @@ function AccountPortalInner() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Return Order Picker Dialog ─────────────────────────────────────── */}
+      {/* Step 1: Customer selects which order they want to return from */}
+      <Dialog open={isReturnOrderPickerOpen} onOpenChange={setIsReturnOrderPickerOpen}>
+        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[540px] p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-5 bg-gradient-to-r from-purple-600 to-purple-700 text-white">
+            <DialogTitle className="font-bold text-white flex items-center gap-2 text-base">
+              <RotateCcw className="h-4 w-4" /> Select Order to Return
+            </DialogTitle>
+            <DialogDescription className="text-purple-100 text-xs font-medium mt-1">
+              Choose an eligible order below. You can only return orders within the return window.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Search bar */}
+          <div className="px-5 pt-4 pb-2 border-b border-[#f1f5f9]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+              <input
+                type="text"
+                placeholder="Search by order ref, part name..."
+                value={returnOrderSearch}
+                onChange={(e) => setReturnOrderSearch(e.target.value)}
+                className="w-full pl-8 pr-3 h-9 text-[12px] border border-[#e2e8f0] rounded-lg bg-[#f8fafc] text-[#1e293b] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-300 transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Eligible orders list */}
+          <div className="overflow-y-auto" style={{ maxHeight: "400px" }}>
+            {(() => {
+              const sq = returnOrderSearch.toLowerCase().trim();
+              const eligibleOrders = orders.filter((o: any) => {
+                // Must be within return period
+                if (!isWithinReturnPeriod(o)) return false;
+                // Must not already have a non-rejected return (unless delivered — allowed 1 more)
+                const existingReturns = myReturns.filter((r: any) => r.order_id === o.id);
+                if (o.status === "Delivered") {
+                  // Allow if no post-delivery return exists
+                  if (existingReturns.some((r: any) => r.is_post_delivery && r.status !== "Rejected")) return false;
+                } else {
+                  if (existingReturns.some((r: any) => r.status !== "Rejected")) return false;
+                }
+                // Search filter
+                if (!sq) return true;
+                const trackMatch = (o.tracking_number || "").toLowerCase().includes(sq);
+                const partMatch = o.items?.some((i: any) =>
+                  (i.product?.name || "").toLowerCase().includes(sq) ||
+                  (i.product?.part_number || "").toLowerCase().includes(sq)
+                );
+                return trackMatch || partMatch;
+              });
+
+              if (loading) {
+                return (
+                  <div className="flex items-center justify-center py-14">
+                    <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+                  </div>
+                );
+              }
+
+              if (eligibleOrders.length === 0) {
+                return (
+                  <div className="flex flex-col items-center justify-center py-14 text-zinc-400 gap-3">
+                    <RotateCcw className="h-8 w-8 opacity-25" />
+                    <div className="text-center">
+                      <p className="text-sm font-bold text-zinc-500">
+                        {sq ? "No orders match your search" : "No eligible orders"}
+                      </p>
+                      <p className="text-xs text-zinc-400 mt-1 max-w-[260px] mx-auto">
+                        {sq
+                          ? "Try a different search term."
+                          : "Orders must be Pending, Processing, or Delivered (within 14 days) and not have an existing active return request."}
+                      </p>
+                    </div>
+                    {sq && (
+                      <button
+                        onClick={() => setReturnOrderSearch("")}
+                        className="text-xs text-purple-600 font-bold hover:underline"
+                      >
+                        Clear search
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="divide-y divide-[#f1f5f9]">
+                  {eligibleOrders.map((order: any) => {
+                    const validItems = order.items?.filter((i: any) => i.cancellation_status !== "Cancelled") || [];
+                    const statusColor =
+                      order.status === "Delivered" ? "bg-emerald-500 text-white" :
+                      order.status === "Processing" ? "bg-orange-500 text-white" :
+                      "bg-amber-400 text-amber-950";
+                    return (
+                      <button
+                        key={order.id}
+                        className="w-full text-left px-5 py-4 hover:bg-purple-50/60 transition-colors group flex items-center justify-between gap-4"
+                        onClick={() => {
+                          setIsReturnOrderPickerOpen(false);
+                          // Pre-load the order into the inspect modal, fetch full detail, then open inspect
+                          setSelectedOrder(order);
+                          setFetchedOrderDetail(null);
+                          setIsOrderModalOpen(true);
+                          api.get(API_ENDPOINTS.orders.myOrderById(order.id))
+                            .then((res) => setFetchedOrderDetail(res.data))
+                            .catch(() => setFetchedOrderDetail(null));
+                        }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[13px] font-extrabold text-[#1e293b] group-hover:text-purple-700 transition-colors">
+                              {order.tracking_number || `#ORD-${order.id}`}
+                            </span>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${statusColor}`}>
+                              {order.status}
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-500 font-medium truncate">
+                            {validItems[0]?.product?.name || "Genuine Spare Part"}
+                            {validItems.length > 1 && ` +${validItems.length - 1} more`}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-medium mt-0.5">
+                            {new Date(order.created_at).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })}
+                            {" · "}{validItems.length} item{validItems.length !== 1 ? "s" : ""}
+                            {" · "}Ksh {Number(order.total_amount || 0).toLocaleString()}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-zinc-300 group-hover:text-purple-500 transition-colors shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="px-5 py-3 bg-[#f8fafc] border-t border-[#f1f5f9] flex items-center justify-between">
+            <p className="text-[10px] text-zinc-400 font-medium">
+              Click an order to view details, then click <strong className="text-purple-600">Request Return</strong>
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="font-bold text-[12px] border-[#e2e8f0] h-8"
+              onClick={() => setIsReturnOrderPickerOpen(false)}
+            >
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -2352,6 +2352,63 @@ function AccountPortalInner() {
                 </div>
               )}
 
+              {/* Live Estimated Refund Breakdown */}
+              {(() => {
+                const selectedEntries = Object.entries(selectedReturnItems).filter(([_, qty]) => Number(qty) > 0);
+                if (selectedEntries.length === 0) return null;
+
+                let productCostTotal = 0;
+                let shippingShareTotal = 0;
+
+                const validItems = (selectedOrder?.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                const totalActiveUnits = Math.max(1, validItems.reduce((acc: number, item: any) => acc + Number(item.quantity || 1), 0));
+                const orderShippingFee = Number(selectedOrder?.shipping_fee || 0);
+
+                selectedEntries.forEach(([itemIdStr, qtyVal]) => {
+                  const item = validItems.find((i: any) => i.id.toString() === itemIdStr);
+                  if (!item) return;
+                  const qty = Number(qtyVal);
+                  const pCost = Number(item.price) * qty;
+                  const feePerUnit = (item.shipping_fee_per_unit !== undefined && item.shipping_fee_per_unit !== null)
+                    ? Number(item.shipping_fee_per_unit)
+                    : (orderShippingFee > 0 ? orderShippingFee / totalActiveUnits : 0);
+                  const sShare = feePerUnit * qty;
+
+                  productCostTotal += pCost;
+                  shippingShareTotal += sShare;
+                });
+
+                const estimatedTotal = productCostTotal + shippingShareTotal;
+
+                return (
+                  <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-4 space-y-2 text-xs">
+                    <div className="flex items-center justify-between font-bold text-purple-900 border-b border-purple-100 pb-2">
+                      <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                        <RotateCcw className="h-3.5 w-3.5 text-purple-600" /> Live Estimated Refund
+                      </span>
+                      <span className="text-sm font-black text-purple-700">Ksh {estimatedTotal.toLocaleString()}</span>
+                    </div>
+                    <div className="space-y-1 text-purple-800 text-[11px] font-medium pt-1">
+                      <div className="flex justify-between">
+                        <span>Product cost refund:</span>
+                        <span className="font-bold">Ksh {productCostTotal.toLocaleString()}</span>
+                      </div>
+                      {shippingShareTotal > 0 ? (
+                        <div className="flex justify-between text-emerald-700">
+                          <span>Shipping fee refund share:</span>
+                          <span className="font-bold">+ Ksh {shippingShareTotal.toLocaleString()}</span>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between text-zinc-400 text-[10px]">
+                          <span>Shipping fee refund share:</span>
+                          <span>Ksh 0 (No shipping fee for selected items)</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">Return Reason *</label>
                 <select

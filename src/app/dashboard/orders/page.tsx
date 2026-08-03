@@ -3529,10 +3529,16 @@ function AdminOrdersPageInner() {
                     const isCancelled = item.cancellation_status === "Cancelled";
                     const isChecked = selectedVoidItemIds.includes(item.id);
                     const qtyToCancel = voidQuantities[item.id] || item.quantity;
-                    const totalUnits = Math.max(1, (voidOrderTarget.items || []).reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                    const shippingFee = Number(voidOrderTarget.shipping_fee || 0);
+                    const activeUnits = Math.max(1, (voidOrderTarget.items || []).filter((i: any) => i.cancellation_status !== "Cancelled").reduce((s: number, i: any) => s + (i.quantity || 1), 0));
+                    const remainingShippingFee = Number(voidOrderTarget.shipping_fee || 0);
+
+                    // Use exact item.shipping_fee_per_unit if provided, else compute active share
+                    const itemFeePerUnit = (item.shipping_fee_per_unit !== undefined && item.shipping_fee_per_unit !== null)
+                      ? Number(item.shipping_fee_per_unit)
+                      : (activeUnits > 0 ? remainingShippingFee / activeUnits : 0);
+
                     const productCost = Number(item.price) * qtyToCancel;
-                    const shippingShare = (shippingFee / totalUnits) * qtyToCancel;
+                    const shippingShare = itemFeePerUnit * qtyToCancel;
                     const itemRefundTotal = productCost + shippingShare;
                     return (
                       <div key={item.id} className="flex flex-col py-2 border-b last:border-0 border-zinc-100 gap-1">
@@ -3559,9 +3565,9 @@ function AdminOrdersPageInner() {
                           <span className="shrink-0 text-right flex flex-col items-end leading-snug">
                             <span className="text-zinc-500">{qtyToCancel} × Ksh {Number(item.price).toLocaleString()}</span>
                             {shippingShare > 0 && (
-                              <span className="text-[10px] text-zinc-400">+ Ksh {Math.round(shippingShare).toLocaleString()} shipping</span>
+                              <span className="text-[10px] text-zinc-400">+ Ksh {shippingShare % 1 === 0 ? shippingShare.toFixed(0) : shippingShare.toFixed(2)} shipping</span>
                             )}
-                            <span className="text-[11px] font-black text-zinc-700">= Ksh {Math.round(itemRefundTotal).toLocaleString()}</span>
+                            <span className="text-[11px] font-black text-zinc-700">= Ksh {(itemRefundTotal % 1 === 0 ? itemRefundTotal.toFixed(0) : itemRefundTotal.toFixed(2))}</span>
                           </span>
                         </div>
                         {isChecked && !isCancelled && (

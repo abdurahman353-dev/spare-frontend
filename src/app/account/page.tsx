@@ -1205,7 +1205,7 @@ function AccountPortalInner() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col gap-0.5">
-                                    {order.items?.map((item: any, i: number) => (
+                                    {validItems.map((item: any, i: number) => (
                                       <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
                                         {item.product?.suitable_vehicle || "—"}
                                       </span>

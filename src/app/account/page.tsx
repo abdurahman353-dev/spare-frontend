@@ -1606,14 +1606,17 @@ function AccountPortalInner() {
                                         <span className="text-zinc-500 font-medium">Product cost</span>
                                         <span className="font-bold text-[#1e293b]">Ksh {productCostTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
                                       </div>
-                                      {shippingShareTotal > 0 && (
-                                        <div className="flex items-center justify-between text-xs">
-                                          <span className="text-zinc-500 font-medium">
-                                            Shipping fee <span className="hidden sm:inline text-zinc-400">(per returned unit)</span>
-                                          </span>
-                                          <span className="font-bold text-[#1e293b]">Ksh {shippingShareTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
-                                        </div>
-                                      )}
+                                      <div className="flex items-center justify-between text-xs">
+                                        <span className="text-zinc-500 font-medium">
+                                          Shipping fee <span className="hidden sm:inline text-zinc-400">(per returned unit)</span>
+                                        </span>
+                                        <span className="font-bold text-[#1e293b]">
+                                          {shippingShareTotal > 0
+                                            ? `Ksh ${shippingShareTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}`
+                                            : <span className="text-zinc-400 font-semibold">Ksh 0.00</span>
+                                          }
+                                        </span>
+                                      </div>
                                       <div className="border-t border-zinc-100 pt-1.5 flex items-center justify-between text-xs">
                                         <span className={cn("font-extrabold", ret.status === "Rejected" ? "text-red-600 line-through" : "text-[#1e293b]")}>Total Refund</span>
                                         <span className={cn("text-sm font-extrabold", ret.status === "Approved" || ret.status === "Completed" ? "text-emerald-600" : ret.status === "Rejected" ? "text-red-500 line-through" : "text-amber-700")}>

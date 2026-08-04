@@ -3649,20 +3649,21 @@ function AdminOrdersPageInner() {
                 {/* Total to Refund — live preview based on checked items */}
                 {selectedVoidItemIds.length > 0 && (() => {
                   const allItems = voidOrderTarget?.items || [];
-                  const totalUnits = Math.max(1, allItems.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-                  const shippingFee = Number(voidOrderTarget?.shipping_fee || 0);
                   const total = allItems
                     .filter((i: any) => selectedVoidItemIds.includes(i.id) && i.cancellation_status !== "Cancelled")
                     .reduce((sum: number, i: any) => {
                       const qty = voidQuantities[i.id] || i.quantity;
+                      const itemFeePerUnit = Number(i.shipping_fee_per_unit ?? 0);
                       const productCost = Number(i.price) * qty;
-                      const shippingShare = (shippingFee / totalUnits) * qty;
+                      const shippingShare = itemFeePerUnit * qty;
                       return sum + productCost + shippingShare;
                     }, 0);
                   return (
                     <div className="mt-2 pt-2 border-t border-zinc-200 flex justify-between items-center">
                       <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Total to Refund to Customer</span>
-                      <span className="text-sm font-black text-red-600">Ksh {Math.round(total).toLocaleString()}</span>
+                      <span className="text-sm font-black text-red-600">
+                        Ksh {(total % 1 === 0 ? total.toFixed(0) : total.toFixed(2))}
+                      </span>
                     </div>
                   );
                 })()}

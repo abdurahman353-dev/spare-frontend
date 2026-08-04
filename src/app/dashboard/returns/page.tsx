@@ -603,12 +603,10 @@ export default function ReturnsManagementPage() {
                         <span className="text-zinc-500 font-medium">Product cost</span>
                         <span className="font-bold text-[#1e293b]">{currency} {productCostTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
                       </div>
-                      {shippingShareTotal > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-zinc-500 font-medium">Shipping fee share</span>
-                          <span className="font-bold text-[#1e293b]">{currency} {shippingShareTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-500 font-medium">Shipping fee share</span>
+                        <span className="font-bold text-[#1e293b]">{currency} {shippingShareTotal.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                      </div>
                       <div className="border-t border-zinc-100 pt-1.5 flex items-center justify-between font-extrabold">
                         <span className="text-[#1e293b]">Total Refund Amount</span>
                         <span className="text-purple-600 text-sm">
@@ -812,12 +810,10 @@ export default function ReturnsManagementPage() {
                           <span>Product cost</span>
                           <span className="font-semibold">Ksh {productCost.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
                         </div>
-                        {shippingShare > 0 && (
-                          <div className="flex justify-between text-zinc-600">
-                            <span>Shipping fee share</span>
-                            <span className="font-semibold">Ksh {shippingShare.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
-                          </div>
-                        )}
+                        <div className="flex justify-between text-zinc-600">
+                          <span>Shipping fee share</span>
+                          <span className="font-semibold">Ksh {shippingShare.toLocaleString("en-KE", { minimumFractionDigits: 2 })}</span>
+                        </div>
                         <div className="flex justify-between border-t border-zinc-200 pt-1.5 mt-1">
                           <span className="font-black text-zinc-800">Total Refund Amount</span>
                           <span className={`font-black text-sm ${actionType === 'reject' ? 'text-red-500 line-through opacity-60' : 'text-emerald-600'}`}>

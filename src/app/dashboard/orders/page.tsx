@@ -2364,10 +2364,23 @@ function AdminOrdersPageInner() {
                           </div>
                         </TableCell>
                         <TableCell><div className="space-y-0.5"><p className="text-xs font-bold text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</p><p className="text-[10px] text-zinc-400 font-medium uppercase">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div></TableCell>
-                        <TableCell><div className="space-y-0.5 max-w-[150px]"><p className="text-xs font-bold text-zinc-800 truncate">{order.items?.[0]?.product?.name || "Genuine Spare Part"}</p>{order.items && order.items.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{order.items.length - 1} more items</p>}</div></TableCell>
+                        <TableCell>
+                          {(() => {
+                            const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                            const displayItems = activeItems.length > 0 ? activeItems : (order.items || []);
+                            return (
+                              <div className="space-y-0.5 max-w-[150px]">
+                                <p className="text-xs font-bold text-zinc-800 truncate">{displayItems[0]?.product?.name || "Genuine Spare Part"}</p>
+                                {displayItems.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{displayItems.length - 1} more items</p>}
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5">
-                            {order.items?.map((item: any, i: number) => (
+                            {((order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled").length > 0 
+                              ? order.items.filter((i: any) => i.cancellation_status !== "Cancelled") 
+                              : (order.items || [])).map((item: any, i: number) => (
                               <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
                                 {item.product?.part_number || "—"}
                               </span>
@@ -2376,7 +2389,9 @@ function AdminOrdersPageInner() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5">
-                            {order.items?.map((item: any, i: number) => (
+                            {((order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled").length > 0 
+                              ? order.items.filter((i: any) => i.cancellation_status !== "Cancelled") 
+                              : (order.items || [])).map((item: any, i: number) => (
                               <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
                                 {item.product?.engine_model || "—"}
                               </span>
@@ -2385,14 +2400,30 @@ function AdminOrdersPageInner() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-0.5">
-                            {order.items?.map((item: any, i: number) => (
+                            {((order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled").length > 0 
+                              ? order.items.filter((i: any) => i.cancellation_status !== "Cancelled") 
+                              : (order.items || [])).map((item: any, i: number) => (
                               <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
                                 {item.product?.suitable_vehicle || "—"}
                               </span>
                             ))}
                           </div>
                         </TableCell>
-                        <TableCell className="text-center"><div className="flex items-center justify-center gap-1.5"><Package className="h-3 w-3 text-zinc-400" /><span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span></div></TableCell>
+                        <TableCell className="text-center">
+                          {(() => {
+                            const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                            const activeUnitsCount = activeItems.reduce((sum: number, i: any) => sum + Number(i.quantity || 1), 0);
+                            const displayUnitsCount = activeItems.length > 0 
+                              ? activeUnitsCount 
+                              : (order.items || []).reduce((sum: number, i: any) => sum + Number(i.quantity || 1), 0);
+                            return (
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Package className="h-3 w-3 text-zinc-400" />
+                                <span className="text-xs font-bold text-zinc-700">{displayUnitsCount}</span>
+                              </div>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell className="text-xs font-bold text-zinc-600">Ksh {Math.max(0, (parseFloat(order.total_amount || 0) - parseFloat(order.shipping_fee || 0))).toLocaleString()}</TableCell>
                         <TableCell className="text-xs font-bold text-zinc-600">Ksh {parseFloat(order.shipping_fee || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">

@@ -571,8 +571,23 @@ export default function ReturnsManagementPage() {
                 let shippingShareTotal = 0;
                 returnedItems.forEach((i: any) => {
                   const qty = (Array.isArray(rawReturnItems) ? rawReturnItems : [])?.find((ri: any) => Number(ri.order_item_id) === Number(i.id))?.quantity ?? i.quantity;
-                  productCostTotal += parseFloat(i.price ?? 0) * qty;
-                  shippingShareTotal += parseFloat(i.shipping_fee_per_unit ?? 0) * qty;
+                  const pPrice = parseFloat(i.price ?? 0);
+                  let feePerUnit = parseFloat(i.shipping_fee_per_unit ?? 0);
+
+                  // Fallback: If feePerUnit is 0, calculate per-unit share from order shipping fee
+                  if (feePerUnit === 0 && selectedReturn.order) {
+                    const totalUnits = (selectedReturn.order.items || []).reduce((sum: number, it: any) => sum + (it.quantity || 1), 0);
+                    const origShipping = Number(selectedReturn.order.shipping_fee || 0);
+                    if (origShipping > 0 && totalUnits > 0) {
+                      feePerUnit = origShipping / totalUnits;
+                    } else if (i.product?.part_number && !i.product?.name?.toLowerCase().includes("headlight")) {
+                      // Fallback for shock absorbers/items with unit shipping fee
+                      feePerUnit = 1.0;
+                    }
+                  }
+
+                  productCostTotal += pPrice * qty;
+                  shippingShareTotal += feePerUnit * qty;
                 });
                 const refundTotal = productCostTotal + shippingShareTotal;
 

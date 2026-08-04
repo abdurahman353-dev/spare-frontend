@@ -2583,20 +2583,27 @@ function AdminOrdersPageInner() {
                                     </DropdownMenuItem>
                                   </>
                                 )}
-                                {/* Assign Driver — visible for Shipped or Arrived orders */}
-                                {(order.status === "Shipped" || order.status === "Arrived") && (
-                                  <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuLabel className="text-[10px] font-black text-indigo-400 uppercase px-2 py-1.5">Delivery Assignment</DropdownMenuLabel>
-                                    <DropdownMenuItem
-                                      onClick={() => handleOpenAssignDriver(order)}
-                                      className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600"
-                                    >
-                                      <UserPlus className="mr-2 h-4 w-4" />
-                                      {order.delivered_by_user_id ? "Reassign Driver" : "Assign Driver"}
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
+                                {/* Assign Driver — for local: Shipped or Arrived; for cross-city: Arrived only */}
+                                {(() => {
+                                  const isCrossCity = !isLocalShipmentRoute(order);
+                                  const showAssignDriver = isCrossCity
+                                    ? order.status === "Arrived"
+                                    : (order.status === "Shipped" || order.status === "Arrived");
+                                  return showAssignDriver ? (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuLabel className="text-[10px] font-black text-indigo-400 uppercase px-2 py-1.5">Delivery Assignment</DropdownMenuLabel>
+                                      <DropdownMenuItem
+                                        onClick={() => handleOpenAssignDriver(order)}
+                                        className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600"
+                                      >
+                                        <UserPlus className="mr-2 h-4 w-4" />
+                                        {order.delivered_by_user_id ? "Reassign Driver" : "Assign Driver"}
+                                      </DropdownMenuItem>
+                                    </>
+                                  ) : null;
+                                })()}
+
                               </DropdownMenuGroup>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -2883,7 +2890,10 @@ function AdminOrdersPageInner() {
                 <ArrowRightLeft className="h-3.5 w-3.5 text-indigo-500" />
                 Handover Flow Timeline
               </h4>
-              <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 space-y-4 text-left">
+              <div className={cn(
+                "bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-left",
+                handoverHistory.length > 5 ? "max-h-[380px] overflow-y-auto custom-scrollbar" : "space-y-4"
+              )}>
                 {loadingHandoverHistory ? (
                   <div className="flex items-center justify-center py-4 gap-2 text-zinc-400 text-xs font-bold uppercase tracking-wider">
                     <Loader2 className="h-4 w-4 animate-spin text-indigo-500" /> Loading Timeline...
@@ -2891,7 +2901,7 @@ function AdminOrdersPageInner() {
                 ) : handoverHistory.length === 0 ? (
                   <p className="text-xs text-zinc-450 font-medium text-center py-2">No handover history logged for this order yet.</p>
                 ) : (
-                  <div className="relative border-l border-zinc-250 pl-4 ml-1 space-y-4">
+                  <div className={cn("relative border-l border-zinc-250 pl-4 ml-1", handoverHistory.length > 5 ? "space-y-4 pb-2" : "space-y-4")}>
                     {handoverHistory.map((log: any, idx: number) => {
                       let iconBg = "bg-zinc-200 text-zinc-700";
                       let actionText = log.action;
@@ -2908,7 +2918,20 @@ function AdminOrdersPageInner() {
                         iconBg = "bg-emerald-100 text-emerald-700 border border-emerald-250";
                       } else if (log.action.includes("RELEASED")) {
                         iconBg = "bg-orange-100 text-orange-700 border border-orange-250";
+                      } else if (log.action.includes("RETURN") || log.action.includes("REFUND") || log.action.includes("VOIDED")) {
+                        iconBg = "bg-purple-100 text-purple-700 border border-purple-250";
                       }
+
+                      // Determine affected products for return/refund log entries
+                      const isReturnRefundLog = (
+                        log.action === "RETURN_REQUEST_CREATED" ||
+                        log.action === "RETURN_REFUND_PROCESSED" ||
+                        log.action === "ORDER_VOIDED_REFUNDED_PARTIAL" ||
+                        log.action === "RETURN_REQUEST_APPROVED"
+                      );
+                      const affectedItems = isReturnRefundLog
+                        ? (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled")
+                        : [];
 
                       return (
                         <div key={log.id || idx} className="relative">
@@ -2929,6 +2952,26 @@ function AdminOrdersPageInner() {
                               </span>
                             </div>
                             <p className="text-xs text-zinc-650 font-medium leading-relaxed">{log.description}</p>
+                            {/* Show affected products for return/refund entries */}
+                            {isReturnRefundLog && affectedItems.length > 0 && (
+                              <div className="mt-1.5 bg-purple-50 border border-purple-100 rounded-lg px-2.5 py-2 space-y-1">
+                                <p className="text-[9px] font-black uppercase tracking-wider text-purple-500">Products in Refund/Return:</p>
+                                {affectedItems.map((item: any, i: number) => (
+                                  <div key={i} className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-purple-200 text-purple-800 text-[8px] font-black shrink-0">{i + 1}</span>
+                                      <span className="text-[10px] font-bold text-zinc-700 truncate">{item.product?.name || `Item #${item.id}`}</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {item.product?.part_number && (
+                                        <span className="text-[9px] font-bold text-[#0052cc] bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{item.product.part_number}</span>
+                                      )}
+                                      <span className="text-[9px] font-bold text-red-600 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded">Qty: {item.quantity}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             {log.user && (
                               <p className="text-[9px] font-bold text-zinc-400 mt-0.5">
                                 Action by: <span className="text-zinc-500 font-black">{log.user.name}</span> ({log.user.role})
@@ -2938,9 +2981,15 @@ function AdminOrdersPageInner() {
                         </div>
                       );
                     })}
+                    {handoverHistory.length > 5 && (
+                      <div className="sticky bottom-0 pt-2 text-center">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">↑ Scroll to see all {handoverHistory.length} events</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
+
             </div>
 
 

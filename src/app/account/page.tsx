@@ -1215,7 +1215,7 @@ function AccountPortalInner() {
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-1.5">
                                     <Package className="h-3 w-3 text-[#94a3b8]" />
-                                    <span className="text-xs font-bold text-[#1e293b]">{order.items?.length || 0}</span>
+                                    <span className="text-xs font-bold text-[#1e293b]">{validItems.length}</span>
                                   </div>
                                 </td>
                                 <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
@@ -2446,7 +2446,17 @@ function AccountPortalInner() {
               <Button type="button" variant="outline" className="font-bold flex-1" onClick={() => setIsReturnModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={submittingReturn} className="font-bold flex-1 bg-purple-600 hover:bg-purple-700 text-white">
+              <Button
+                type="submit"
+                disabled={submittingReturn || !returnReason}
+                className={cn(
+                  "font-bold flex-1 text-white transition-all",
+                  !returnReason
+                    ? "bg-purple-300 cursor-not-allowed hover:bg-purple-300"
+                    : "bg-purple-600 hover:bg-purple-700"
+                )}
+                title={!returnReason ? "Please select a return reason before submitting" : undefined}
+              >
                 {submittingReturn ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
                 Submit Return Request
               </Button>

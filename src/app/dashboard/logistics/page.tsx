@@ -1732,7 +1732,9 @@ export default function AdminLogisticsPage() {
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <Package className="h-3 w-3 text-zinc-400" />
-                          <span className="text-xs font-bold text-zinc-700">{order.items?.length || 0}</span>
+                          <span className="text-xs font-bold text-zinc-700">
+                            {(order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled").length}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="text-xs font-bold text-zinc-600">

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { CarFront, Globe, MessageCircle, Camera, Share2, Mail, Phone, MapPin, Clock } from "lucide-react";
 import { useSettings } from "@/components/providers/SettingsProvider";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import api, { getActiveDestinationsCached, getCountriesCached } from "@/lib/axios";
 
 export const formatWorkingHours = (hours: string) => {
@@ -30,6 +30,35 @@ export function Footer() {
   };
 
   const [hubs, setHubs] = useState<string[]>([]);
+
+  // Auto-scroll ticker refs
+  const tickerRef = useRef<HTMLDivElement>(null);
+  const animRef   = useRef<number | null>(null);
+  const pausedRef = useRef(false);
+  const posRef    = useRef(0);
+
+  const startScroll = useCallback(() => {
+    const ticker = tickerRef.current;
+    if (!ticker) return;
+
+    const step = () => {
+      if (!pausedRef.current && ticker) {
+        posRef.current += 0.45;
+        // Reset when we've scrolled exactly half (one full copy of the list)
+        const half = ticker.scrollHeight / 2;
+        if (posRef.current >= half) posRef.current = 0;
+        ticker.style.transform = `translateY(-${posRef.current}px)`;
+      }
+      animRef.current = requestAnimationFrame(step);
+    };
+    animRef.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => {
+    if (hubs.length === 0) return;
+    startScroll();
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  }, [hubs, startScroll]);
 
   useEffect(() => {
     const fetchHubs = async () => {
@@ -158,9 +187,16 @@ export function Footer() {
           {hubs.length > 0 && (
             <div>
               <h3 className="font-semibold text-lg mb-4 text-zinc-900">Distribution points</h3>
-              <div className="relative">
-                <ul className="space-y-3.5 text-sm text-muted-foreground max-h-[260px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-zinc-300 scrollbar-track-transparent [scrollbar-width:thin] [scrollbar-color:rgba(212,212,216,1)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-zinc-300 [&::-webkit-scrollbar-thumb]:rounded [&::-webkit-scrollbar-track]:bg-transparent">
-                  {hubs.map((hub, idx) => {
+              {/* Auto-scroll ticker — hover to pause */}
+              <div
+                className="overflow-hidden"
+                style={{ height: "260px" }}
+                onMouseEnter={() => { pausedRef.current = true; }}
+                onMouseLeave={() => { pausedRef.current = false; }}
+              >
+                <div ref={tickerRef} className="will-change-transform">
+                  {/* Render items twice for seamless infinite loop */}
+                  {[...hubs, ...hubs].map((hub, idx) => {
                     const parts = hub.split(", ");
                     const city = parts[0];
                     const countryAndHq = parts[1] || "";
@@ -168,9 +204,9 @@ export function Footer() {
                     const country = countryAndHq.replace(" (HQ)", "");
 
                     return (
-                      <li key={idx} className="flex items-center gap-2.5 group cursor-default">
+                      <div key={idx} className="flex items-center gap-2.5 group cursor-default py-1.5">
                         <span className="h-1.5 w-1.5 rounded-full bg-zinc-300 group-hover:bg-primary transition-all duration-300 shrink-0" />
-                        <span className="group-hover:translate-x-1 group-hover:text-zinc-900 transition-all duration-300 flex items-center gap-1.5 font-medium text-zinc-600">
+                        <span className="group-hover:translate-x-1 group-hover:text-zinc-900 transition-all duration-300 flex items-center gap-1.5 font-medium text-zinc-600 text-sm">
                           <span>{city}</span>
                           <span className="text-zinc-400 text-xs font-normal">| {country}</span>
                           {isHq && (
@@ -179,14 +215,14 @@ export function Footer() {
                             </span>
                           )}
                         </span>
-                      </li>
+                      </div>
                     );
                   })}
-                </ul>
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-zinc-50 to-transparent pointer-events-none" />
+                </div>
               </div>
             </div>
           )}
+
 
           {/* Contact */}
           {(address || phone || email || whatsapp || workingHours) && (

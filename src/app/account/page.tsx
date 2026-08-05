@@ -550,26 +550,19 @@ function AccountPortalInner() {
 
   useEffect(() => {
     let dir = 1;
-    let accumulated = 0;
     const interval = setInterval(() => {
       const el = tabsNavRef.current;
       if (!el || isNavPausedRef.current) return;
-      if (el.scrollWidth <= el.clientWidth) return;
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (maxScroll <= 0) return;
 
-      accumulated += 0.8 * dir;
-      if (Math.abs(accumulated) >= 1) {
-        const step = Math.floor(Math.abs(accumulated)) * dir;
-        accumulated -= step;
-
-        const maxScroll = el.scrollWidth - el.clientWidth;
-        if (el.scrollLeft + step >= maxScroll - 1) {
-          dir = -1;
-        } else if (el.scrollLeft + step <= 0) {
-          dir = 1;
-        }
-        el.scrollLeft += step;
+      if (el.scrollLeft >= maxScroll - 1) {
+        dir = -1;
+      } else if (el.scrollLeft <= 0) {
+        dir = 1;
       }
-    }, 20);
+      el.scrollLeft += dir;
+    }, 25);
 
     return () => clearInterval(interval);
   }, []);
@@ -684,14 +677,9 @@ function AccountPortalInner() {
             onMouseLeave={() => { isNavPausedRef.current = false; }}
             onTouchStart={() => { isNavPausedRef.current = true; }}
             onTouchEnd={() => { isNavPausedRef.current = false; }}
-            onScroll={() => {
-              isNavPausedRef.current = true;
-              clearTimeout((window as any)._navScrollTimer);
-              (window as any)._navScrollTimer = setTimeout(() => {
-                isNavPausedRef.current = false;
-              }, 2500);
-            }}
-            className="mb-5 -mx-4 px-4 overflow-x-auto scrollbar-thin"
+            onMouseDown={() => { isNavPausedRef.current = true; }}
+            onMouseUp={() => { isNavPausedRef.current = false; }}
+            className="lg:hidden mb-5 -mx-4 px-4 overflow-x-auto scrollbar-none"
           >
             <div className="flex items-center gap-2 pb-2" style={{ minWidth: 'max-content' }}>
               {tabs.map((item) => (

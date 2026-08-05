@@ -4010,28 +4010,51 @@ function AdminOrdersPageInner() {
             </DialogDescription>
           </DialogHeader>
           <div className="p-6 space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Select Driver</label>
-              {drivers.length === 0 ? (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-xs text-amber-700 font-bold">No active delivery drivers found.</p>
-                  <p className="text-xs text-amber-600 mt-1">Create delivery drivers in Admins &amp; Audits → Delivery Drivers.</p>
+            {(() => {
+              const targetDestCity = (assignDriverTarget?.shipment?.destination || assignDriverTarget?.shipping_city || "").trim();
+              const availableDrivers = drivers.filter((d: any) => {
+                if (!targetDestCity) return true;
+                const destLower = targetDestCity.toLowerCase();
+                const driverCity = (d.city || "").toLowerCase();
+                const driverCountry = (d.country || "").toLowerCase();
+                return driverCity.includes(destLower) || destLower.includes(driverCity) || (driverCity && destLower.startsWith(driverCity));
+              });
+
+              // Fallback to all drivers if no specific driver matched destination, but show filter badge
+              const displayDrivers = availableDrivers.length > 0 ? availableDrivers : drivers;
+
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-700 uppercase tracking-wider">Select Driver</label>
+                    {targetDestCity && (
+                      <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
+                        📍 Filtered by Destination: {targetDestCity}
+                      </span>
+                    )}
+                  </div>
+                  {drivers.length === 0 ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-xs text-amber-700 font-bold">No active delivery drivers found.</p>
+                      <p className="text-xs text-amber-600 mt-1">Create delivery drivers in Admins &amp; Audits → Delivery Drivers.</p>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedDriverId}
+                      onChange={(e) => setSelectedDriverId(e.target.value)}
+                      className="w-full h-11 px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-300"
+                    >
+                      <option value="">— Unassign / No Driver —</option>
+                      {displayDrivers.map((d) => (
+                        <option key={d.id} value={d.id.toString()}>
+                          {d.name} {d.city || d.country ? `(${d.city || ""}${d.city && d.country ? ", " : ""}${d.country || ""})` : ""} {d.vehicle_plate ? ` · ${d.vehicle_plate}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-              ) : (
-                <select
-                  value={selectedDriverId}
-                  onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className="w-full h-11 px-3 border border-zinc-200 rounded-lg text-sm font-semibold bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-300"
-                >
-                  <option value="">— Unassign / No Driver —</option>
-                  {drivers.map((d) => (
-                    <option key={d.id} value={d.id.toString()}>
-                      {d.name} {d.city || d.country ? `(${d.city || ""}${d.city && d.country ? ", " : ""}${d.country || ""})` : ""} {d.vehicle_plate ? ` · ${d.vehicle_plate}` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+              );
+            })()}
             {selectedDriverId && (() => {
               const d = drivers.find((dr) => dr.id.toString() === selectedDriverId);
               if (!d) return null;

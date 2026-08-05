@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Fragment, useMemo } from "react";
+import { useEffect, useState, Fragment, useMemo, useRef } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { useAuth } from "@/context/AuthContext";
@@ -544,6 +544,34 @@ function AccountPortalInner() {
     { name: "Account Settings", icon: Settings },
   ];
 
+  // ── Auto-scroll horizontal ticker for mobile tabs bar ─────────────────
+  const tabsNavRef = useRef<HTMLDivElement>(null);
+  const isNavPausedRef = useRef(false);
+  const navAnimRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const el = tabsNavRef.current;
+    if (!el) return;
+
+    let dir = 1;
+    const scrollStep = () => {
+      if (el && !isNavPausedRef.current) {
+        if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 2) {
+          dir = -1;
+        } else if (el.scrollLeft <= 0) {
+          dir = 1;
+        }
+        el.scrollLeft += dir * 0.6;
+      }
+      navAnimRef.current = requestAnimationFrame(scrollStep);
+    };
+
+    navAnimRef.current = requestAnimationFrame(scrollStep);
+    return () => {
+      if (navAnimRef.current) cancelAnimationFrame(navAnimRef.current);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen bg-white font-sans text-slate-900">
       {mounted && (
@@ -646,8 +674,23 @@ function AccountPortalInner() {
             </div>
           </div>
 
-          {/* ── Mobile horizontal tab bar ───────────────────────────── */}
-          <div id="tour-nav" className="lg:hidden mb-5 -mx-4 px-4 overflow-x-auto">
+          {/* ── Mobile horizontal tab bar (auto-scrolls, pauses on touch/hover) ── */}
+          <div
+            id="tour-nav"
+            ref={tabsNavRef}
+            onMouseEnter={() => { isNavPausedRef.current = true; }}
+            onMouseLeave={() => { isNavPausedRef.current = false; }}
+            onTouchStart={() => { isNavPausedRef.current = true; }}
+            onTouchEnd={() => { isNavPausedRef.current = false; }}
+            onScroll={() => {
+              isNavPausedRef.current = true;
+              clearTimeout((window as any)._navScrollTimer);
+              (window as any)._navScrollTimer = setTimeout(() => {
+                isNavPausedRef.current = false;
+              }, 2500);
+            }}
+            className="lg:hidden mb-5 -mx-4 px-4 overflow-x-auto"
+          >
             <div className="flex items-center gap-2 pb-2" style={{ minWidth: 'max-content' }}>
               {tabs.map((item) => (
                 <button

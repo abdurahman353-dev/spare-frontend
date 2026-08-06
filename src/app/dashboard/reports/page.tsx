@@ -225,8 +225,19 @@ export default function AdminReportsPage() {
     return filteredInventory.slice(start, start + INVENTORY_PAGE_SIZE);
   }, [filteredInventory, inventoryPage]);
 
-  // Summary stats — fully reflect both warehouse and channel filters
-  const totalRevenue = channelRevenueOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0);
+  // Helper to calculate exact active net revenue of an order excluding returned/cancelled items
+  const getOrderNetRevenue = (o: any) => {
+    if (o.items && Array.isArray(o.items) && o.items.length > 0) {
+      const activeItemsSum = o.items
+        .filter((i: any) => i.cancellation_status !== "Cancelled")
+        .reduce((s: number, i: any) => s + (Number(i.price || 0) * Number(i.quantity || 1)), 0);
+      return activeItemsSum + Number(o.shipping_fee || 0);
+    }
+    return Math.max(0, Number(o.total_amount || 0) - Number(o.refunded_amount || 0));
+  };
+
+  // Summary stats — fully reflect both warehouse, channel filters, and refunds
+  const totalRevenue = channelRevenueOrders.reduce((s, o) => s + getOrderNetRevenue(o), 0);
   const totalShippingFeesInPeriod = channelRevenueOrders.reduce((s, o) => s + Number(o.shipping_fee || 0), 0);
   const totalVAT = totalRevenue * 0.16;
   const netRevenue = totalRevenue - totalVAT;
@@ -234,12 +245,12 @@ export default function AdminReportsPage() {
   const channelLabel = orderChannelFilter === "All" ? "All Channels" : orderChannelFilter;
   const warehouseLabel = selectedWarehouseId === "All" ? "All Hubs" : (warehouses.find(w => String(w.id) === selectedWarehouseId)?.name || "Selected Hub");
 
-  // BI Calculations: Timeline Data — respects BOTH warehouse and channel filters
+  // BI Calculations: Timeline Data — respects BOTH warehouse and channel filters + net revenue
   const timelineData = useMemo(() => {
     const map = new Map<string, number>();
     channelRevenueOrders.forEach(o => {
       const date = o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE", { month: "short", day: "numeric" }) : "Unknown";
-      map.set(date, (map.get(date) || 0) + Number(o.total_amount || 0));
+      map.set(date, (map.get(date) || 0) + getOrderNetRevenue(o));
     });
     return Array.from(map.entries()).map(([date, revenue]) => ({ date, revenue })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [channelRevenueOrders]);
@@ -257,16 +268,18 @@ export default function AdminReportsPage() {
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
   }, [channelFilteredOrders]);
 
-  // BI Calculations: Top Products — respects BOTH filters
+  // BI Calculations: Top Products — excludes returned/cancelled items so refunds reduce quantity and revenue
   const topProducts = useMemo(() => {
     const map = new Map<string, { revenue: number, qty: number }>();
     channelRevenueOrders.forEach(o => {
       if (o.items && Array.isArray(o.items)) {
         o.items.forEach((item: any) => {
+          if (item.cancellation_status === "Cancelled") return; // Skip returned/refunded items
           const pName = item.product?.name || `Product #${item.product_id}`;
           const current = map.get(pName) || { revenue: 0, qty: 0 };
-          current.revenue += (Number(item.price) * Number(item.quantity));
-          current.qty += Number(item.quantity);
+          const itemQty = Number(item.quantity || 1);
+          current.revenue += (Number(item.price || 0) * itemQty);
+          current.qty += itemQty;
           map.set(pName, current);
         });
       }
@@ -275,12 +288,12 @@ export default function AdminReportsPage() {
       .sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [channelRevenueOrders]);
 
-  // BI Calculations: Sales by Location — respects BOTH filters
+  // BI Calculations: Sales by Location — uses net order revenue so refunds reduce regional revenue
   const locationData = useMemo(() => {
     const map = new Map<string, number>();
     channelRevenueOrders.forEach(o => {
       const loc = o.shipping_city ? `${o.shipping_city}, ${o.shipping_country || 'KE'}` : "Unknown Origin";
-      map.set(loc, (map.get(loc) || 0) + Number(o.total_amount || 0));
+      map.set(loc, (map.get(loc) || 0) + getOrderNetRevenue(o));
     });
     return Array.from(map.entries()).map(([name, revenue]) => ({ name, revenue })).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [channelRevenueOrders]);

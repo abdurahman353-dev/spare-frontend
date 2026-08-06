@@ -34,7 +34,7 @@ type PaymentMethod = "mpesa_stk" | "paybill";
 type PaymentStatus = "idle" | "pending" | "paybill_verify" | "success" | "failed" | "timeout";
 
 export default function CheckoutPage() {
-  const { cart, cartTotal, cartWeight, clearCart } = useCart();
+  const { cart, removeFromCart, updateQuantity, cartTotal, cartWeight, clearCart } = useCart();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { settings } = useSettings();
   const [step, setStep] = useState(1);
@@ -45,6 +45,33 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     setMounted(true);
+    const validateLiveCheckoutStock = async () => {
+      if (!cart || cart.length === 0) return;
+      const uniqueProductIds = Array.from(new Set(cart.map((i) => i.id)));
+
+      for (const prodId of uniqueProductIds) {
+        try {
+          const res = await api.get(`/products/${prodId}`);
+          const product = res.data;
+          if (!product || !product.inventories) continue;
+
+          const cartItemsForProd = cart.filter((i) => i.id === prodId);
+          for (const item of cartItemsForProd) {
+            const whInv = product.inventories.find((inv: any) => Number(inv.warehouse_id) === Number(item.warehouse_id));
+            const liveStock = whInv ? Number(whInv.quantity) : 0;
+
+            if (liveStock === 0) {
+              removeFromCart(item.id, item.warehouse_id);
+            } else if (item.quantity > liveStock) {
+              updateQuantity(item.id, item.warehouse_id, liveStock);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to validate checkout stock", e);
+        }
+      }
+    };
+    validateLiveCheckoutStock();
   }, []);
 
   // Shipping

@@ -12,8 +12,54 @@ import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { toast } from "react-hot-toast";
 
+import api from "@/lib/axios";
+import { useEffect, useState } from "react";
+
 export default function CartPage() {
   const { cart, removeFromCart, updateQuantity, cartTotal } = useCart();
+  const [isValidating, setIsValidating] = useState(false);
+
+  // Live stock auto-adjustment on cart page mount
+  useEffect(() => {
+    const validateLiveCartStock = async () => {
+      if (!cart || cart.length === 0) return;
+      setIsValidating(true);
+      const uniqueProductIds = Array.from(new Set(cart.map((i) => i.id)));
+
+      for (const prodId of uniqueProductIds) {
+        try {
+          const res = await api.get(`/products/${prodId}`);
+          const product = res.data;
+          if (!product || !product.inventories) continue;
+
+          const cartItemsForProd = cart.filter((i) => i.id === prodId);
+          for (const item of cartItemsForProd) {
+            const whInv = product.inventories.find((inv: any) => Number(inv.warehouse_id) === Number(item.warehouse_id));
+            const liveStock = whInv ? Number(whInv.quantity) : 0;
+
+            if (liveStock === 0) {
+              removeFromCart(item.id, item.warehouse_id);
+              toast.error(`"${item.name}" at ${item.warehouse_name} is out of stock and was removed from your cart.`, {
+                duration: 6000,
+                style: { background: "#ef4444", color: "#fff", fontWeight: "bold", fontSize: "12px" },
+              });
+            } else if (item.quantity > liveStock) {
+              updateQuantity(item.id, item.warehouse_id, liveStock);
+              toast.error(`Quantity for "${item.name}" was adjusted to ${liveStock} due to current stock at ${item.warehouse_name}.`, {
+                duration: 6000,
+                style: { background: "#f59e0b", color: "#fff", fontWeight: "bold", fontSize: "12px" },
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Failed to revalidate live stock for product", prodId, e);
+        }
+      }
+      setIsValidating(false);
+    };
+
+    validateLiveCartStock();
+  }, []);
 
   if (cart.length === 0) {
     return (

@@ -98,6 +98,8 @@ export default function CheckoutPage() {
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
   const [paymentError, setPaymentError] = useState("");
+  const [reservedMessage, setReservedMessage] = useState("");
+  const [reservedCountdown, setReservedCountdown] = useState(0);
   const [paybillOrderId, setPaybillOrderId] = useState<number | null>(null);
   const [pendingOrderIds, setPendingOrderIds] = useState<number[]>([]); // track unpaid orders for cleanup
   const [mpesaCode, setMpesaCode] = useState("");
@@ -108,6 +110,7 @@ export default function CheckoutPage() {
   const [mpesaReceipt, setMpesaReceipt] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reservedCountdownRef = useRef<NodeJS.Timeout | null>(null);
   // Tracks every checkout_request_id attempted this session
   const previousSessionIds = useRef<string[]>([]);
   // Abort flag: set to true when a new session starts to kill any lingering grace period
@@ -582,6 +585,28 @@ export default function CheckoutPage() {
       }
     } catch (error: any) {
       console.error("STK Push failed:", error);
+      const isReserved = error?.response?.status === 409 && error?.response?.data?.reserved;
+      if (isReserved) {
+        const secs = error.response.data.seconds_remaining ?? 300;
+        const msg  = error.response.data.message ?? "Item reserved by another buyer.";
+        setReservedMessage(msg);
+        setReservedCountdown(secs);
+        setPaymentStatus("idle");
+        setIsProcessing(false);
+        // Tick countdown and auto-clear when it reaches 0
+        if (reservedCountdownRef.current) clearInterval(reservedCountdownRef.current);
+        reservedCountdownRef.current = setInterval(() => {
+          setReservedCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(reservedCountdownRef.current!);
+              setReservedMessage("");
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        return;
+      }
       setPaymentError(error?.response?.data?.message || "Could not send payment request. Please try again.");
       setPaymentStatus("failed");
       setIsProcessing(false);
@@ -971,8 +996,36 @@ export default function CheckoutPage() {
                               </p>
                             )}
                           </div>
+                          {/* Reserved by another buyer banner */}
+                          {reservedMessage && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-2"
+                            >
+                              <div className="flex items-start gap-3">
+                                <span className="text-2xl mt-0.5">⏳</span>
+                                <div>
+                                  <p className="text-sm font-bold text-amber-900">{reservedMessage}</p>
+                                  {reservedCountdown > 0 && (
+                                    <p className="text-xs text-amber-700 mt-1 font-semibold">
+                                      Available in{" "}
+                                      <span className="font-black text-amber-900 tabular-nums">
+                                        {Math.floor(reservedCountdown / 60)}:{String(reservedCountdown % 60).padStart(2, "0")}
+                                      </span>
+                                      {" "}— if their payment is not completed, you can purchase this item.
+                                    </p>
+                                  )}
+                                  {reservedCountdown === 0 && (
+                                    <p className="text-xs text-emerald-700 font-bold mt-1">
+                                      ✅ The item may now be available! Please try paying again.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
 
-                          {/* Pending: waiting for PIN */}
                           {paymentStatus === "pending" && (
                             <motion.div
                               initial={{ opacity: 0, scale: 0.95 }}

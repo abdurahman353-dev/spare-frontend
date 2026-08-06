@@ -182,6 +182,7 @@ function AdminOrdersPageInner() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All Status");
+  const [shippingMethodFilter, setShippingMethodFilter] = useState("All Methods");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [secondsSinceSync, setSecondsSinceSync] = useState(0);
 
@@ -625,14 +626,14 @@ function AdminOrdersPageInner() {
   }, [orderItems, selectedWarehouseId, warehouses, extractCityFromWarehouse]);
 
   useEffect(() => {
-    if (shippingMethod === "Local Delivery" && activeOriginHubCity) {
+    if (shippingMethod !== "Pickup" && activeOriginHubCity) {
       const country = activeOriginHubCity === "Kampala" ? "Uganda" : (activeOriginHubCity === "Kigali" ? "Rwanda" : "Kenya");
-      if (shippingCity !== activeOriginHubCity) {
+      if (shippingCity !== activeOriginHubCity || shippingCountry !== country) {
         setShippingCountry(country);
         setShippingCity(activeOriginHubCity);
       }
     }
-  }, [shippingMethod, activeOriginHubCity, shippingCity]);
+  }, [shippingMethod, activeOriginHubCity, shippingCity, shippingCountry]);
 
   const editOriginHubCity = useMemo(() => {
     if (editWalkInTarget?.items && editWalkInTarget.items.length > 0) {
@@ -644,12 +645,12 @@ function AdminOrdersPageInner() {
   }, [editWalkInTarget, warehouses, extractCityFromWarehouse]);
 
   useEffect(() => {
-    if (editWalkInForm.shipping_method === "Local Delivery" && editOriginHubCity) {
+    if (editWalkInForm.shipping_method !== "Pickup" && editOriginHubCity) {
       const country = editOriginHubCity === "Kampala" ? "Uganda" : (editOriginHubCity === "Kigali" ? "Rwanda" : "Kenya");
-      if (editWalkInForm.shipping_city !== editOriginHubCity) {
+      if (editWalkInForm.shipping_city !== editOriginHubCity || editWalkInForm.shipping_country !== country) {
         setEditWalkInForm(prev => ({
           ...prev,
-          shipping_country: prev.shipping_country || country,
+          shipping_country: country,
           shipping_city: editOriginHubCity,
         }));
       }
@@ -1351,6 +1352,7 @@ function AdminOrdersPageInner() {
 
   const handleClearFilters = () => {
     setStatusFilter("All Status");
+    setShippingMethodFilter("All Methods");
     setWarehouseFilter("all");
     setCountryFilter("all");
     setCityFilter("all");
@@ -1473,14 +1475,25 @@ function AdminOrdersPageInner() {
         order.shipping_city?.toLowerCase() === cityFilter.toLowerCase();
       const matchesStatus = statusFilter === "All Status" ||
         (statusFilter === "Refunded" ? (order.status === "Refunded" || order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" || getOrderRefundedTotal(order) > 0) : order.status === statusFilter);
+      const matchesMethod = shippingMethodFilter === "All Methods" ||
+        (shippingMethodFilter === "Express" ? (order.shipping_method || "").toLowerCase().includes("express") :
+         shippingMethodFilter === "Standard" ? (
+           !(order.shipping_method || "").toLowerCase().includes("express") &&
+           !(order.shipping_method || "").toLowerCase().includes("pickup") &&
+           !(order.shipping_method || "").toLowerCase().includes("counter")
+         ) :
+         shippingMethodFilter === "Pickup" ? (
+           (order.shipping_method || "").toLowerCase().includes("pickup") ||
+           (order.shipping_method || "").toLowerCase().includes("counter")
+         ) : true);
       const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
       const matchesDateFrom = !shipmentDateFrom || orderDate >= new Date(shipmentDateFrom).setHours(0, 0, 0, 0);
       const matchesDateTo = !shipmentDateTo || orderDate <= new Date(shipmentDateTo).setHours(0, 0, 0, 0);
-      return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesStatus && matchesDateFrom && matchesDateTo;
+      return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesStatus && matchesMethod && matchesDateFrom && matchesDateTo;
     });
   }, [
     activeOrdersTab,
-    shipmentOrders, shipmentSearchQuery, localShipmentOrders, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
+    shipmentOrders, shipmentSearchQuery, localShipmentOrders, warehouseFilter, countryFilter, cityFilter, statusFilter, shippingMethodFilter, shipmentDateFrom, shipmentDateTo,
     walkInOrders, walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInOrderStatusFilter, walkInDateFrom, walkInDateTo,
   ]);
 
@@ -1488,7 +1501,7 @@ function AdminOrdersPageInner() {
     setCurrentPage(1);
   }, [
     activeOrdersTab,
-    shipmentSearchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, shipmentDateFrom, shipmentDateTo,
+    shipmentSearchQuery, warehouseFilter, countryFilter, cityFilter, statusFilter, shippingMethodFilter, shipmentDateFrom, shipmentDateTo,
     walkInSearchQuery, walkInWarehouseFilter, walkInDestFilter, walkInPayStatusFilter, walkInOrderStatusFilter, walkInDateFrom, walkInDateTo,
   ]);
 
@@ -1646,6 +1659,15 @@ function AdminOrdersPageInner() {
               {statuses.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+          {/* Shipping Method Filter */}
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[130px] shrink-0">
+            <select className="h-9 px-2.5 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer font-bold"
+              value={shippingMethodFilter} onChange={(e) => setShippingMethodFilter(e.target.value)}>
+              <option value="All Methods">All Methods</option>
+              <option value="Express">⚡ Express</option>
+              <option value="Standard">📦 Standard</option>
+            </select>
+          </div>
           {/* Date Range — always side by side */}
           <div className="flex gap-1.5 w-full sm:flex-1 lg:w-auto shrink-0 items-center">
             <Input type="date" className="h-9 border-zinc-200 focus-visible:ring-[#0052cc] rounded-lg text-xs font-semibold shadow-none bg-zinc-50/50 cursor-pointer flex-1 lg:w-[115px]"
@@ -1717,6 +1739,19 @@ function AdminOrdersPageInner() {
               <option value="Arrived">Arrived</option>
               <option value="Delivered">Delivered</option>
               <option value="Refunded">Refunded</option>
+            </select>
+          </div>
+          {/* Shipping Method Filter */}
+          <div className="w-full sm:w-[calc(50%-4px)] lg:w-[130px] shrink-0">
+            <select
+              className="h-9 px-2.5 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-emerald-200 w-full text-zinc-600 cursor-pointer font-bold"
+              value={shippingMethodFilter}
+              onChange={(e) => setShippingMethodFilter(e.target.value)}
+            >
+              <option value="All Methods">All Methods</option>
+              <option value="Express">⚡ Express</option>
+              <option value="Standard">📦 Standard</option>
+              <option value="Pickup">🏪 Pickup</option>
             </select>
           </div>
           {/* Date Range — always side by side */}
@@ -2341,12 +2376,15 @@ function AdminOrdersPageInner() {
                           </button>
                         </TableCell>
                         <TableCell className="px-4 py-4">
-                          <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
-                          {isRealMpesaReceipt(order.payment_ref_code) && (
-                            <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
-                              M-Pesa: {order.payment_ref_code}
-                            </p>
-                          )}
+                          <div className="flex flex-col gap-1 items-start">
+                            <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
+                            <ShippingMethodBadge method={order.shipping_method} />
+                            {isRealMpesaReceipt(order.payment_ref_code) && (
+                              <p className="text-[10px] font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 mt-1 inline-block tracking-wide">
+                                M-Pesa: {order.payment_ref_code}
+                              </p>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-0.5">
@@ -3431,10 +3469,23 @@ function AdminOrdersPageInner() {
                     <select
                       className="w-full h-10 px-3 border border-zinc-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/20 text-zinc-600 font-medium"
                       value={shippingMethod}
-                      onChange={(e) => { setShippingMethod(e.target.value); if (e.target.value === "Pickup") { setShippingFee(0); setShippingCountry(""); setShippingCity(""); setShippingAddress(""); setRecipientName(""); setRecipientPhone(""); setRecipientEmail(""); } }}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setShippingMethod(val);
+                        if (val === "Pickup") {
+                          setShippingFee(0);
+                          setShippingCountry("");
+                          setShippingCity("");
+                          setShippingAddress("");
+                          setRecipientName("");
+                          setRecipientPhone("");
+                          setRecipientEmail("");
+                        }
+                      }}
                     >
-                      <option value="Pickup">In-Store Collection</option>
-                      <option value="Local Delivery">Dispatch / Shipping</option>
+                      <option value="Pickup">🏪 In-Store Collection</option>
+                      <option value="Express Logistics">⚡ Express Logistics (Dispatch)</option>
+                      <option value="Standard Delivery">📦 Standard Delivery (Dispatch)</option>
                     </select>
                   </div>
                 </div>
@@ -3456,7 +3507,7 @@ function AdminOrdersPageInner() {
                   </div>
                 )}
 
-                {shippingMethod === "Local Delivery" && (
+                {shippingMethod !== "Pickup" && (
                   <div className="space-y-4">
                     {/* Delivery fee + country + city + address */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
@@ -3466,8 +3517,16 @@ function AdminOrdersPageInner() {
                           value={shippingFee || ""} onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-500">Destination Country <span className="text-red-500">*</span></label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-zinc-500">Destination Country <span className="text-red-500">*</span></label>
+                          {activeOriginHubCity && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              🔒 Locked to Hub Origin
+                            </span>
+                          )}
+                        </div>
                         <SearchableDropdown
+                          disabled={!!activeOriginHubCity}
                           items={countryDropdownItems}
                           value={shippingCountry}
                           onChange={(val) => { setShippingCountry(val); setShippingCity(""); }}
@@ -3479,12 +3538,12 @@ function AdminOrdersPageInner() {
                           <label className="text-xs font-semibold text-zinc-500">Destination City <span className="text-red-500">*</span></label>
                           {activeOriginHubCity && (
                             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              🔒 Local Dispatch (Hub: {activeOriginHubCity})
+                              🔒 Local Dispatch ({activeOriginHubCity})
                             </span>
                           )}
                         </div>
                         <SearchableDropdown
-                          disabled={!shippingCountry}
+                          disabled={!!activeOriginHubCity || !shippingCountry}
                           items={cityDropdownItems}
                           value={shippingCity}
                           onChange={(val) => setShippingCity(val)}
@@ -3869,12 +3928,12 @@ function AdminOrdersPageInner() {
                   }
                 }}
               >
-                {["Pickup", "Local Delivery"].map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
+                <option value="Pickup">🏪 In-Store Collection</option>
+                <option value="Express Logistics">⚡ Express Logistics (Dispatch)</option>
+                <option value="Standard Delivery">📦 Standard Delivery (Dispatch)</option>
               </select>
             </div>
-            {editWalkInForm.shipping_method === "Local Delivery" && (
+            {editWalkInForm.shipping_method !== "Pickup" && (
               <>
                 {/* Shipping Fee */}
                 <div className="space-y-1.5">
@@ -3891,9 +3950,16 @@ function AdminOrdersPageInner() {
                 </div>
                 {/* Destination Country */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination Country</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination Country</label>
+                    {editOriginHubCity && (
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        🔒 Locked to Hub Origin
+                      </span>
+                    )}
+                  </div>
                   <SearchableDropdown
-                    disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                    disabled={!!editOriginHubCity || editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
                     items={editCountryDropdownItems}
                     value={editWalkInForm.shipping_country}
                     onChange={(val) => setEditWalkInForm({ ...editWalkInForm, shipping_country: val, shipping_city: "" })}
@@ -3906,12 +3972,12 @@ function AdminOrdersPageInner() {
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Destination City</label>
                     {editOriginHubCity && (
                       <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        🔒 Local Dispatch (Hub: {editOriginHubCity})
+                        🔒 Local Dispatch ({editOriginHubCity})
                       </span>
                     )}
                   </div>
                   <SearchableDropdown
-                    disabled={!editWalkInForm.shipping_country || editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
+                    disabled={!!editOriginHubCity || !editWalkInForm.shipping_country || editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
                     items={editCityDropdownItems}
                     value={editWalkInForm.shipping_city}
                     onChange={(val) => setEditWalkInForm({ ...editWalkInForm, shipping_city: val })}

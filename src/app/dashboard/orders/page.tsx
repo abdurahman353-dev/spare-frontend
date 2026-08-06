@@ -1179,7 +1179,11 @@ function AdminOrdersPageInner() {
     const order = orders.find((o: any) => o.id === id);
     const currentRank = statusRank[order?.status ?? ""] ?? 0;
     const newRank = statusRank[status] ?? 0;
-    if (newRank < currentRank) {
+
+    const activeItems = order?.items ? order.items.filter((i: any) => i.cancellation_status !== "Cancelled") : [];
+    const hasActiveItems = activeItems.length > 0;
+
+    if (newRank < currentRank && !hasActiveItems) {
       toast.error(`Cannot change status from "${order?.status}" to "${status}". Orders cannot be moved backwards.`);
       return;
     }
@@ -1218,11 +1222,13 @@ function AdminOrdersPageInner() {
     };
     const targetRank = statusRank[status] ?? 0;
 
-    // Filter: only include orders whose current status ranks lower than the target
+    // Filter: include orders whose current status ranks lower than target OR partially refunded orders with active items
     const eligibleIds = selectedOrderIds.filter((id) => {
       const order = orders.find((o: any) => o.id === id);
+      const activeItems = order?.items ? order.items.filter((i: any) => i.cancellation_status !== "Cancelled") : [];
+      const hasActiveItems = activeItems.length > 0;
       const currentRank = statusRank[order?.status ?? ""] ?? 0;
-      return currentRank < targetRank;
+      return (currentRank < targetRank) || (hasActiveItems && (order?.status === "Returned" || order?.status === "Cancelled" || Number(order?.refunded_amount || 0) > 0));
     });
 
     const skipped = selectedOrderIds.length - eligibleIds.length;
@@ -2307,22 +2313,21 @@ function AdminOrdersPageInner() {
                                     </>
                                   )}
 
-                                  {/* ── Delivery Status Progression (Local Delivery only, admin caps at Shipped) ── */}
-                                  {order.shipping_method === "Local Delivery" && !isOrderVoided(order) && order.status !== "Shipped" && order.status !== "Arrived" && order.status !== "Delivered" && (
+                                  {/* ── Delivery Status Progression (Express / Standard / Local Delivery) ── */}
+                                  {order.shipping_method !== "Pickup" && !isOrderVoided(order) && order.status !== "Shipped" && order.status !== "Arrived" && order.status !== "Delivered" && (
                                     <>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
-                                      {order.status === "Pending" && (
+                                      {(order.status === "Pending" || (order.items && order.items.some((i: any) => i.cancellation_status !== "Cancelled"))) && (
                                         <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
                                           <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
                                         </DropdownMenuItem>
                                       )}
-                                      {(order.status === "Pending" || order.status === "Processing") && (
+                                      {(order.status === "Pending" || order.status === "Processing" || (order.items && order.items.some((i: any) => i.cancellation_status !== "Cancelled"))) && (
                                         <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
                                           <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                         </DropdownMenuItem>
                                       )}
-                                      {/* Arrived & Delivered are delivery-guy only — not shown to admin */}
                                     </>
                                   )}
                                   {/* Show read-only label when already with delivery guy */}

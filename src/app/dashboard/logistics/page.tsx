@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { ShippingMethodBadge } from "@/components/ui/shipping-method-badge";
 import {
   Table,
   TableBody,
@@ -1667,7 +1668,10 @@ export default function AdminLogisticsPage() {
                         </button>
                       </TableCell>
                       <TableCell className="px-4 py-4">
-                        <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
+                        <div className="flex flex-col gap-1 items-start">
+                          <p className="text-sm font-bold text-zinc-900">{order.tracking_number || `ORD-${order.id}`}</p>
+                          <ShippingMethodBadge method={order.shipping_method} />
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-0.5">

@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ShippingMethodBadge } from "@/components/ui/shipping-method-badge";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -2944,10 +2945,13 @@ function OrderCard({
 
         {/* Header */}
         <CardHeader className="p-4 bg-zinc-50/80 border-b border-zinc-100 flex flex-row items-start justify-between gap-2">
-          <div className="text-left">
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Order Reference</span>
-            <CardTitle className="text-base font-black text-slate-800 tracking-wider leading-tight">{order.tracking_number}</CardTitle>
-            <p className="text-[10px] text-slate-500 mt-0.5 font-semibold">
+          <div className="text-left space-y-1">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Order Reference</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <CardTitle className="text-base font-black text-slate-800 tracking-wider leading-tight">{order.tracking_number}</CardTitle>
+              <ShippingMethodBadge method={order.shipping_method} />
+            </div>
+            <p className="text-[10px] text-slate-500 font-semibold">
               {new Date(order.updated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
             </p>
           </div>

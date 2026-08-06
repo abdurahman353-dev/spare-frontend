@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { ShippingMethodBadge } from "@/components/ui/shipping-method-badge";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
@@ -2000,9 +2001,12 @@ function AdminOrdersPageInner() {
                       return (
                         <TableRow key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
                           <TableCell className="px-4 py-3">
-                            <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
-                              {order.tracking_number}
-                            </span>
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200">
+                                {order.tracking_number}
+                              </span>
+                              <ShippingMethodBadge method={order.shipping_method} />
+                            </div>
                           </TableCell>
                           <TableCell>
                             {(() => {

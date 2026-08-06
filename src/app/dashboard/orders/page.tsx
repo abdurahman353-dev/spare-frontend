@@ -1440,19 +1440,19 @@ function AdminOrdersPageInner() {
           order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
         const matchesDest = walkInDestFilter === "all" ||
           getWalkInDestinationLabel(order) === walkInDestFilter;
-        const matchesMethod = shippingMethodFilter === "All Methods" ||
-          (shippingMethodFilter === "Express" ? (order.shipping_method || "").toLowerCase().includes("express") :
-           shippingMethodFilter === "Standard" ? (
-             !(order.shipping_method || "").toLowerCase().includes("express") &&
-             !(order.shipping_method || "").toLowerCase().includes("pickup") &&
-             !(order.shipping_method || "").toLowerCase().includes("counter") &&
-             !(order.shipping_method || "").toLowerCase().includes("in-store")
-           ) :
-           shippingMethodFilter === "Pickup" ? (
-             (order.shipping_method || "").toLowerCase().includes("pickup") ||
-             (order.shipping_method || "").toLowerCase().includes("counter") ||
-             (order.shipping_method || "").toLowerCase().includes("in-store")
-           ) : true);
+        const matchesMethod = shippingMethodFilter === "All Methods" || (() => {
+          const m = (order.shipping_method || "").toLowerCase();
+          if (shippingMethodFilter === "Express") {
+            return m.includes("express");
+          }
+          if (shippingMethodFilter === "Standard") {
+            return m.includes("standard") || (!m.includes("express") && !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store"));
+          }
+          if (shippingMethodFilter === "Pickup") {
+            return m.includes("pickup") || m.includes("counter") || m.includes("in-store");
+          }
+          return true;
+        })();
         const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
         const matchesDateFrom = !walkInDateFrom || orderDate >= new Date(walkInDateFrom).setHours(0, 0, 0, 0);
         const matchesDateTo = !walkInDateTo || orderDate <= new Date(walkInDateTo).setHours(0, 0, 0, 0);
@@ -3544,13 +3544,20 @@ function AdminOrdersPageInner() {
                             </span>
                           )}
                         </div>
-                        <SearchableDropdown
-                          disabled={!!activeOriginHubCity}
-                          items={countryDropdownItems}
-                          value={shippingCountry}
-                          onChange={(val) => { setShippingCountry(val); setShippingCity(""); }}
-                          placeholder="Select Country"
-                        />
+                        {activeOriginHubCity ? (
+                          <Input
+                            disabled
+                            value={shippingCountry || "Kenya"}
+                            className="h-10 border-zinc-200 rounded-lg bg-zinc-100 font-bold text-zinc-700 cursor-not-allowed"
+                          />
+                        ) : (
+                          <SearchableDropdown
+                            items={countryDropdownItems}
+                            value={shippingCountry}
+                            onChange={(val) => { setShippingCountry(val); setShippingCity(""); }}
+                            placeholder="Select Country"
+                          />
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
@@ -3561,13 +3568,21 @@ function AdminOrdersPageInner() {
                             </span>
                           )}
                         </div>
-                        <SearchableDropdown
-                          disabled={!!activeOriginHubCity || !shippingCountry}
-                          items={cityDropdownItems}
-                          value={shippingCity}
-                          onChange={(val) => setShippingCity(val)}
-                          placeholder="Select City"
-                        />
+                        {activeOriginHubCity ? (
+                          <Input
+                            disabled
+                            value={shippingCity || activeOriginHubCity}
+                            className="h-10 border-zinc-200 rounded-lg bg-zinc-100 font-bold text-zinc-700 cursor-not-allowed"
+                          />
+                        ) : (
+                          <SearchableDropdown
+                            disabled={!shippingCountry}
+                            items={cityDropdownItems}
+                            value={shippingCity}
+                            onChange={(val) => setShippingCity(val)}
+                            placeholder="Select City"
+                          />
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Delivery Address <span className="text-red-500">*</span></label>

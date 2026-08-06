@@ -1365,6 +1365,7 @@ function AdminOrdersPageInner() {
     setWalkInSearchQuery("");
     setWalkInPayStatusFilter("All");
     setWalkInOrderStatusFilter("All Status");
+    setShippingMethodFilter("All Methods");
     setWalkInWarehouseFilter("all");
     setWalkInDestFilter("all");
     setWalkInDateFrom("");
@@ -1433,10 +1434,23 @@ function AdminOrdersPageInner() {
           order.items?.some((i: any) => i.warehouse_id?.toString() === walkInWarehouseFilter);
         const matchesDest = walkInDestFilter === "all" ||
           getWalkInDestinationLabel(order) === walkInDestFilter;
+        const matchesMethod = shippingMethodFilter === "All Methods" ||
+          (shippingMethodFilter === "Express" ? (order.shipping_method || "").toLowerCase().includes("express") :
+           shippingMethodFilter === "Standard" ? (
+             !(order.shipping_method || "").toLowerCase().includes("express") &&
+             !(order.shipping_method || "").toLowerCase().includes("pickup") &&
+             !(order.shipping_method || "").toLowerCase().includes("counter") &&
+             !(order.shipping_method || "").toLowerCase().includes("in-store")
+           ) :
+           shippingMethodFilter === "Pickup" ? (
+             (order.shipping_method || "").toLowerCase().includes("pickup") ||
+             (order.shipping_method || "").toLowerCase().includes("counter") ||
+             (order.shipping_method || "").toLowerCase().includes("in-store")
+           ) : true);
         const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
         const matchesDateFrom = !walkInDateFrom || orderDate >= new Date(walkInDateFrom).setHours(0, 0, 0, 0);
         const matchesDateTo = !walkInDateTo || orderDate <= new Date(walkInDateTo).setHours(0, 0, 0, 0);
-        return matchesSearch && matchesPayStatus && matchesOrderStatus && matchesWarehouse && matchesDest && matchesDateFrom && matchesDateTo;
+        return matchesSearch && matchesPayStatus && matchesOrderStatus && matchesWarehouse && matchesDest && matchesMethod && matchesDateFrom && matchesDateTo;
       });
     }
 

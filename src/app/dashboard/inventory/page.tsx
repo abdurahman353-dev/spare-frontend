@@ -101,7 +101,6 @@ export default function InventoryPage() {
       const engineModel = item.product?.engine_model || "";
       const suitableVehicle = item.product?.suitable_vehicle || "";
       const brand = item.product?.brand?.name || "";
-      const warehouse = item.warehouse?.name || "";
       
       const matchesSearch = 
         name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -111,12 +110,17 @@ export default function InventoryPage() {
         suitableVehicle.toLowerCase().includes(searchQuery.toLowerCase()) ||
         brand.toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesWarehouse = !selectedWarehouseId || item.warehouse?.id.toString() === selectedWarehouseId;
+      const itemWhId = item.warehouse?.id != null ? String(item.warehouse.id) : "unassigned";
+      const matchesWarehouse = !selectedWarehouseId || itemWhId === selectedWarehouseId;
+
       const matchesName = !selectedName || item.product?.name === selectedName;
-      const matchesBrand = !selectedBrandId || item.product?.brand?.id.toString() === selectedBrandId;
-      const matchesCategory = !selectedCategoryId || 
-        item.product?.category_id?.toString() === selectedCategoryId || 
-        item.product?.category?.id?.toString() === selectedCategoryId;
+
+      const itemBrandId = item.product?.brand?.id != null ? String(item.product.brand.id) : "";
+      const matchesBrand = !selectedBrandId || itemBrandId === selectedBrandId;
+
+      const itemCatId = item.product?.category?.id != null ? String(item.product.category.id) : (item.product?.category_id != null ? String(item.product.category_id) : "");
+      const matchesCategory = !selectedCategoryId || itemCatId === selectedCategoryId;
+
       const matchesStatus = !selectedStatus || getStatus(item) === selectedStatus;
       
       return matchesSearch && matchesWarehouse && matchesName && matchesBrand && matchesCategory && matchesStatus;
@@ -133,17 +137,33 @@ export default function InventoryPage() {
     return filteredInventory.slice(startIndex, startIndex + pageSize);
   }, [filteredInventory, currentPage, pageSize]);
 
-  const uniqueWarehouses = Array.from(new Set(inventory.map(i => i.warehouse).filter(Boolean).map(w => JSON.stringify(w)))).map(w => JSON.parse(w as string));
-  const filterWarehouseOptions = uniqueWarehouses.map(w => ({ id: w.id?.toString() || "unassigned", name: w.name }));
+  const filterWarehouseOptions = useMemo(() => {
+    const warehousesMap = new Map<string, string>();
+    let hasUnassigned = false;
+
+    inventory.forEach((item) => {
+      if (item.warehouse && item.warehouse.id != null) {
+        warehousesMap.set(String(item.warehouse.id), item.warehouse.name || "Unknown Warehouse");
+      } else {
+        hasUnassigned = true;
+      }
+    });
+
+    const options = Array.from(warehousesMap.entries()).map(([id, name]) => ({ id, name }));
+    if (hasUnassigned) {
+      options.push({ id: "unassigned", name: "Unassigned" });
+    }
+    return options;
+  }, [inventory]);
 
   const uniqueNames = Array.from(new Set(inventory.map(i => i.product?.name).filter(Boolean)));
   const filterNameOptions = uniqueNames.map(name => ({ id: name, name: name }));
 
   const uniqueBrands = Array.from(new Set(inventory.map(i => i.product?.brand).filter(Boolean).map(b => JSON.stringify(b)))).map(b => JSON.parse(b as string));
-  const filterBrandOptions = uniqueBrands.map(b => ({ id: b.id?.toString() || "", name: b.name }));
+  const filterBrandOptions = uniqueBrands.map(b => ({ id: String(b.id ?? ""), name: b.name }));
 
   const uniqueCategories = Array.from(new Set(inventory.map(i => i.product?.category).filter(Boolean).map(c => JSON.stringify(c)))).map(c => JSON.parse(c as string));
-  const filterCategoryOptions = uniqueCategories.map(c => ({ id: c.id?.toString() || "", name: c.name }));
+  const filterCategoryOptions = uniqueCategories.map(c => ({ id: String(c.id ?? ""), name: c.name }));
 
   const filterStatusOptions = [
     { id: "IN STOCK", name: "In Stock" },

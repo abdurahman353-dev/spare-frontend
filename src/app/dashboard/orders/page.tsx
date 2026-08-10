@@ -920,6 +920,15 @@ function AdminOrdersPageInner() {
           toast.error("Please enter a valid Kenyan phone number (e.g., 0712345678 or 254712345678).");
           return;
         }
+        if (!recipientEmail.trim()) {
+          toast.error("Recipient email address is required for walk-in dispatch orders.");
+          return;
+        }
+        const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRx.test(recipientEmail.trim())) {
+          toast.error("Please enter a valid email address for the recipient.");
+          return;
+        }
       }
     }
 
@@ -3229,25 +3238,27 @@ function AdminOrdersPageInner() {
                 {selectedCustomerId === "walkin" && (
                   <div className="bg-emerald-50/40 border border-emerald-100 rounded-xl p-4 space-y-3">
                     <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5" /> Customer Info ({shippingMethod === "Local Delivery" ? "Required for Dispatch" : "Optional for Pickup"})
+                      <User className="h-3.5 w-3.5" /> Customer &amp; Recipient Info ({shippingMethod !== "Pickup" ? "Compulsory for Dispatch" : "Optional for Pickup"})
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-600">
-                          Customer Name {shippingMethod === "Local Delivery" && <span className="text-red-500">*</span>}
+                          Customer Name {shippingMethod !== "Pickup" && <span className="text-red-500">*</span>}
                         </label>
                         <Input placeholder="Full name" className="h-10 border-emerald-200 rounded-lg bg-white"
                           value={recipientName} onChange={(e) => setRecipientName(e.target.value)} />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-600">
-                          Phone Number {shippingMethod === "Local Delivery" && <span className="text-red-500">*</span>}
+                          Phone Number {shippingMethod !== "Pickup" && <span className="text-red-500">*</span>}
                         </label>
                         <Input placeholder="07XXXXXXXX" className="h-10 border-emerald-200 rounded-lg bg-white"
                           value={recipientPhone} onChange={(e) => setRecipientPhone(e.target.value.replace(/\D/g, ""))} />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-600">Email Address <span className="text-zinc-400 font-normal">(optional)</span></label>
+                        <label className="text-xs font-semibold text-zinc-600">
+                          Email Address {shippingMethod !== "Pickup" ? <span className="text-red-500">*</span> : <span className="text-zinc-400 font-normal">(optional)</span>}
+                        </label>
                         <Input type="email" placeholder="email@example.com" className="h-10 border-emerald-200 rounded-lg bg-white"
                           value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)} />
                       </div>

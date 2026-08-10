@@ -2342,16 +2342,16 @@ function AdminOrdersPageInner() {
                                   )}
 
                                   {/* ── Delivery Status Progression (Express / Standard / Local Delivery) ── */}
-                                  {order.shipping_method !== "Pickup" && !isOrderVoided(order) && order.status !== "Shipped" && order.status !== "Arrived" && order.status !== "Delivered" && (
+                                  {order.shipping_method !== "Pickup" && !isOrderVoided(order) && (order.status === "Pending" || order.status === "Processing") && (
                                     <>
                                       <DropdownMenuSeparator />
-                                      <DropdownMenuLabel className="text-[10px] font-black text-zinc-300 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
-                                      {(order.status === "Pending" || (order.items && order.items.some((i: any) => i.cancellation_status !== "Cancelled"))) && (
+                                      <DropdownMenuLabel className="text-[10px] font-black text-zinc-400 uppercase px-2 pt-2 pb-1">Update Status</DropdownMenuLabel>
+                                      {order.status === "Pending" && (
                                         <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Processing")} className="cursor-pointer rounded-lg font-bold text-sm text-indigo-600">
                                           <RefreshCw className="mr-2 h-4 w-4" /> Mark Processing
                                         </DropdownMenuItem>
                                       )}
-                                      {(order.status === "Pending" || order.status === "Processing" || (order.items && order.items.some((i: any) => i.cancellation_status !== "Cancelled"))) && (
+                                      {(order.status === "Pending" || order.status === "Processing") && (
                                         <DropdownMenuItem onClick={() => handleStatusChange(order.id, "Shipped")} className="cursor-pointer rounded-lg font-bold text-sm text-blue-600">
                                           <Truck className="mr-2 h-4 w-4" /> Mark Shipped
                                         </DropdownMenuItem>

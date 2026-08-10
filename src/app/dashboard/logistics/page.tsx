@@ -2285,38 +2285,80 @@ export default function AdminLogisticsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500">Standard Fee (Ksh) *</label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 350"
-                  className="h-10 border-zinc-200 rounded-lg font-bold text-blue-700 bg-white"
-                  value={zoneFormData.standard_fee || ""}
-                  onChange={(e) => {
-                    const std = parseFloat(e.target.value) || 0;
-                    setZoneFormData(prev => ({
-                      ...prev,
-                      standard_fee: std,
-                      express_fee: parseFloat((std * 1.5).toFixed(2))
-                    }));
-                  }}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-500">
-                  Express Fee (Ksh) *
-                  <span className="ml-1.5 text-[10px] font-bold text-amber-500 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Auto: Std × 1.5</span>
-                </label>
-                <Input
-                  type="number"
-                  placeholder="e.g. 525"
-                  className="h-10 border-zinc-200 rounded-lg font-bold text-amber-600 bg-white"
-                  value={zoneFormData.express_fee || ""}
-                  onChange={(e) => setZoneFormData({ ...zoneFormData, express_fee: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-            </div>
+            {(() => {
+              const selectedWh = warehousesData.find(w => w.id.toString() === zoneFormData.warehouse_id?.toString());
+              const destCity = zoneFormData.city?.trim()?.toLowerCase() || "";
+              const whName = selectedWh?.name?.trim()?.toLowerCase() || "";
+              const whLoc = selectedWh?.location?.trim()?.toLowerCase() || "";
+              const isSameCity = destCity && (
+                (whName && (whName.includes(destCity) || destCity.includes(whName))) ||
+                (whLoc && (whLoc.includes(destCity) || destCity.includes(whLoc)))
+              );
+
+              if (isSameCity) {
+                return (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">🔒</span>
+                      <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Same-City Route (Local Delivery — Ksh 0)</p>
+                    </div>
+                    <p className="text-xs text-emerald-700 font-medium">
+                      Origin warehouse <strong>({selectedWh?.name})</strong> and destination city <strong>({zoneFormData.city})</strong> are in the same location. Same-city routes have <strong>Ksh 0 carrier shipping fee</strong> (delivered by local drivers).
+                    </p>
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase">Std. Fee</span>
+                        <p className="text-sm font-black text-emerald-800">Ksh 0.00</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase">Exp. Fee</span>
+                        <p className="text-sm font-black text-emerald-800">Ksh 0.00</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">Standard Fee (Ksh) *</label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="e.g. 350"
+                      className="h-10 border-zinc-200 rounded-lg font-bold text-blue-700 bg-white"
+                      value={zoneFormData.standard_fee || ""}
+                      onChange={(e) => {
+                        const std = parseFloat(e.target.value) || 0;
+                        setZoneFormData(prev => ({
+                          ...prev,
+                          standard_fee: std,
+                          express_fee: parseFloat((std * 1.5).toFixed(2))
+                        }));
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-zinc-500">
+                      Express Fee (Ksh) *
+                      <span className="ml-1.5 text-[10px] font-bold text-amber-500 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Auto: Std × 1.5</span>
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      placeholder="e.g. 525"
+                      className="h-10 border-zinc-200 rounded-lg font-bold text-amber-600 bg-white"
+                      value={zoneFormData.express_fee || ""}
+                      onChange={(e) => setZoneFormData({ ...zoneFormData, express_fee: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
           <DialogFooter className="p-4 border-t bg-zinc-50/50 flex flex-col sm:flex-row items-center justify-between gap-3 m-0 flex-shrink-0">
             <Button variant="outline" className="w-full sm:w-auto h-10 rounded-lg px-6 font-bold text-sm text-zinc-600 bg-white border-zinc-200" onClick={() => setIsZoneModalOpen(false)}>Cancel</Button>
@@ -2536,37 +2578,68 @@ export default function AdminLogisticsPage() {
                             const globalIdx = bulkZoneRoutes.findIndex(
                               r => r.warehouse_id === route.warehouse_id && r.country === route.country && r.city === route.city
                             );
+                            const destCity = route.city?.trim()?.toLowerCase() || "";
+                            const whName = wh?.name?.trim()?.toLowerCase() || "";
+                            const whLoc = wh?.location?.trim()?.toLowerCase() || "";
+                            const isSameCity = destCity && (
+                              (whName && (whName.includes(destCity) || destCity.includes(whName))) ||
+                              (whLoc && (whLoc.includes(destCity) || destCity.includes(whLoc)))
+                            );
+
                             return (
                               <tr key={`${route.warehouse_id}-${route.country}-${route.city}`}
-                                className="border-b border-zinc-100 hover:bg-zinc-50/50 transition-colors">
+                                className={cn("border-b border-zinc-100 transition-colors", isSameCity ? "bg-emerald-50/30" : "hover:bg-zinc-50/50")}>
                                 <td className="px-3 py-1.5">
                                   <span className="font-semibold text-zinc-700">{route.country}</span>
                                 </td>
-                                <td className="px-3 py-1.5">
+                                <td className="px-3 py-1.5 flex items-center gap-1.5">
                                   <span className="font-semibold text-zinc-600">{route.city}</span>
+                                  {isSameCity && (
+                                    <span className="text-[9px] font-black text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded border border-emerald-200 uppercase tracking-tighter">
+                                      Same-City (Ksh 0)
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-2 py-1.5">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    placeholder="0.00"
-                                    value={route.standard_fee || ""}
-                                    onChange={e => handleBulkRouteChange(globalIdx, "standard_fee", parseFloat(e.target.value) || 0)}
-                                    className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
-                                  />
+                                  {isSameCity ? (
+                                    <input
+                                      disabled
+                                      value="0.00"
+                                      title="Same-city route has Ksh 0 carrier shipping fee (delivered by local driver)"
+                                      className="w-full h-8 px-2 border border-emerald-200 rounded-lg text-xs font-black text-emerald-700 bg-emerald-50 text-center cursor-not-allowed"
+                                    />
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      placeholder="0.00"
+                                      value={route.standard_fee || ""}
+                                      onChange={e => handleBulkRouteChange(globalIdx, "standard_fee", parseFloat(e.target.value) || 0)}
+                                      className="w-full h-8 px-2 border border-zinc-200 rounded-lg text-xs font-bold text-blue-600 focus:outline-none focus:ring-2 focus:ring-[#0052cc]/20 bg-white text-center"
+                                    />
+                                  )}
                                 </td>
                                 <td className="px-2 py-1.5">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    step="0.01"
-                                    placeholder="auto"
-                                    value={route.express_fee || ""}
-                                    onChange={e => handleBulkRouteChange(globalIdx, "express_fee", parseFloat(e.target.value) || 0)}
-                                    className="w-full h-8 px-2 border border-amber-200 rounded-lg text-xs font-bold text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200 bg-amber-50/30 text-center"
-                                    title="Auto-set to Std × 1.5. You can override manually."
-                                  />
+                                  {isSameCity ? (
+                                    <input
+                                      disabled
+                                      value="0.00"
+                                      title="Same-city route has Ksh 0 carrier shipping fee (delivered by local driver)"
+                                      className="w-full h-8 px-2 border border-emerald-200 rounded-lg text-xs font-black text-emerald-700 bg-emerald-50 text-center cursor-not-allowed"
+                                    />
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      step="0.01"
+                                      placeholder="auto"
+                                      value={route.express_fee || ""}
+                                      onChange={e => handleBulkRouteChange(globalIdx, "express_fee", parseFloat(e.target.value) || 0)}
+                                      className="w-full h-8 px-2 border border-amber-200 rounded-lg text-xs font-bold text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-200 bg-amber-50/30 text-center"
+                                      title="Auto-set to Std × 1.5. You can override manually."
+                                    />
+                                  )}
                                 </td>
                               </tr>
                             );

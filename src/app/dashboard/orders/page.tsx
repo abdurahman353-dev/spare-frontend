@@ -610,12 +610,29 @@ function AdminOrdersPageInner() {
     })),
     [products]);
 
-  const warehouseDropdownItems = useMemo(() =>
-    (selectedProductDetails?.inventories || []).map((inv: any) => ({
+  const warehouseDropdownItems = useMemo(() => {
+    let inventories = selectedProductDetails?.inventories || [];
+    if (orderItems.length > 0) {
+      const lockedWhId = orderItems[0].warehouse_id.toString();
+      inventories = inventories.filter((inv: any) => inv.warehouse_id.toString() === lockedWhId);
+    }
+    return inventories.map((inv: any) => ({
       id: inv.warehouse_id.toString(),
       name: `${inv.warehouse?.name} (Stock: ${inv.quantity})`
-    })),
-    [selectedProductDetails]);
+    }));
+  }, [selectedProductDetails, orderItems]);
+
+  useEffect(() => {
+    if (selectedProductId && orderItems.length > 0) {
+      const lockedWhId = orderItems[0].warehouse_id.toString();
+      const hasStockAtWh = selectedProductDetails?.inventories?.some(
+        (inv: any) => inv.warehouse_id.toString() === lockedWhId
+      );
+      if (hasStockAtWh) {
+        setSelectedWarehouseId(lockedWhId);
+      }
+    }
+  }, [selectedProductId, orderItems, selectedProductDetails]);
 
   const extractCityFromWarehouse = useCallback((warehouse: any): string => {
     if (!warehouse) return "";
@@ -705,6 +722,12 @@ function AdminOrdersPageInner() {
       toast.error("Please select a product and warehouse");
       return;
     }
+
+    if (orderItems.length > 0 && selectedWarehouseId !== orderItems[0].warehouse_id.toString()) {
+      toast.error(`All products in a walk-in order must originate from the same source warehouse (${orderItems[0].warehouse_name}).`);
+      return;
+    }
+
     const product = products.find(p => p.id.toString() === selectedProductId);
     if (!product) return;
 
@@ -1470,14 +1493,11 @@ function AdminOrdersPageInner() {
           getWalkInDestinationLabel(order) === walkInDestFilter;
         const matchesMethod = shippingMethodFilter === "All Methods" || (() => {
           const m = (order.shipping_method || "").toLowerCase();
-          if (shippingMethodFilter === "Express") {
-            return m.includes("express");
-          }
-          if (shippingMethodFilter === "Standard") {
-            return m.includes("standard") || (!m.includes("express") && !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store"));
+          if (shippingMethodFilter === "Local Dispatch") {
+            return !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store") && !m.includes("collection");
           }
           if (shippingMethodFilter === "Pickup") {
-            return m.includes("pickup") || m.includes("counter") || m.includes("in-store");
+            return m.includes("pickup") || m.includes("counter") || m.includes("in-store") || m.includes("collection");
           }
           return true;
         })();
@@ -1523,17 +1543,16 @@ function AdminOrdersPageInner() {
         order.shipping_city?.toLowerCase() === cityFilter.toLowerCase();
       const matchesStatus = statusFilter === "All Status" ||
         (statusFilter === "Refunded" ? (order.status === "Refunded" || order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" || getOrderRefundedTotal(order) > 0) : order.status === statusFilter);
-      const matchesMethod = shippingMethodFilter === "All Methods" ||
-        (shippingMethodFilter === "Express" ? (order.shipping_method || "").toLowerCase().includes("express") :
-         shippingMethodFilter === "Standard" ? (
-           !(order.shipping_method || "").toLowerCase().includes("express") &&
-           !(order.shipping_method || "").toLowerCase().includes("pickup") &&
-           !(order.shipping_method || "").toLowerCase().includes("counter")
-         ) :
-         shippingMethodFilter === "Pickup" ? (
-           (order.shipping_method || "").toLowerCase().includes("pickup") ||
-           (order.shipping_method || "").toLowerCase().includes("counter")
-         ) : true);
+      const matchesMethod = shippingMethodFilter === "All Methods" || (() => {
+        const m = (order.shipping_method || "").toLowerCase();
+        if (shippingMethodFilter === "Local Dispatch") {
+          return !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store") && !m.includes("collection");
+        }
+        if (shippingMethodFilter === "Pickup") {
+          return m.includes("pickup") || m.includes("counter") || m.includes("in-store") || m.includes("collection");
+        }
+        return true;
+      })();
       const orderDate = new Date(order.created_at).setHours(0, 0, 0, 0);
       const matchesDateFrom = !shipmentDateFrom || orderDate >= new Date(shipmentDateFrom).setHours(0, 0, 0, 0);
       const matchesDateTo = !shipmentDateTo || orderDate <= new Date(shipmentDateTo).setHours(0, 0, 0, 0);
@@ -1712,8 +1731,8 @@ function AdminOrdersPageInner() {
             <select className="h-9 px-2.5 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer font-bold"
               value={shippingMethodFilter} onChange={(e) => setShippingMethodFilter(e.target.value)}>
               <option value="All Methods">All Methods</option>
-              <option value="Express">⚡ Express</option>
-              <option value="Standard">📦 Standard</option>
+              <option value="Local Dispatch">🛵 Local Dispatch</option>
+              <option value="Pickup">🛍️ Pickup</option>
             </select>
           </div>
           {/* Date Range — always side by side */}

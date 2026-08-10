@@ -467,7 +467,10 @@ export default function AdminLogisticsPage() {
         const originName = (order.items?.[0]?.warehouse?.name || "").trim().toLowerCase();
         const destCity   = (order.shipping_city || "").trim().toLowerCase();
         if (!originName || !destCity) return false;
-        return originName.includes(destCity) || destCity.includes(originName);
+        // Extract the actual city from the warehouse name using known cities list
+        const allKnownCities = countriesData.flatMap((c: any) => (c.cities || []).map((ct: any) => ct.name?.trim()?.toLowerCase()));
+        const whCity = allKnownCities.find((c: string) => originName.includes(c)) || "";
+        return !!(whCity && whCity === destCity);
       })();
 
       return matchesSearch && matchesWarehouse && matchesCountry && matchesCity && matchesDateFrom && matchesDateTo && !isLocal;
@@ -2290,10 +2293,10 @@ export default function AdminLogisticsPage() {
               const destCity = zoneFormData.city?.trim()?.toLowerCase() || "";
               const whName = selectedWh?.name?.trim()?.toLowerCase() || "";
               const whLoc = selectedWh?.location?.trim()?.toLowerCase() || "";
-              const isSameCity = destCity && (
-                (whName && (whName.includes(destCity) || destCity.includes(whName))) ||
-                (whLoc && (whLoc.includes(destCity) || destCity.includes(whLoc)))
-              );
+              // Correct same-city check: extract warehouse city from known cities, then exact match
+              const allCities = countriesData.flatMap((c: any) => (c.cities || []).map((ct: any) => ct.name?.trim()?.toLowerCase()));
+              const whCity = allCities.find((c: string) => whName.includes(c) || whLoc === c) || "";
+              const isSameCity = !!(destCity && whCity && whCity === destCity);
 
               if (isSameCity) {
                 return (
@@ -2581,10 +2584,11 @@ export default function AdminLogisticsPage() {
                             const destCity = route.city?.trim()?.toLowerCase() || "";
                             const whName = wh?.name?.trim()?.toLowerCase() || "";
                             const whLoc = wh?.location?.trim()?.toLowerCase() || "";
-                            const isSameCity = destCity && (
-                              (whName && (whName.includes(destCity) || destCity.includes(whName))) ||
-                              (whLoc && (whLoc.includes(destCity) || destCity.includes(whLoc)))
-                            );
+                            // Correct same-city check: the warehouse city is extracted from known city list
+                            // A city in the warehouse name must EXACTLY match the destination city (not substring)
+                            const allCities = countriesData.flatMap((c: any) => (c.cities || []).map((ct: any) => ct.name?.trim()?.toLowerCase()));
+                            const whCity = allCities.find((c: string) => whName.includes(c) || whLoc === c) || "";
+                            const isSameCity = !!(destCity && whCity && whCity === destCity);
 
                             return (
                               <tr key={`${route.warehouse_id}-${route.country}-${route.city}`}

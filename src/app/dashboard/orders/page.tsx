@@ -3180,16 +3180,19 @@ function AdminOrdersPageInner() {
                       const cancelledProductCost = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
                       const totalItems = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + Number(i.quantity), 0));
                       const cancelledQty = cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0);
-                      const actualShippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
-                      // Shipping refund = shipping_fee * proportion of cancelled items
-                      const shippingRefund = cancelledQty >= totalItems ? actualShippingFee : (actualShippingFee / totalItems) * cancelledQty;
+                      const isLocal = currentSelectedOrder?.shipping_method === "Local Delivery" || currentSelectedOrder?.shipping_method === "Pickup" || currentSelectedOrder?.tracking_number?.toLowerCase()?.startsWith("wk-");
+                      const actualShippingFee = isLocal ? 0 : Number(currentSelectedOrder?.shipping_fee || 0);
+                      // Shipping refund = shipping_fee * proportion of cancelled items (0 for local delivery)
+                      const shippingRefund = isLocal ? 0 : (cancelledQty >= totalItems ? actualShippingFee : (actualShippingFee / totalItems) * cancelledQty);
                       const computedRefund = cancelledProductCost + shippingRefund;
                       if (computedRefund <= 0) return null;
                       return (
                         <p className="text-xs font-semibold text-red-900">
                           <span className="text-red-700">Total Refunded:</span>{" "}
                           <span className="font-black">Ksh {Math.round(computedRefund).toLocaleString()}</span>
-                          <span className="text-[10px] text-zinc-500 ml-1">(product + shipping)</span>
+                          <span className="text-[10px] text-zinc-500 ml-1">
+                            {isLocal ? "(product only — local delivery driver fee)" : "(product + shipping)"}
+                          </span>
                         </p>
                       );
                     })()}
@@ -3204,17 +3207,18 @@ function AdminOrdersPageInner() {
 
             <div className="mt-6 pt-4 border-t border-zinc-100 space-y-2">
               {(() => {
-                const orderShippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
+                const isLocal = currentSelectedOrder?.shipping_method === "Local Delivery" || currentSelectedOrder?.shipping_method === "Pickup" || currentSelectedOrder?.tracking_number?.toLowerCase()?.startsWith("wk-");
+                const orderShippingFee = isLocal ? 0 : Number(currentSelectedOrder?.shipping_fee || 0);
                 const refundedAmt = Number(currentSelectedOrder?.refunded_amount || 0);
                 const productTotal = (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
                 // Shipping is refunded if refunded_amount covers product + shipping
-                const shippingIsRefunded = refundedAmt >= productTotal + orderShippingFee;
+                const shippingIsRefunded = !isLocal && (refundedAmt >= productTotal + orderShippingFee);
                 const remainingShipping = shippingIsRefunded ? 0 : orderShippingFee;
                 return (
                   <div className="flex justify-between items-center text-zinc-500 font-bold text-[11px] uppercase tracking-tight">
                     <span>Shipping ({currentSelectedOrder?.shipping_method})</span>
                     <span className="flex items-center gap-1.5">
-                      Ksh {remainingShipping.toLocaleString()}
+                      {isLocal ? "Ksh 0 (Local Delivery)" : `Ksh ${remainingShipping.toLocaleString()}`}
                       {shippingIsRefunded && (
                         <span className="text-[9px] font-black text-red-500 uppercase bg-red-50 px-1.5 py-0.5 rounded border border-red-100 ml-1">Refunded</span>
                       )}
@@ -3556,9 +3560,10 @@ function AdminOrdersPageInner() {
                         }
                       }}
                     >
-                      <option value="Pickup">🏪 In-Store Collection</option>
-                      <option value="Express Logistics">⚡ Express Logistics (Dispatch)</option>
-                      <option value="Standard Delivery">📦 Standard Delivery (Dispatch)</option>
+                      <option value="Pickup">🏪 In-Store Collection (Pickup)</option>
+                      <option value="Local Delivery">🛵 Local Hub Delivery (Same City - Ksh 0 Carrier Fee)</option>
+                      <option value="Express Logistics">⚡ Express Logistics (Cross-City)</option>
+                      <option value="Standard Delivery">📦 Standard Delivery (Cross-City)</option>
                     </select>
                   </div>
                 </div>
@@ -3586,8 +3591,16 @@ function AdminOrdersPageInner() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Delivery Fee (Ksh)</label>
-                        <Input type="number" min={0} placeholder="e.g. 500" className="h-10 border-zinc-200 rounded-lg bg-white"
-                          value={shippingFee || ""} onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)} />
+                        {shippingMethod === "Local Delivery" ? (
+                          <Input
+                            disabled
+                            value="0 (Local Delivery - Driver Fee)"
+                            className="h-10 border-zinc-200 rounded-lg bg-zinc-100 font-bold text-emerald-700 cursor-not-allowed"
+                          />
+                        ) : (
+                          <Input type="number" min={0} placeholder="e.g. 500" className="h-10 border-zinc-200 rounded-lg bg-white"
+                            value={shippingFee || ""} onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)} />
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">

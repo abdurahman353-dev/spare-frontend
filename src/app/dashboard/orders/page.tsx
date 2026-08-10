@@ -3585,55 +3585,33 @@ function AdminOrdersPageInner() {
                 {shippingMethod !== "Pickup" && (
                   <div className="space-y-4">
                     {/* Destination country + city + address */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-semibold text-zinc-500">Destination Country <span className="text-red-500">*</span></label>
-                          {activeOriginHubCity && (
-                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              🔒 Locked to Hub Origin
-                            </span>
-                          )}
+                          <label className="text-xs font-semibold text-zinc-500">Destination Country</label>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            🔒 Same-City Locked
+                          </span>
                         </div>
-                        {activeOriginHubCity ? (
-                          <Input
-                            disabled
-                            value={shippingCountry || "Kenya"}
-                            className="h-10 border-zinc-200 rounded-lg bg-zinc-100 font-bold text-zinc-700 cursor-not-allowed"
-                          />
-                        ) : (
-                          <SearchableDropdown
-                            items={countryDropdownItems}
-                            value={shippingCountry}
-                            onChange={(val) => { setShippingCountry(val); setShippingCity(""); }}
-                            placeholder="Select Country"
-                          />
-                        )}
+                        <Input
+                          disabled
+                          value={shippingCountry || "Kenya"}
+                          className="h-10 border-emerald-200 rounded-lg bg-emerald-50 font-bold text-zinc-600 cursor-not-allowed"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-semibold text-zinc-500">Destination City <span className="text-red-500">*</span></label>
-                          {activeOriginHubCity && (
-                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              🔒 Local Dispatch ({activeOriginHubCity})
-                            </span>
-                          )}
+                          <label className="text-xs font-semibold text-zinc-500">Destination City</label>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            🔒 {activeOriginHubCity ? `Hub: ${activeOriginHubCity}` : "Select a hub above"}
+                          </span>
                         </div>
-                        {activeOriginHubCity ? (
-                          <Input
-                            disabled
-                            value={shippingCity || activeOriginHubCity}
-                            className="h-10 border-zinc-200 rounded-lg bg-zinc-100 font-bold text-zinc-700 cursor-not-allowed"
-                          />
-                        ) : (
-                          <SearchableDropdown
-                            disabled={!shippingCountry}
-                            items={cityDropdownItems}
-                            value={shippingCity}
-                            onChange={(val) => setShippingCity(val)}
-                            placeholder="Select City"
-                          />
-                        )}
+                        <Input
+                          disabled
+                          value={activeOriginHubCity || shippingCity || ""}
+                          placeholder="Select a Source Warehouse above"
+                          className="h-10 border-emerald-200 rounded-lg bg-emerald-50 font-bold text-zinc-600 cursor-not-allowed"
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-zinc-500">Delivery Address <span className="text-red-500">*</span></label>

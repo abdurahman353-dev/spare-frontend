@@ -1797,9 +1797,8 @@ function AdminOrdersPageInner() {
               onChange={(e) => setShippingMethodFilter(e.target.value)}
             >
               <option value="All Methods">All Methods</option>
-              <option value="Express">⚡ Express</option>
-              <option value="Standard">📦 Standard</option>
-              <option value="Pickup">🏪 Pickup</option>
+              <option value="Pickup">🏪 In-Store Collection</option>
+              <option value="Local Delivery">🛵 Local Dispatch</option>
             </select>
           </div>
           {/* Date Range — always side by side */}
@@ -3561,9 +3560,7 @@ function AdminOrdersPageInner() {
                       }}
                     >
                       <option value="Pickup">🏪 In-Store Collection (Pickup)</option>
-                      <option value="Local Delivery">🛵 Local Hub Delivery (Same City - Ksh 0 Carrier Fee)</option>
-                      <option value="Express Logistics">⚡ Express Logistics (Cross-City)</option>
-                      <option value="Standard Delivery">📦 Standard Delivery (Cross-City)</option>
+                      <option value="Local Delivery">🛵 Local Dispatch</option>
                     </select>
                   </div>
                 </div>
@@ -3587,21 +3584,8 @@ function AdminOrdersPageInner() {
 
                 {shippingMethod !== "Pickup" && (
                   <div className="space-y-4">
-                    {/* Delivery fee + country + city + address */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-zinc-500">Delivery Fee (Ksh)</label>
-                        {shippingMethod === "Local Delivery" ? (
-                          <Input
-                            disabled
-                            value="0 (Local Delivery - Driver Fee)"
-                            className="h-10 border-zinc-200 rounded-lg bg-zinc-100 font-bold text-emerald-700 cursor-not-allowed"
-                          />
-                        ) : (
-                          <Input type="number" min={0} placeholder="e.g. 500" className="h-10 border-zinc-200 rounded-lg bg-white"
-                            value={shippingFee || ""} onChange={(e) => setShippingFee(parseFloat(e.target.value) || 0)} />
-                        )}
-                      </div>
+                    {/* Destination country + city + address */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
                           <label className="text-xs font-semibold text-zinc-500">Destination Country <span className="text-red-500">*</span></label>
@@ -4029,26 +4013,12 @@ function AdminOrdersPageInner() {
                   }
                 }}
               >
-                <option value="Pickup">🏪 In-Store Collection</option>
-                <option value="Express Logistics">⚡ Express Logistics (Dispatch)</option>
-                <option value="Standard Delivery">📦 Standard Delivery (Dispatch)</option>
+                <option value="Pickup">🏪 In-Store Collection (Pickup)</option>
+                <option value="Local Delivery">🛵 Local Dispatch</option>
               </select>
             </div>
             {editWalkInForm.shipping_method !== "Pickup" && (
               <>
-                {/* Shipping Fee */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Shipping Fee (Ksh)</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    disabled={editWalkInTarget?.status === "Shipped" || editWalkInTarget?.status === "In Transit" || editWalkInTarget?.status === "Delivered"}
-                    placeholder="0"
-                    className="h-10 border-zinc-200 rounded-lg bg-zinc-50 text-sm font-semibold disabled:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-75"
-                    value={editWalkInForm.shipping_fee}
-                    onChange={(e) => setEditWalkInForm({ ...editWalkInForm, shipping_fee: parseFloat(e.target.value) || 0 })}
-                  />
-                </div>
                 {/* Destination Country */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">

@@ -50,6 +50,7 @@ interface ReturnRequest {
     shipping_fee?: number;
     refunded_amount?: number;
     status: string;
+    notes?: string;
     customer?: {
       name: string;
       email?: string;
@@ -60,6 +61,20 @@ interface ReturnRequest {
   user?: {
     name: string;
     email: string;
+  };
+}
+
+// Helper to parse recipient info from walk-in order notes
+function parseRecipientNotes(notes?: string): { name: string; phone: string; email: string } | null {
+  if (!notes) return null;
+  const nameMatch = notes.match(/Recipient:\s*([^|]+)/i);
+  const phoneMatch = notes.match(/Phone:\s*([^|]+)/i);
+  const emailMatch = notes.match(/Email:\s*([^|\s]+)/i);
+  if (!nameMatch) return null;
+  return {
+    name: nameMatch[1].trim(),
+    phone: phoneMatch ? phoneMatch[1].trim() : "",
+    email: emailMatch ? emailMatch[1].trim() : "",
   };
 }
 
@@ -357,10 +372,17 @@ export default function ReturnsManagementPage() {
                     {ret.order?.tracking_number || `#${ret.order_id}`}
                   </TableCell>
                   <TableCell>
-                    <div>
-                      <p className="font-medium text-sm text-zinc-900">{ret.order?.customer?.name || "—"}</p>
-                      <p className="text-xs text-zinc-400">{ret.order?.customer?.phone || ret.order?.customer?.email || ""}</p>
-                    </div>
+                    {(() => {
+                      const recipient = parseRecipientNotes(ret.order?.notes);
+                      const name = recipient?.name || ret.order?.customer?.name || "—";
+                      const contact = recipient?.phone || recipient?.email || ret.order?.customer?.phone || ret.order?.customer?.email || "";
+                      return (
+                        <div>
+                          <p className="font-medium text-sm text-zinc-900">{name}</p>
+                          <p className="text-xs text-zinc-400">{contact}</p>
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div>
@@ -495,10 +517,21 @@ export default function ReturnsManagementPage() {
                    </Badge>
                  </div>
                  <div className="space-y-0.5">
-                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</p>
-                   <p className="font-semibold text-zinc-800">{selectedReturn.order?.customer?.name}</p>
-                   <p className="text-xs text-zinc-400">{selectedReturn.order?.customer?.phone || selectedReturn.order?.customer?.email}</p>
-                 </div>
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Customer</p>
+                    {(() => {
+                      const recipient = parseRecipientNotes(selectedReturn.order?.notes);
+                      const name = recipient?.name || selectedReturn.order?.customer?.name || "—";
+                      const phone = recipient?.phone || selectedReturn.order?.customer?.phone || "";
+                      const email = recipient?.email || selectedReturn.order?.customer?.email || "";
+                      return (
+                        <>
+                          <p className="font-semibold text-zinc-800">{name}</p>
+                          <p className="text-xs text-zinc-400">{phone || email}</p>
+                          {recipient?.email && <p className="text-xs text-zinc-400">{recipient.email}</p>}
+                        </>
+                      );
+                    })()}
+                  </div>
                 <div className="space-y-0.5">
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Order Value</p>
                   <p className="font-bold text-zinc-800">{currency} {Number(selectedReturn.order?.total_amount || 0).toLocaleString()}</p>

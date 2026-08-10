@@ -548,6 +548,23 @@ function AdminOrdersPageInner() {
 
   const handleSaveEditWalkIn = async () => {
     if (!editWalkInTarget) return;
+
+    // Dispatch-specific validation — city and address are required
+    if (editWalkInForm.shipping_method !== "Pickup") {
+      if (!editWalkInForm.shipping_country?.trim()) {
+        toast.error("Please select a destination country.");
+        return;
+      }
+      if (!editWalkInForm.shipping_city?.trim()) {
+        toast.error("Please select a destination city.");
+        return;
+      }
+      if (!editWalkInForm.shipping_address?.trim()) {
+        toast.error("Delivery address is required for dispatch orders.");
+        return;
+      }
+    }
+
     setIsSavingEditWalkIn(true);
     try {
       const isDigital = isDigitalPayment(editWalkInForm.payment_method);
@@ -892,7 +909,8 @@ function AdminOrdersPageInner() {
       return;
     }
 
-    if (shippingMethod === "Local Delivery") {
+    // Dispatch-specific validation (Express Logistics, Standard Delivery, or any non-Pickup method)
+    if (shippingMethod !== "Pickup") {
       if (!shippingCountry.trim()) {
         toast.error("Please select a destination country.");
         return;
@@ -902,17 +920,17 @@ function AdminOrdersPageInner() {
         return;
       }
       if (!shippingAddress.trim()) {
-        toast.error("Please enter delivery address.");
+        toast.error("Delivery address is required for dispatch orders.");
         return;
       }
-      // Recipient info required for walk-in guests on dispatch
+      // Recipient info is compulsory for walk-in guest dispatch orders
       if (selectedCustomerId === "walkin") {
         if (!recipientName.trim()) {
           toast.error("Recipient name is required for walk-in dispatch orders.");
           return;
         }
         if (!recipientPhone.trim()) {
-          toast.error("Recipient phone is required for walk-in dispatch orders.");
+          toast.error("Recipient phone number is required for walk-in dispatch orders.");
           return;
         }
         const phoneDigits = recipientPhone.replace(/\D/g, "");
@@ -924,13 +942,14 @@ function AdminOrdersPageInner() {
           toast.error("Recipient email address is required for walk-in dispatch orders.");
           return;
         }
-        const emailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRx.test(recipientEmail.trim())) {
+        const dispatchEmailRx = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!dispatchEmailRx.test(recipientEmail.trim())) {
           toast.error("Please enter a valid email address for the recipient.");
           return;
         }
       }
     }
+
 
     // Digital payment ref validation
     if (isDigitalPayment(paymentMethod) && !paymentRefCode.trim()) {
@@ -2778,7 +2797,7 @@ function AdminOrdersPageInner() {
                           </span>
                         )}
                       </p>
-                      {displayEmail && !isWalkIn && (
+                      {displayEmail && (
                         <p className="text-sm text-zinc-500 font-medium mt-0.5">{displayEmail}</p>
                       )}
                       {displayPhone && (
@@ -2786,7 +2805,9 @@ function AdminOrdersPageInner() {
                           📞 {displayPhone}
                         </p>
                       )}
-                      <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder?.shipping_address}</p>
+                      {currentSelectedOrder?.shipping_address && currentSelectedOrder.shipping_address !== "Walk-In Counter" && (
+                        <p className="text-sm text-zinc-500 font-medium mt-1">{currentSelectedOrder.shipping_address}</p>
+                      )}
                     </>
                   );
                 })()}

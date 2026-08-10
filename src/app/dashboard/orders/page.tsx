@@ -3090,9 +3090,12 @@ function AdminOrdersPageInner() {
                 const cancelledItems = (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
                 const cancelledProductTotal = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
                 const refundedAmount = Number(currentSelectedOrder?.refunded_amount || 0);
-                const refundedShippingTotal = Math.max(0, refundedAmount - cancelledProductTotal);
+                // Use actual order shipping_fee for per-unit share; do NOT reverse-engineer from refunded_amount
+                const actualShippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
                 const cancelledQtyTotal = Math.max(1, cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0));
-                const perUnitShippingRefunded = cancelledQtyTotal > 0 ? refundedShippingTotal / cancelledQtyTotal : 0;
+                const totalOrderQty = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + Number(i.quantity), 0));
+                // Shipping refund share = actual shipping fee * (cancelled qty / total qty)
+                const perUnitShippingRefunded = actualShippingFee / totalOrderQty;
 
                 return (currentSelectedOrder?.items || []).map((item: any, idx: number) => {
                   const isItemCancelled = item.cancellation_status === "Cancelled";
@@ -3171,14 +3174,21 @@ function AdminOrdersPageInner() {
                         {currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id || Number(currentSelectedOrder.refunded_amount || 0) > 0 ? "Completed" : "Pending")}
                       </span>
                     </p>
-                    {/* Total refunded amount — reads from backend-persisted refunded_amount */}
+                    {/* Total refunded amount — computed from actual shipping_fee + cancelled product costs */}
                     {(() => {
-                      const refunded = Number(currentSelectedOrder?.refunded_amount || 0);
-                      if (refunded <= 0) return null;
+                      const cancelledItems = (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                      const cancelledProductCost = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
+                      const totalItems = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + Number(i.quantity), 0));
+                      const cancelledQty = cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0);
+                      const actualShippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
+                      // Shipping refund = shipping_fee * proportion of cancelled items
+                      const shippingRefund = cancelledQty >= totalItems ? actualShippingFee : (actualShippingFee / totalItems) * cancelledQty;
+                      const computedRefund = cancelledProductCost + shippingRefund;
+                      if (computedRefund <= 0) return null;
                       return (
                         <p className="text-xs font-semibold text-red-900">
                           <span className="text-red-700">Total Refunded:</span>{" "}
-                          <span className="font-black">Ksh {Math.round(refunded).toLocaleString()}</span>
+                          <span className="font-black">Ksh {Math.round(computedRefund).toLocaleString()}</span>
                           <span className="text-[10px] text-zinc-500 ml-1">(product + shipping)</span>
                         </p>
                       );
@@ -3194,15 +3204,18 @@ function AdminOrdersPageInner() {
 
             <div className="mt-6 pt-4 border-t border-zinc-100 space-y-2">
               {(() => {
-                const originalShipping = Number(currentSelectedOrder?.shipping_fee || 0);
-                const refundedAmount = Number(currentSelectedOrder?.refunded_amount || 0);
-                const hasRefund = refundedAmount > 0;
+                const orderShippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
+                const refundedAmt = Number(currentSelectedOrder?.refunded_amount || 0);
+                const productTotal = (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
+                // Shipping is refunded if refunded_amount covers product + shipping
+                const shippingIsRefunded = refundedAmt >= productTotal + orderShippingFee;
+                const remainingShipping = shippingIsRefunded ? 0 : orderShippingFee;
                 return (
                   <div className="flex justify-between items-center text-zinc-500 font-bold text-[11px] uppercase tracking-tight">
                     <span>Shipping ({currentSelectedOrder?.shipping_method})</span>
                     <span className="flex items-center gap-1.5">
-                      Ksh {originalShipping.toLocaleString()}
-                      {hasRefund && originalShipping === 0 && (
+                      Ksh {remainingShipping.toLocaleString()}
+                      {shippingIsRefunded && (
                         <span className="text-[9px] font-black text-red-500 uppercase bg-red-50 px-1.5 py-0.5 rounded border border-red-100 ml-1">Refunded</span>
                       )}
                     </span>
@@ -3211,7 +3224,16 @@ function AdminOrdersPageInner() {
               })()}
               <div className="flex justify-between items-center">
                 <span className="font-bold text-zinc-900 text-sm">Total Settlement</span>
-                <span className="text-xl font-black text-zinc-900">Ksh {Number(currentSelectedOrder?.total_amount).toLocaleString()}</span>
+                {(() => {
+                  const totalAmt = Number(currentSelectedOrder?.total_amount || 0);
+                  const refundedAmt = Number(currentSelectedOrder?.refunded_amount || 0);
+                  const settlement = Math.max(0, totalAmt - refundedAmt);
+                  return (
+                    <span className="text-xl font-black text-zinc-900">
+                      Ksh {settlement.toLocaleString()}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           </div>

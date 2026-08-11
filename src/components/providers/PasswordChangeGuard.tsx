@@ -17,12 +17,17 @@ import { useAuth } from "@/context/AuthContext";
  */
 
 // Routes that are always allowed regardless of must_change_password status
-const EXEMPT_ROUTES = ["/change-password", "/login", "/register", "/forgot-password", "/reset-password"];
+const EXEMPT_PREFIXES = ["/change-password", "/login", "/register", "/forgot-password", "/reset-password"];
+const EXEMPT_EXACT = ["/"];
 
 export default function PasswordChangeGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  const isExempt = () => 
+    EXEMPT_PREFIXES.some((route) => pathname.startsWith(route)) || 
+    EXEMPT_EXACT.includes(pathname);
 
   useEffect(() => {
     // Wait until auth state is resolved before acting
@@ -31,8 +36,7 @@ export default function PasswordChangeGuard({ children }: { children: React.Reac
     // If the user is logged in and must change their password…
     if (user && user.must_change_password) {
       // …and they are NOT already on an exempt route, redirect them.
-      const isExempt = EXEMPT_ROUTES.some((route) => pathname.startsWith(route));
-      if (!isExempt) {
+      if (!isExempt()) {
         router.replace("/change-password");
       }
     }
@@ -41,8 +45,7 @@ export default function PasswordChangeGuard({ children }: { children: React.Reac
   // While we know the user needs to change password and they're not on the
   // change-password page, render nothing to avoid a flash of the protected page.
   if (!loading && user && user.must_change_password) {
-    const isExempt = EXEMPT_ROUTES.some((route) => pathname.startsWith(route));
-    if (!isExempt) {
+    if (!isExempt()) {
       return null;
     }
   }

@@ -6,6 +6,7 @@ import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { Toaster } from "react-hot-toast";
 import { SettingsProvider } from "@/components/providers/SettingsProvider";
+import PasswordChangeGuard from "@/components/providers/PasswordChangeGuard";
 import { getSiteUrl } from "@/lib/site-url";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -104,10 +105,12 @@ export default function RootLayout({
         >
           <SettingsProvider>
             <AuthProvider>
-              <CartProvider>
-                {children}
-                <Toaster position="top-right" />
-              </CartProvider>
+              <PasswordChangeGuard>
+                <CartProvider>
+                  {children}
+                  <Toaster position="top-right" />
+                </CartProvider>
+              </PasswordChangeGuard>
             </AuthProvider>
           </SettingsProvider>
         </ThemeProvider>

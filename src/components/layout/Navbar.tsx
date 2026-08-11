@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Menu, X, CarFront, RotateCcw } from "lucide-react";
+import { Menu, X, CarFront, RotateCcw, KeyRound } from "lucide-react";
 import { useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,7 +16,7 @@ const navLinks = [
   { name: "Contact", href: "/contact" },
 ];
 
-import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, CreditCard, ChevronDown, LayoutDashboard, MapPin, Truck } from "lucide-react";
+import { ShoppingCart, User as UserIcon, LogOut, Package, Settings as SettingsIcon, ChevronDown, LayoutDashboard, MapPin, Truck } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useSettings } from "@/components/providers/SettingsProvider";
@@ -79,27 +79,30 @@ export function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-8">
-          <div className="flex items-center gap-4 border-r pr-8">
-            <Link id="tour-cart-btn" href="/cart" className="relative group p-2 rounded-full hover:bg-secondary transition-colors">
-              <motion.div
-                key={cartCount}
-                initial={{ scale: 1 }}
-                animate={{ scale: cartCount > 0 ? [1, 1.3, 1] : 1 }}
-                transition={{ duration: 0.3 }}
-              >
-                <ShoppingCart className="h-5 w-5 text-zinc-700 group-hover:text-primary transition-colors" />
-              </motion.div>
-              {cartCount > 0 && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border-2 border-white shadow-lg"
+          {/* Desktop cart — hidden when password change is required */}
+          {!(isAuthenticated && user?.must_change_password) && (
+            <div className="flex items-center gap-4 border-r pr-8">
+              <Link id="tour-cart-btn" href="/cart" className="relative group p-2 rounded-full hover:bg-secondary transition-colors">
+                <motion.div
+                  key={cartCount}
+                  initial={{ scale: 1 }}
+                  animate={{ scale: cartCount > 0 ? [1, 1.3, 1] : 1 }}
+                  transition={{ duration: 0.3 }}
                 >
-                  {cartCount}
-                </motion.span>
-              )}
-            </Link>
-          </div>
+                  <ShoppingCart className="h-5 w-5 text-zinc-700 group-hover:text-primary transition-colors" />
+                </motion.div>
+                {cartCount > 0 && (
+                  <motion.span
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border-2 border-white shadow-lg"
+                  >
+                    {cartCount}
+                  </motion.span>
+                )}
+              </Link>
+            </div>
+          )}
 
           {authLoading ? (
             /* ── Auth resolving: skeleton so Login never flashes ── */
@@ -109,6 +112,25 @@ export function Navbar() {
                 <div className="h-2 w-10 rounded bg-zinc-100 animate-pulse" />
                 <div className="h-3 w-16 rounded bg-zinc-100 animate-pulse" />
               </div>
+            </div>
+          ) : isAuthenticated && user?.must_change_password ? (
+            /* ── Password change required: locked-down state ── */
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push("/change-password")}
+                className="flex items-center gap-2 bg-amber-50 border border-amber-300 text-amber-700 hover:bg-amber-100 transition-all rounded-lg px-3 py-1.5"
+              >
+                <KeyRound className="h-4 w-4 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider hidden sm:block">Set Password</span>
+              </button>
+              <div className="h-6 w-px bg-zinc-200 hidden lg:block" />
+              <button
+                onClick={logout}
+                className="h-8 w-8 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-700 transition-all border border-red-100"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           ) : isAuthenticated ? (
             <div className="flex items-center gap-4">
@@ -233,16 +255,18 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Mobile: Cart + Menu */}
+        {/* Mobile: Cart (hidden when password change required) + Menu */}
         <div className="md:hidden flex items-center gap-1">
-          <Link href="/cart" className="relative p-2 rounded-full hover:bg-secondary transition-colors">
-            <ShoppingCart className="h-5 w-5 text-zinc-700" />
-            {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-primary text-white text-[9px] font-black h-4 w-4 rounded-full flex items-center justify-center border-2 border-white shadow">
-                {cartCount}
-              </span>
-            )}
-          </Link>
+          {!(isAuthenticated && user?.must_change_password) && (
+            <Link href="/cart" className="relative p-2 rounded-full hover:bg-secondary transition-colors">
+              <ShoppingCart className="h-5 w-5 text-zinc-700" />
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-primary text-white text-[9px] font-black h-4 w-4 rounded-full flex items-center justify-center border-2 border-white shadow">
+                  {cartCount}
+                </span>
+              )}
+            </Link>
+          )}
           <Button variant="ghost" size="icon" onClick={() => setIsOpen(!isOpen)}>
             {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>
@@ -275,7 +299,39 @@ export function Navbar() {
 
             <div className="h-px bg-zinc-100 my-1" />
 
-            {isAuthenticated ? (
+            {isAuthenticated && user?.must_change_password ? (
+              /* ── Mobile: password change required ── */
+              <>
+                <div className="flex items-center gap-3 px-3 py-2">
+                  <div className="h-9 w-9 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 shrink-0">
+                    <KeyRound className="h-5 w-5" />
+                  </div>
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Action Required</span>
+                    <span className="text-sm font-bold text-zinc-900">Set Your Password</span>
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-100 my-1" />
+
+                <Link
+                  href="/change-password"
+                  onClick={() => setIsOpen(false)}
+                  className="text-sm font-semibold py-2.5 px-3 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 flex items-center gap-2"
+                >
+                  <KeyRound className="h-4 w-4" /> Set Password (Required)
+                </Link>
+
+                <div className="h-px bg-zinc-100 my-1" />
+
+                <button
+                  onClick={() => { logout(); setIsOpen(false); }}
+                  className="w-full text-left text-sm font-semibold py-2.5 px-3 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" /> Sign Out
+                </button>
+              </>
+            ) : isAuthenticated ? (
               <>
                 {/* User info */}
                 <div className="flex items-center gap-3 px-3 py-2">

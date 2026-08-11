@@ -2143,38 +2143,66 @@ function AdminOrdersPageInner() {
                             <p className="text-[10px] text-zinc-400">{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                           </TableCell>
                           <TableCell>
-                            <div className="space-y-0.5">
-                              <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{order.items?.[0]?.product?.name || "Spare Part"}</p>
-                              {order.items?.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{order.items.length - 1} more</p>}
-                              <p className="text-[10px] text-zinc-500">{order.items?.length || 0} item(s)</p>
-                            </div>
+                            {(() => {
+                              const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                              const cancelledCount = (order.items || []).length - activeItems.length;
+                              const displayItem = activeItems[0]?.product || order.items?.[0]?.product;
+                              return (
+                                <div className="space-y-0.5">
+                                  <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{displayItem?.name || "Spare Part"}</p>
+                                  {activeItems.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{activeItems.length - 1} more</p>}
+                                  <p className="text-[10px] text-zinc-500 font-semibold">
+                                    {activeItems.length} item(s)
+                                    {cancelledCount > 0 && <span className="text-red-500 ml-1">({cancelledCount} refunded)</span>}
+                                  </p>
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
-                            <div className="flex flex-col gap-0.5">
-                              {order.items?.map((item: any, i: number) => (
-                                <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
-                                  {item.product?.part_number || "—"}
-                                </span>
-                              ))}
-                            </div>
+                            {(() => {
+                              const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                              const itemsToDisplay = activeItems.length > 0 ? activeItems : order.items || [];
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  {itemsToDisplay.map((item: any, i: number) => (
+                                    <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                      {item.product?.part_number || "—"}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
-                            <div className="flex flex-col gap-0.5">
-                              {order.items?.map((item: any, i: number) => (
-                                <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
-                                  {item.product?.engine_model || "—"}
-                                </span>
-                              ))}
-                            </div>
+                            {(() => {
+                              const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                              const itemsToDisplay = activeItems.length > 0 ? activeItems : order.items || [];
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  {itemsToDisplay.map((item: any, i: number) => (
+                                    <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                      {item.product?.engine_model || "—"}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
-                            <div className="flex flex-col gap-0.5">
-                              {order.items?.map((item: any, i: number) => (
-                                <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
-                                  {item.product?.suitable_vehicle || "—"}
-                                </span>
-                              ))}
-                            </div>
+                            {(() => {
+                              const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                              const itemsToDisplay = activeItems.length > 0 ? activeItems : order.items || [];
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  {itemsToDisplay.map((item: any, i: number) => (
+                                    <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                      {item.product?.suitable_vehicle || "—"}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1.5">
@@ -3247,9 +3275,8 @@ function AdminOrdersPageInner() {
               <div className="flex justify-between items-center">
                 <span className="font-bold text-zinc-900 text-sm">Total Settlement</span>
                 {(() => {
-                  const totalAmt = Number(currentSelectedOrder?.total_amount || 0);
-                  const refundedAmt = Number(currentSelectedOrder?.refunded_amount || 0);
-                  const settlement = Math.max(0, totalAmt - refundedAmt);
+                  const isFullyReturned = currentSelectedOrder?.status === "Returned" || currentSelectedOrder?.status === "Cancelled" || currentSelectedOrder?.payment_status === "Refunded";
+                  const settlement = isFullyReturned ? 0 : Number(currentSelectedOrder?.total_amount || 0);
                   return (
                     <span className="text-xl font-black text-zinc-900">
                       Ksh {settlement.toLocaleString()}

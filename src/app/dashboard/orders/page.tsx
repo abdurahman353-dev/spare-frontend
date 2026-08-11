@@ -1493,8 +1493,14 @@ function AdminOrdersPageInner() {
           getWalkInDestinationLabel(order) === walkInDestFilter;
         const matchesMethod = shippingMethodFilter === "All Methods" || (() => {
           const m = (order.shipping_method || "").toLowerCase();
+          if (shippingMethodFilter === "Express") {
+            return m.includes("express");
+          }
+          if (shippingMethodFilter === "Standard") {
+            return m.includes("standard") || (!m.includes("express") && !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store") && !m.includes("local"));
+          }
           if (shippingMethodFilter === "Local Dispatch") {
-            return !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store") && !m.includes("collection");
+            return m.includes("local") || m.includes("dispatch");
           }
           if (shippingMethodFilter === "Pickup") {
             return m.includes("pickup") || m.includes("counter") || m.includes("in-store") || m.includes("collection");
@@ -1545,8 +1551,14 @@ function AdminOrdersPageInner() {
         (statusFilter === "Refunded" ? (order.status === "Refunded" || order.payment_status === "Refunded" || order.payment_status === "Cancelled / Refunded" || getOrderRefundedTotal(order) > 0) : order.status === statusFilter);
       const matchesMethod = shippingMethodFilter === "All Methods" || (() => {
         const m = (order.shipping_method || "").toLowerCase();
+        if (shippingMethodFilter === "Express") {
+          return m.includes("express");
+        }
+        if (shippingMethodFilter === "Standard") {
+          return m.includes("standard") || (!m.includes("express") && !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store") && !m.includes("local"));
+        }
         if (shippingMethodFilter === "Local Dispatch") {
-          return !m.includes("pickup") && !m.includes("counter") && !m.includes("in-store") && !m.includes("collection");
+          return m.includes("local") || m.includes("dispatch");
         }
         if (shippingMethodFilter === "Pickup") {
           return m.includes("pickup") || m.includes("counter") || m.includes("in-store") || m.includes("collection");
@@ -1731,8 +1743,8 @@ function AdminOrdersPageInner() {
             <select className="h-9 px-2.5 border border-zinc-200 rounded-lg text-xs font-semibold bg-zinc-50/50 outline-none focus:ring-2 focus:ring-[#0052cc]/20 w-full text-zinc-600 cursor-pointer font-bold"
               value={shippingMethodFilter} onChange={(e) => setShippingMethodFilter(e.target.value)}>
               <option value="All Methods">All Methods</option>
-              <option value="Local Dispatch">🛵 Local Dispatch</option>
-              <option value="Pickup">🛍️ Pickup</option>
+              <option value="Express">⚡ Express</option>
+              <option value="Standard">📦 Standard</option>
             </select>
           </div>
           {/* Date Range — always side by side */}
@@ -2145,15 +2157,18 @@ function AdminOrdersPageInner() {
                           <TableCell>
                             {(() => {
                               const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                              const cancelledCount = (order.items || []).length - activeItems.length;
+                              const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                              const isAllRefunded = activeItems.length === 0;
                               const displayItem = activeItems[0]?.product || order.items?.[0]?.product;
                               return (
                                 <div className="space-y-0.5">
-                                  <p className="text-xs font-bold text-zinc-800 max-w-[130px] truncate">{displayItem?.name || "Spare Part"}</p>
+                                  <p className={cn("text-xs font-bold max-w-[130px] truncate", isAllRefunded ? "line-through text-red-500" : "text-zinc-800")}>
+                                    {displayItem?.name || "Spare Part"}
+                                  </p>
                                   {activeItems.length > 1 && <p className="text-[10px] text-zinc-400 font-bold">+{activeItems.length - 1} more</p>}
                                   <p className="text-[10px] text-zinc-500 font-semibold">
                                     {activeItems.length} item(s)
-                                    {cancelledCount > 0 && <span className="text-red-500 ml-1">({cancelledCount} refunded)</span>}
+                                    {cancelledItems.length > 0 && <span className="text-red-500 ml-1 font-bold">({cancelledItems.length} refunded)</span>}
                                   </p>
                                 </div>
                               );
@@ -2162,11 +2177,29 @@ function AdminOrdersPageInner() {
                           <TableCell>
                             {(() => {
                               const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                              const itemsToDisplay = activeItems.length > 0 ? activeItems : order.items || [];
+                              const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+
+                              if (activeItems.length === 0) {
+                                return (
+                                  <div className="flex flex-col gap-0.5">
+                                    {cancelledItems.map((item: any, i: number) => (
+                                      <span key={i} className="text-xs font-bold text-red-500 line-through bg-red-50 px-1 py-0.5 rounded block truncate max-w-[120px]">
+                                        {item.product?.part_number || "—"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                );
+                              }
+
                               return (
                                 <div className="flex flex-col gap-0.5">
-                                  {itemsToDisplay.map((item: any, i: number) => (
+                                  {activeItems.map((item: any, i: number) => (
                                     <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                      {item.product?.part_number || "—"}
+                                    </span>
+                                  ))}
+                                  {cancelledItems.map((item: any, i: number) => (
+                                    <span key={i} className="text-[10px] font-bold text-red-400 line-through bg-red-50 px-1 py-0.5 rounded block truncate max-w-[120px]">
                                       {item.product?.part_number || "—"}
                                     </span>
                                   ))}
@@ -2177,11 +2210,14 @@ function AdminOrdersPageInner() {
                           <TableCell>
                             {(() => {
                               const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                              const itemsToDisplay = activeItems.length > 0 ? activeItems : order.items || [];
+                              const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                              const isAllRefunded = activeItems.length === 0;
+                              const itemsToDisplay = isAllRefunded ? cancelledItems : activeItems;
+
                               return (
                                 <div className="flex flex-col gap-0.5">
                                   {itemsToDisplay.map((item: any, i: number) => (
-                                    <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                    <span key={i} className={cn("text-xs font-semibold block truncate max-w-[100px]", isAllRefunded ? "line-through text-red-400" : "text-zinc-600")}>
                                       {item.product?.engine_model || "—"}
                                     </span>
                                   ))}
@@ -2192,11 +2228,14 @@ function AdminOrdersPageInner() {
                           <TableCell>
                             {(() => {
                               const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                              const itemsToDisplay = activeItems.length > 0 ? activeItems : order.items || [];
+                              const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                              const isAllRefunded = activeItems.length === 0;
+                              const itemsToDisplay = isAllRefunded ? cancelledItems : activeItems;
+
                               return (
                                 <div className="flex flex-col gap-0.5">
                                   {itemsToDisplay.map((item: any, i: number) => (
-                                    <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                    <span key={i} className={cn("text-xs font-semibold block truncate max-w-[120px]", isAllRefunded ? "line-through text-red-400" : "text-zinc-600")} title={item.product?.suitable_vehicle}>
                                       {item.product?.suitable_vehicle || "—"}
                                     </span>
                                   ))}
@@ -2502,13 +2541,16 @@ function AdminOrdersPageInner() {
                         <TableCell>
                           {(() => {
                             const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                            if (activeItems.length === 0) {
-                              return <span className="text-xs font-medium text-zinc-400 italic">—</span>;
-                            }
+                            const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                            const isAllRefunded = activeItems.length === 0;
+                            const displayItem = activeItems[0]?.product || order.items?.[0]?.product;
                             return (
                               <div className="space-y-0.5 max-w-[150px]">
-                                <p className="text-xs font-bold text-zinc-800 truncate">{activeItems[0]?.product?.name || "Genuine Spare Part"}</p>
+                                <p className={cn("text-xs font-bold truncate", isAllRefunded ? "line-through text-red-500" : "text-zinc-800")}>
+                                  {displayItem?.name || "Genuine Spare Part"}
+                                </p>
                                 {activeItems.length > 1 && <p className="text-[10px] text-zinc-400 font-bold uppercase">+{activeItems.length - 1} more items</p>}
+                                {isAllRefunded && <p className="text-[10px] text-red-500 font-bold uppercase">(All Items Refunded)</p>}
                               </div>
                             );
                           })()}
@@ -2516,11 +2558,29 @@ function AdminOrdersPageInner() {
                         <TableCell>
                           {(() => {
                             const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                            if (activeItems.length === 0) return <span className="text-xs font-medium text-zinc-400 italic">—</span>;
+                            const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+
+                            if (activeItems.length === 0) {
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  {cancelledItems.map((item: any, i: number) => (
+                                    <span key={i} className="text-xs font-bold text-red-500 line-through bg-red-50 px-1 py-0.5 rounded block truncate max-w-[120px]">
+                                      {item.product?.part_number || "—"}
+                                    </span>
+                                  ))}
+                                </div>
+                              );
+                            }
+
                             return (
                               <div className="flex flex-col gap-0.5">
                                 {activeItems.map((item: any, i: number) => (
                                   <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                    {item.product?.part_number || "—"}
+                                  </span>
+                                ))}
+                                {cancelledItems.map((item: any, i: number) => (
+                                  <span key={i} className="text-[10px] font-bold text-red-400 line-through bg-red-50 px-1 py-0.5 rounded block truncate max-w-[120px]">
                                     {item.product?.part_number || "—"}
                                   </span>
                                 ))}
@@ -2531,11 +2591,14 @@ function AdminOrdersPageInner() {
                         <TableCell>
                           {(() => {
                             const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                            if (activeItems.length === 0) return <span className="text-xs font-medium text-zinc-400 italic">—</span>;
+                            const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                            const isAllRefunded = activeItems.length === 0;
+                            const itemsToDisplay = isAllRefunded ? cancelledItems : activeItems;
+
                             return (
                               <div className="flex flex-col gap-0.5">
-                                {activeItems.map((item: any, i: number) => (
-                                  <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                {itemsToDisplay.map((item: any, i: number) => (
+                                  <span key={i} className={cn("text-xs font-semibold block truncate max-w-[100px]", isAllRefunded ? "line-through text-red-400" : "text-zinc-600")}>
                                     {item.product?.engine_model || "—"}
                                   </span>
                                 ))}
@@ -2546,11 +2609,14 @@ function AdminOrdersPageInner() {
                         <TableCell>
                           {(() => {
                             const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                            if (activeItems.length === 0) return <span className="text-xs font-medium text-zinc-400 italic">—</span>;
+                            const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                            const isAllRefunded = activeItems.length === 0;
+                            const itemsToDisplay = isAllRefunded ? cancelledItems : activeItems;
+
                             return (
                               <div className="flex flex-col gap-0.5">
-                                {activeItems.map((item: any, i: number) => (
-                                  <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                {itemsToDisplay.map((item: any, i: number) => (
+                                  <span key={i} className={cn("text-xs font-semibold block truncate max-w-[120px]", isAllRefunded ? "line-through text-red-400" : "text-zinc-600")} title={item.product?.suitable_vehicle}>
                                     {item.product?.suitable_vehicle || "—"}
                                   </span>
                                 ))}

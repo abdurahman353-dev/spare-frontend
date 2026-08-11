@@ -1,0 +1,51 @@
+import { MetadataRoute } from "next";
+
+const SITE_URL = "https://spare-backend-k79l.onrender.com";
+
+/**
+ * Next.js App Router sitemap — automatically served at /sitemap.xml
+ * Only public, crawlable pages are included. Authenticated/admin
+ * routes are deliberately excluded (also blocked in robots.txt).
+ */
+export default function sitemap(): MetadataRoute.Sitemap {
+    const now = new Date();
+
+    return [
+        {
+            url: `${SITE_URL}/`,
+            lastModified: now,
+            changeFrequency: "weekly",
+            priority: 1.0,
+        },
+        {
+            url: `${SITE_URL}/products`,
+            lastModified: now,
+            changeFrequency: "daily",
+            priority: 0.9,
+        },
+        {
+            url: `${SITE_URL}/about`,
+            lastModified: now,
+            changeFrequency: "monthly",
+            priority: 0.7,
+        },
+        {
+            url: `${SITE_URL}/contact`,
+            lastModified: now,
+            changeFrequency: "monthly",
+            priority: 0.6,
+        },
+        {
+            url: `${SITE_URL}/login`,
+            lastModified: now,
+            changeFrequency: "yearly",
+            priority: 0.4,
+        },
+        {
+            url: `${SITE_URL}/register`,
+            lastModified: now,
+            changeFrequency: "yearly",
+            priority: 0.4,
+        },
+    ];
+}

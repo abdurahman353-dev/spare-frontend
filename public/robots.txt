@@ -1,0 +1,28 @@
+User-agent: *
+Allow: /
+Allow: /products
+Allow: /products/
+Allow: /brands
+Allow: /about
+Allow: /contact
+Allow: /faq
+Allow: /services
+Allow: /privacy
+Allow: /terms
+Allow: /delivery
+
+# Block private/authenticated pages
+Disallow: /dashboard
+Disallow: /dashboard/
+Disallow: /account
+Disallow: /account/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
+Disallow: /register
+Disallow: /change-password
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /delivery/
+
+Sitemap: https://spare-backend-k79l.onrender.com/sitemap.xml

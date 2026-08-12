@@ -1194,7 +1194,11 @@ function AccountPortalInner() {
                                 </div>
                               </td></tr>
                             ) : filteredOrders.map((order: any) => {
-                              const validItems = order.items?.filter((item: any) => item.cancellation_status !== "Cancelled") || [];
+                              const activeItems = (order.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
+                              const cancelledItems = (order.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
+                              const allCancelled = (order.items || []).length > 0 && activeItems.length === 0;
+                              const displayItems = allCancelled ? cancelledItems : activeItems;
+
                               return (
                               <tr key={order.id} className="hover:bg-[#f8fafc] transition-colors">
                                 <td className="px-6 py-4">
@@ -1210,18 +1214,23 @@ function AccountPortalInner() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="space-y-0.5 max-w-[200px]">
-                                    <p className="text-[13px] font-bold text-[#1e293b] truncate">
-                                      {validItems[0]?.product?.name || "Genuine Spare Part"}
+                                    <p className={cn("text-[13px] font-bold truncate", allCancelled ? "text-red-500 line-through" : "text-[#1e293b]")}>
+                                      {displayItems[0]?.product?.name || "Genuine Spare Part"}
                                     </p>
-                                    {validItems.length > 1 && (
-                                      <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{validItems.length - 1} more items</p>
+                                    {displayItems.length > 1 && (
+                                      <p className="text-[10px] text-[#94a3b8] font-bold uppercase">+{displayItems.length - 1} more items</p>
                                     )}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col gap-0.5">
-                                    {validItems.map((item: any, i: number) => (
+                                    {activeItems.map((item: any, i: number) => (
                                       <span key={i} className="text-xs font-bold text-[#0052cc] block truncate max-w-[120px]">
+                                        {item.product?.part_number || "—"}
+                                      </span>
+                                    ))}
+                                    {cancelledItems.map((item: any, i: number) => (
+                                      <span key={i} className="text-[10px] font-bold text-red-500 line-through bg-red-50 px-1 py-0.5 rounded block truncate max-w-[120px]">
                                         {item.product?.part_number || "—"}
                                       </span>
                                     ))}
@@ -1229,8 +1238,8 @@ function AccountPortalInner() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col gap-0.5">
-                                    {validItems.map((item: any, i: number) => (
-                                      <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[100px]">
+                                    {displayItems.map((item: any, i: number) => (
+                                      <span key={i} className={cn("text-xs font-semibold block truncate max-w-[100px]", allCancelled ? "text-red-400 line-through" : "text-zinc-600")}>
                                         {item.product?.engine_model || "—"}
                                       </span>
                                     ))}
@@ -1238,29 +1247,57 @@ function AccountPortalInner() {
                                 </td>
                                 <td className="px-6 py-4">
                                   <div className="flex flex-col gap-0.5">
-                                    {validItems.map((item: any, i: number) => (
-                                      <span key={i} className="text-xs font-semibold text-zinc-600 block truncate max-w-[120px]" title={item.product?.suitable_vehicle}>
+                                    {displayItems.map((item: any, i: number) => (
+                                      <span key={i} className={cn("text-xs font-semibold block truncate max-w-[120px]", allCancelled ? "text-red-400 line-through" : "text-zinc-600")} title={item.product?.suitable_vehicle}>
                                         {item.product?.suitable_vehicle || "—"}
                                       </span>
                                     ))}
                                   </div>
                                 </td>
                                 <td className="px-6 py-4">
-                                  <div className="flex items-center gap-1.5">
-                                    <Package className="h-3 w-3 text-[#94a3b8]" />
-                                    <span className="text-xs font-bold text-[#1e293b]">{validItems.length}</span>
-                                  </div>
+                                  {(() => {
+                                    const activeCount = activeItems.reduce((sum: number, i: any) => sum + Number(i.quantity || 1), 0);
+                                    const totalCount = (order.items || []).reduce((sum: number, i: any) => sum + Number(i.quantity || 1), 0);
+                                    return (
+                                      <div className="flex items-center gap-1.5 justify-center">
+                                        <Package className="h-3 w-3 text-[#94a3b8]" />
+                                        <span className={cn("text-xs font-bold", allCancelled ? "text-red-500 line-through" : "text-[#1e293b]")}>
+                                          {allCancelled ? totalCount : activeCount}
+                                        </span>
+                                      </div>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
-                                  Ksh {Math.max(0, (Number(order.total_amount) - Number(order.shipping_fee || 0))).toLocaleString()}
+                                  {(() => {
+                                    const activeProductCost = activeItems.reduce((sum: number, i: any) => sum + (Number(i.price) * Number(i.quantity)), 0);
+                                    const totalProductCost = (order.items || []).reduce((sum: number, i: any) => sum + (Number(i.price) * Number(i.quantity)), 0);
+                                    const displayCost = allCancelled ? totalProductCost : activeProductCost;
+                                    return (
+                                      <span className={cn("text-[13px] font-semibold", allCancelled ? "text-red-500 line-through" : "text-[#64748b]")}>
+                                        Ksh {displayCost.toLocaleString()}
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
-                                  Ksh {Number(order.shipping_fee || 0).toLocaleString()}
+                                  {(() => {
+                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => sum + (parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity)), 0);
+                                    const totalShippingFee = (order.items || []).reduce((sum: number, i: any) => sum + (parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity)), 0);
+                                    const displayFee = allCancelled ? totalShippingFee : (cancelledItems.length > 0 ? activeShippingFee : Number(order.shipping_fee || 0));
+                                    return (
+                                      <span className={cn("text-[13px] font-semibold", allCancelled ? "text-red-500 line-through" : "text-[#64748b]")}>
+                                        Ksh {displayFee % 1 === 0 ? displayFee.toFixed(0) : displayFee.toFixed(2)}
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                                 <td className="px-6 py-4 text-right pr-10">
                                   {(() => {
                                     const refundedTotal = getOrderRefundedTotal(order);
-                                    const allCancelled = order.items?.every((i: any) => i.cancellation_status === "Cancelled");
+                                    const activeProductCost = activeItems.reduce((sum: number, i: any) => sum + (Number(i.price) * Number(i.quantity)), 0);
+                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => sum + (parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity)), 0);
+                                    const activeTotalAmount = cancelledItems.length > 0 ? (activeProductCost + activeShippingFee) : Number(order.total_amount || 0);
 
                                     if (order.status === "Cancelled" || allCancelled) {
                                       return (
@@ -1276,11 +1313,11 @@ function AccountPortalInner() {
                                     return (
                                       <>
                                         <p className="text-[14px] font-black text-[#1e293b]">
-                                          Ksh {Number(order.total_amount || 0).toLocaleString()}
+                                          Ksh {(activeTotalAmount % 1 === 0 ? activeTotalAmount.toFixed(0) : activeTotalAmount.toFixed(2))}
                                         </p>
                                         {refundedTotal > 0 && (
                                           <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">
-                                            Ksh {refundedTotal.toLocaleString()} Refunded
+                                            Ksh {(refundedTotal % 1 === 0 ? refundedTotal.toFixed(0) : refundedTotal.toFixed(2))} Refunded
                                           </p>
                                         )}
                                       </>

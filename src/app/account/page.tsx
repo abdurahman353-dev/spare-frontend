@@ -2302,19 +2302,19 @@ function AccountPortalInner() {
 
       {/* Return Request Modal */}
       <Dialog open={isReturnModalOpen} onOpenChange={setIsReturnModalOpen}>
-        <DialogContent className="rounded-xl border-none shadow-2xl sm:max-w-[500px] p-0 overflow-hidden">
-          <DialogHeader className="px-6 py-5 bg-purple-50 border-b border-purple-100">
-            <DialogTitle className="font-bold text-[#1e293b] flex items-center gap-2">
-              <RotateCcw className="h-4 w-4 text-purple-600" /> Request Return — {selectedOrder?.tracking_number}
+        <DialogContent className="rounded-xl border-none shadow-2xl w-[95vw] sm:w-full sm:max-w-[500px] max-w-[calc(100vw-1rem)] p-0 overflow-hidden">
+          <DialogHeader className="px-4 py-4 sm:px-6 sm:py-5 bg-purple-50 border-b border-purple-100">
+            <DialogTitle className="font-bold text-[#1e293b] flex items-center gap-2 text-sm sm:text-base">
+              <RotateCcw className="h-4 w-4 text-purple-600 shrink-0" /> <span className="truncate">Request Return — {selectedOrder?.tracking_number}</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-[#64748b] font-medium mt-1">
+            <DialogDescription className="text-xs text-[#64748b] font-medium mt-1 leading-normal">
               Select the items you wish to return and specify quantities. Our team will review your request within 2–3 business days.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRequestReturn}>
-            <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 max-h-[60vh] overflow-y-auto">
               {/* One-time Submission Warning Banner */}
-              <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-3 flex gap-2.5 items-start text-xs text-amber-800 leading-normal">
+              <div className="rounded-lg border border-amber-100 bg-amber-50/70 p-3 flex gap-2.5 items-start text-[11px] sm:text-xs text-amber-800 leading-normal">
                 <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold block">Single Return Request Permitted</span>
@@ -2326,14 +2326,14 @@ function AccountPortalInner() {
               {selectedOrder?.items && selectedOrder.items.filter((i: any) => i.cancellation_status !== "Cancelled").length > 0 && (
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-[#64748b] uppercase tracking-widest block">Select Items to Return *</label>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto border border-purple-100 rounded-lg p-3 bg-purple-50/30">
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto border border-purple-100 rounded-lg p-2.5 sm:p-3 bg-purple-50/30">
                     {selectedOrder.items
                       .filter((item: any) => item.cancellation_status !== "Cancelled")
                       .map((item: any) => {
                         const selected = selectedReturnItems[item.id] !== undefined;
                         const qty = selectedReturnItems[item.id] ?? 0;
                         return (
-                          <div key={item.id} className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${selected ? "bg-white border-purple-300 shadow-sm" : "bg-white/60 border-transparent hover:border-purple-200"}`}>
+                          <div key={item.id} className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-lg border transition-all ${selected ? "bg-white border-purple-300 shadow-sm" : "bg-white/60 border-transparent hover:border-purple-200"}`}>
                             <input
                               type="checkbox"
                               className="w-4 h-4 accent-purple-600 rounded cursor-pointer shrink-0"
@@ -2348,12 +2348,12 @@ function AccountPortalInner() {
                                 }
                               }}
                             />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-bold text-zinc-800 text-xs leading-tight truncate">{item.product?.name || "Genuine Part"}</p>
-                              <p className="text-[10px] text-zinc-400 font-medium">Ksh {Number(item.price).toLocaleString()} · Available: {item.quantity}</p>
+                            <div className="flex-1 min-w-0 pr-1">
+                              <p className="font-bold text-zinc-800 text-[11px] sm:text-xs leading-snug truncate">{item.product?.name || "Genuine Part"}</p>
+                              <p className="text-[10px] text-zinc-400 font-medium truncate">Ksh {Number(item.price).toLocaleString()} · Available: {item.quantity}</p>
                             </div>
                             {selected && (
-                              <div className="flex items-center gap-1 shrink-0">
+                              <div className="flex items-center gap-1 shrink-0 ml-auto">
                                 <button
                                   type="button"
                                   className="w-6 h-6 rounded bg-purple-100 text-purple-700 font-black text-sm flex items-center justify-center hover:bg-purple-200 transition"
@@ -2365,8 +2365,8 @@ function AccountPortalInner() {
                                       setSelectedReturnItems(updated);
                                     }
                                   }}
-                                >−</button>
-                                <span className="w-6 text-center font-black text-zinc-800 text-sm">{qty}</span>
+                                >-</button>
+                                <span className="w-5 text-center font-black text-zinc-800 text-xs sm:text-sm">{qty}</span>
                                 <button
                                   type="button"
                                   className="w-6 h-6 rounded bg-purple-100 text-purple-700 font-black text-sm flex items-center justify-center hover:bg-purple-200 transition"
@@ -2397,8 +2397,6 @@ function AccountPortalInner() {
                 let shippingShareTotal = 0;
 
                 const validItems = (selectedOrder?.items || []).filter((i: any) => i.cancellation_status !== "Cancelled");
-                const totalActiveUnits = Math.max(1, validItems.reduce((acc: number, item: any) => acc + Number(item.quantity || 1), 0));
-                const orderShippingFee = Number(selectedOrder?.shipping_fee || 0);
 
                 selectedEntries.forEach(([itemIdStr, qtyVal]) => {
                   const item = validItems.find((i: any) => i.id.toString() === itemIdStr);
@@ -2412,30 +2410,32 @@ function AccountPortalInner() {
                   shippingShareTotal += sShare;
                 });
 
-                const estimatedTotal = productCostTotal + shippingShareTotal;
+                shippingShareTotal = Math.round(shippingShareTotal * 100) / 100;
+                productCostTotal = Math.round(productCostTotal * 100) / 100;
+                const estimatedTotal = Math.round((productCostTotal + shippingShareTotal) * 100) / 100;
 
                 return (
-                  <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-4 space-y-2 text-xs">
-                    <div className="flex items-center justify-between font-bold text-purple-900 border-b border-purple-100 pb-2">
-                      <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
-                        <RotateCcw className="h-3.5 w-3.5 text-purple-600" /> Live Estimated Refund
+                  <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3 sm:p-4 space-y-2 text-xs">
+                    <div className="flex items-center justify-between gap-2 font-bold text-purple-900 border-b border-purple-100 pb-2">
+                      <span className="flex items-center gap-1.5 uppercase text-[10px] tracking-wider shrink-0">
+                        <RotateCcw className="h-3.5 w-3.5 text-purple-600 shrink-0" /> Live Estimated Refund
                       </span>
-                      <span className="text-sm font-black text-purple-700">Ksh {estimatedTotal.toLocaleString()}</span>
+                      <span className="text-sm sm:text-base font-black text-purple-700 shrink-0 text-right">Ksh {estimatedTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="space-y-1 text-purple-800 text-[11px] font-medium pt-1">
-                      <div className="flex justify-between">
-                        <span>Product cost refund:</span>
-                        <span className="font-bold">Ksh {productCostTotal.toLocaleString()}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="shrink-0 pr-1">Product cost refund:</span>
+                        <span className="font-bold shrink-0 text-right">Ksh {productCostTotal.toLocaleString()}</span>
                       </div>
                       {shippingShareTotal > 0 ? (
-                        <div className="flex justify-between text-emerald-700">
-                          <span>Shipping fee refund share:</span>
-                          <span className="font-bold">+ Ksh {shippingShareTotal.toLocaleString()}</span>
+                        <div className="flex items-center justify-between gap-2 text-emerald-700">
+                          <span className="shrink-0 pr-1">Shipping fee refund share:</span>
+                          <span className="font-bold shrink-0 text-right">+ Ksh {shippingShareTotal.toLocaleString()}</span>
                         </div>
                       ) : (
-                        <div className="flex justify-between text-zinc-400 text-[10px]">
-                          <span>Shipping fee refund share:</span>
-                          <span>Ksh 0 (No shipping fee for selected items)</span>
+                        <div className="flex items-center justify-between gap-2 text-zinc-400 text-[10px]">
+                          <span className="shrink-0 pr-1">Shipping fee refund share:</span>
+                          <span className="shrink-0 text-right">Ksh 0 (No fee)</span>
                         </div>
                       )}
                     </div>
@@ -2478,7 +2478,7 @@ function AccountPortalInner() {
                 ⚠️ Return requests can only be submitted within the eligible return window. Approved returns must be shipped back in original condition. Refunds are processed within 5–7 business days of receiving the part.
               </p>
             </div>
-            <DialogFooter className="px-6 pb-5 flex gap-3">
+            <DialogFooter className="px-4 py-3 sm:px-6 sm:py-4 border-t flex flex-row gap-2 sm:gap-3">
               <Button type="button" variant="outline" className="font-bold flex-1" onClick={() => setIsReturnModalOpen(false)}>
                 Cancel
               </Button>
@@ -2486,15 +2486,15 @@ function AccountPortalInner() {
                 type="submit"
                 disabled={submittingReturn || !returnReason}
                 className={cn(
-                  "font-bold flex-1 text-white transition-all",
+                  "font-bold flex-1 text-white transition-all text-xs sm:text-sm",
                   !returnReason
                     ? "bg-purple-300 cursor-not-allowed hover:bg-purple-300"
                     : "bg-purple-600 hover:bg-purple-700"
                 )}
                 title={!returnReason ? "Please select a return reason before submitting" : undefined}
               >
-                {submittingReturn ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
-                Submit Return Request
+                {submittingReturn ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <RotateCcw className="h-4 w-4 mr-1.5 shrink-0" />}
+                <span className="truncate">Submit Request</span>
               </Button>
             </DialogFooter>
           </form>

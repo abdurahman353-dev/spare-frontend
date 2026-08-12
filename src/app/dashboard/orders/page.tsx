@@ -3198,19 +3198,13 @@ function AdminOrdersPageInner() {
               <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Items Summary</h4>
               {(() => {
                 const cancelledItems = (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
-                const cancelledProductTotal = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
-                const refundedAmount = Number(currentSelectedOrder?.refunded_amount || 0);
-                // Use actual order shipping_fee for per-unit share; do NOT reverse-engineer from refunded_amount
-                const actualShippingFee = Number(currentSelectedOrder?.shipping_fee || 0);
-                const cancelledQtyTotal = Math.max(1, cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0));
-                const totalOrderQty = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + Number(i.quantity), 0));
-                // Shipping refund share = actual shipping fee * (cancelled qty / total qty)
-                const perUnitShippingRefunded = actualShippingFee / totalOrderQty;
+                const isLocalOrder = currentSelectedOrder?.shipping_method === "Local Delivery" || currentSelectedOrder?.shipping_method === "Pickup" || currentSelectedOrder?.tracking_number?.toLowerCase()?.startsWith("wk-");
 
                 return (currentSelectedOrder?.items || []).map((item: any, idx: number) => {
                   const isItemCancelled = item.cancellation_status === "Cancelled";
                   const itemProductCost = Number(item.price) * Number(item.quantity);
-                  const itemShippingShare = isItemCancelled ? perUnitShippingRefunded * Number(item.quantity) : 0;
+                  const feePerUnit = isLocalOrder ? 0 : parseFloat(item.shipping_fee_per_unit ?? 0);
+                  const itemShippingShare = isItemCancelled ? feePerUnit * Number(item.quantity) : 0;
                   const itemRefundTotal = itemProductCost + itemShippingShare;
                   return (
                     <div key={idx} className={cn("flex justify-between items-start py-3 border-b last:border-0", isItemCancelled && "bg-red-50/50 px-3 py-2 rounded-xl border border-red-100")}>
@@ -3284,16 +3278,12 @@ function AdminOrdersPageInner() {
                         {currentSelectedOrder.refund_status || (currentSelectedOrder.refund_transaction_id || Number(currentSelectedOrder.refunded_amount || 0) > 0 ? "Completed" : "Pending")}
                       </span>
                     </p>
-                    {/* Total refunded amount — computed from actual shipping_fee + cancelled product costs */}
+                    {/* Total refunded amount — computed from actual shipping_fee_per_unit + cancelled product costs */}
                     {(() => {
                       const cancelledItems = (currentSelectedOrder?.items || []).filter((i: any) => i.cancellation_status === "Cancelled");
                       const cancelledProductCost = cancelledItems.reduce((s: number, i: any) => s + Number(i.price) * Number(i.quantity), 0);
-                      const totalItems = Math.max(1, (currentSelectedOrder?.items || []).reduce((s: number, i: any) => s + Number(i.quantity), 0));
-                      const cancelledQty = cancelledItems.reduce((s: number, i: any) => s + Number(i.quantity), 0);
                       const isLocal = currentSelectedOrder?.shipping_method === "Local Delivery" || currentSelectedOrder?.shipping_method === "Pickup" || currentSelectedOrder?.tracking_number?.toLowerCase()?.startsWith("wk-");
-                      const actualShippingFee = isLocal ? 0 : Number(currentSelectedOrder?.shipping_fee || 0);
-                      // Shipping refund = shipping_fee * proportion of cancelled items (0 for local delivery)
-                      const shippingRefund = isLocal ? 0 : (cancelledQty >= totalItems ? actualShippingFee : (actualShippingFee / totalItems) * cancelledQty);
+                      const shippingRefund = isLocal ? 0 : cancelledItems.reduce((s: number, i: any) => s + (parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity)), 0);
                       const computedRefund = cancelledProductCost + shippingRefund;
                       if (computedRefund <= 0) return null;
                       return (

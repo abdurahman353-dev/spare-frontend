@@ -1282,8 +1282,16 @@ function AccountPortalInner() {
                                 </td>
                                 <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
                                   {(() => {
-                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => sum + (parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity)), 0);
-                                    const totalShippingFee = (order.items || []).reduce((sum: number, i: any) => sum + (parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity)), 0);
+                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => {
+                                      const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
+                                      const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
+                                      return sum + (feePerUnit * Number(i.quantity));
+                                    }, 0);
+                                    const totalShippingFee = (order.items || []).reduce((sum: number, i: any) => {
+                                      const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
+                                      const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
+                                      return sum + (feePerUnit * Number(i.quantity));
+                                    }, 0);
                                     const displayFee = allCancelled ? totalShippingFee : (cancelledItems.length > 0 ? activeShippingFee : Number(order.shipping_fee || 0));
                                     return (
                                       <span className={cn("text-[13px] font-semibold", allCancelled ? "text-red-500 line-through" : "text-[#64748b]")}>
@@ -1296,7 +1304,11 @@ function AccountPortalInner() {
                                   {(() => {
                                     const refundedTotal = getOrderRefundedTotal(order);
                                     const activeProductCost = activeItems.reduce((sum: number, i: any) => sum + (Number(i.price) * Number(i.quantity)), 0);
-                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => sum + (parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity)), 0);
+                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => {
+                                      const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
+                                      const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
+                                      return sum + (feePerUnit * Number(i.quantity));
+                                    }, 0);
                                     const activeTotalAmount = cancelledItems.length > 0 ? (activeProductCost + activeShippingFee) : Number(order.total_amount || 0);
 
                                     if (order.status === "Cancelled" || allCancelled) {
@@ -1578,8 +1590,10 @@ function AccountPortalInner() {
                             let shippingShareTotal = 0;
                             returnedItems.forEach((i: any) => {
                               const qty = (Array.isArray(rawReturnItems) ? rawReturnItems : [])?.find((ri: any) => Number(ri.order_item_id) === Number(i.id))?.quantity ?? i.quantity;
+                              const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
+                              const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
                               productCostTotal += parseFloat(i.price ?? 0) * qty;
-                              shippingShareTotal += parseFloat(i.shipping_fee_per_unit ?? 0) * qty;
+                              shippingShareTotal += feePerUnit * qty;
                             });
                             const refundTotal = productCostTotal + shippingShareTotal;
                             const totalOrderUnits = items.reduce((acc: number, item: any) => acc + Number(item.quantity || 1), 0);

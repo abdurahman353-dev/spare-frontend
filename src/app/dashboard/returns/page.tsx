@@ -605,7 +605,8 @@ export default function ReturnsManagementPage() {
                 returnedItems.forEach((i: any) => {
                   const qty = (Array.isArray(rawReturnItems) ? rawReturnItems : [])?.find((ri: any) => Number(ri.order_item_id) === Number(i.id))?.quantity ?? i.quantity;
                   const pPrice = parseFloat(i.price ?? 0);
-                  const feePerUnit = parseFloat(i.shipping_fee_per_unit ?? 0);
+                  const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
+                  const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
 
                   productCostTotal += pPrice * qty;
                   shippingShareTotal += feePerUnit * qty;

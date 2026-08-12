@@ -155,13 +155,11 @@ function getOrderRefundedTotal(order: any): number {
   }
   // Legacy fallback: proportional calculation from items
   if (!order.items) return 0;
-  const totalUnits = Math.max(1, order.items.reduce((s: number, i: any) => s + (i.quantity || 1), 0));
-  const shippingFee = Number(order.shipping_fee || 0);
   return order.items
     .filter((i: any) => i.cancellation_status === "Cancelled")
     .reduce((sum: number, i: any) => {
-      const itemProductCost = Number(i.price) * i.quantity;
-      const itemShippingShare = (shippingFee / totalUnits) * i.quantity;
+      const itemProductCost = Number(i.price) * Number(i.quantity);
+      const itemShippingShare = parseFloat(i.shipping_fee_per_unit ?? 0) * Number(i.quantity);
       return sum + itemProductCost + itemShippingShare;
     }, 0);
 }

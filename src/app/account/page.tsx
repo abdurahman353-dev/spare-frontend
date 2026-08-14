@@ -1282,20 +1282,10 @@ function AccountPortalInner() {
                                 </td>
                                 <td className="px-6 py-4 text-[13px] font-semibold text-[#64748b]">
                                   {(() => {
-                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => {
-                                      const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
-                                      const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
-                                      return sum + (feePerUnit * Number(i.quantity));
-                                    }, 0);
-                                    const totalShippingFee = (order.items || []).reduce((sum: number, i: any) => {
-                                      const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
-                                      const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
-                                      return sum + (feePerUnit * Number(i.quantity));
-                                    }, 0);
-                                    const displayFee = allCancelled ? totalShippingFee : (cancelledItems.length > 0 ? activeShippingFee : Number(order.shipping_fee || 0));
+                                    const shippingFee = Number(order.shipping_fee || 0);
                                     return (
                                       <span className={cn("text-[13px] font-semibold", allCancelled ? "text-red-500 line-through" : "text-[#64748b]")}>
-                                        Ksh {displayFee % 1 === 0 ? displayFee.toFixed(0) : displayFee.toFixed(2)}
+                                        Ksh {shippingFee % 1 === 0 ? shippingFee.toFixed(0) : shippingFee.toFixed(2)}
                                       </span>
                                     );
                                   })()}
@@ -1303,9 +1293,7 @@ function AccountPortalInner() {
                                 <td className="px-6 py-4 text-right pr-10">
                                   {(() => {
                                     const refundedTotal = getOrderRefundedTotal(order);
-                                    const activeTotalAmount = cancelledItems.length > 0
-                                      ? Math.max(0, Number(order.total_amount || 0) - refundedTotal)
-                                      : Number(order.total_amount || 0);
+                                    const displayTotal = Number(order.total_amount || 0);
 
                                     if (order.status === "Cancelled" || allCancelled) {
                                       return (
@@ -1321,7 +1309,7 @@ function AccountPortalInner() {
                                     return (
                                       <>
                                         <p className="text-[14px] font-black text-[#1e293b]">
-                                          Ksh {(activeTotalAmount % 1 === 0 ? activeTotalAmount.toFixed(0) : activeTotalAmount.toFixed(2))}
+                                          Ksh {(displayTotal % 1 === 0 ? displayTotal.toFixed(0) : displayTotal.toFixed(2))}
                                         </p>
                                         {refundedTotal > 0 && (
                                           <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">

@@ -1303,13 +1303,9 @@ function AccountPortalInner() {
                                 <td className="px-6 py-4 text-right pr-10">
                                   {(() => {
                                     const refundedTotal = getOrderRefundedTotal(order);
-                                    const activeProductCost = activeItems.reduce((sum: number, i: any) => sum + (Number(i.price) * Number(i.quantity)), 0);
-                                    const activeShippingFee = activeItems.reduce((sum: number, i: any) => {
-                                      const rawFee = parseFloat(i.shipping_fee_per_unit ?? 0);
-                                      const feePerUnit = (rawFee > 0 && rawFee < 1.0) ? 1.0 : rawFee;
-                                      return sum + (feePerUnit * Number(i.quantity));
-                                    }, 0);
-                                    const activeTotalAmount = cancelledItems.length > 0 ? (activeProductCost + activeShippingFee) : Number(order.total_amount || 0);
+                                    const activeTotalAmount = cancelledItems.length > 0
+                                      ? Math.max(0, Number(order.total_amount || 0) - refundedTotal)
+                                      : Number(order.total_amount || 0);
 
                                     if (order.status === "Cancelled" || allCancelled) {
                                       return (

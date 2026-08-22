@@ -202,11 +202,11 @@ export default function AdminReportsPage() {
 
   // Pagination for Sales table — only Paid, non-cancelled orders shown (reports = financial records)
   const [salesPage, setSalesPage] = useState(1);
-  const SALES_PAGE_SIZE = 15;
+  const [salesPageSize, setSalesPageSize] = useState(15);
   const paginatedSalesOrders = useMemo(() => {
-    const start = (salesPage - 1) * SALES_PAGE_SIZE;
-    return channelRevenueOrders.slice(start, start + SALES_PAGE_SIZE);
-  }, [channelRevenueOrders, salesPage]);
+    const start = (salesPage - 1) * salesPageSize;
+    return channelRevenueOrders.slice(start, start + salesPageSize);
+  }, [channelRevenueOrders, salesPage, salesPageSize]);
 
   // Filter Inventory based on active warehouse hub filter
   const filteredInventory = useMemo(() => {
@@ -219,11 +219,23 @@ export default function AdminReportsPage() {
 
   // Pagination for Inventory table
   const [inventoryPage, setInventoryPage] = useState(1);
-  const INVENTORY_PAGE_SIZE = 15;
+  const [inventoryPageSize, setInventoryPageSize] = useState(15);
   const paginatedInventory = useMemo(() => {
-    const start = (inventoryPage - 1) * INVENTORY_PAGE_SIZE;
-    return filteredInventory.slice(start, start + INVENTORY_PAGE_SIZE);
-  }, [filteredInventory, inventoryPage]);
+    const start = (inventoryPage - 1) * inventoryPageSize;
+    return filteredInventory.slice(start, start + inventoryPageSize);
+  }, [filteredInventory, inventoryPage, inventoryPageSize]);
+
+  // Pagination for Customer Statement table
+  const [statementPage, setStatementPage] = useState(1);
+  const [statementPageSize, setStatementPageSize] = useState(15);
+
+  // Pagination for VAT & Tax Compliance Report table
+  const [vatPage, setVatPage] = useState(1);
+  const [vatPageSize, setVatPageSize] = useState(15);
+  const paginatedVatOrders = useMemo(() => {
+    const start = (vatPage - 1) * vatPageSize;
+    return channelRevenueOrders.slice(start, start + vatPageSize);
+  }, [channelRevenueOrders, vatPage, vatPageSize]);
 
   // Helper to calculate exact active net revenue of an order excluding returned/cancelled items
   const getOrderNetRevenue = (o: any) => {
@@ -302,6 +314,11 @@ export default function AdminReportsPage() {
   const customerOrders = useMemo(() => selectedCustomerId
     ? orders.filter(o => String(o.customer_id) === selectedCustomerId || String(o.customer?.id) === selectedCustomerId)
     : [], [orders, selectedCustomerId]);
+
+  const paginatedCustomerOrders = useMemo(() => {
+    const start = (statementPage - 1) * statementPageSize;
+    return customerOrders.slice(start, start + statementPageSize);
+  }, [customerOrders, statementPage, statementPageSize]);
   const selectedCustomer = customers.find(c => String(c.id) === selectedCustomerId);
 
   const selectedCustomerLtv = useMemo(() => {
@@ -896,57 +913,59 @@ export default function AdminReportsPage() {
               </div>
 
               {/* Data Table */}
-              <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm mt-8">
-                <div className="p-5 border-b border-zinc-100 bg-zinc-50/50">
-                  <h3 className="text-sm font-black text-zinc-800">Recent Transactions Log</h3>
+              <div className="space-y-4 mt-8">
+                <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
+                  <div className="p-5 border-b border-zinc-100 bg-zinc-50/50">
+                    <h3 className="text-sm font-black text-zinc-800">Recent Transactions Log</h3>
+                  </div>
+                  <Table>
+                    <TableHeader className="bg-zinc-50">
+                      <TableRow>
+                        <TableHead className="px-6 font-bold text-zinc-900">Order Ref</TableHead>
+                        <TableHead className="font-bold text-zinc-900">Client</TableHead>
+                        <TableHead className="font-bold text-zinc-900">Date</TableHead>
+                        <TableHead className="font-bold text-zinc-900">Status</TableHead>
+                        <TableHead className="font-bold text-zinc-900 text-right">Amount (Ksh)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {channelRevenueOrders.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No paid transactions in this period.</TableCell></TableRow>
+                      ) : paginatedSalesOrders.map((o, i) => (
+                        <TableRow key={i} className="hover:bg-zinc-50/80 transition-colors">
+                          <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">
+                            {o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`}
+                          </TableCell>
+                          <TableCell className="font-bold text-zinc-700">{o.customer?.name || "—"}</TableCell>
+                          <TableCell className="text-zinc-500 text-sm font-medium">
+                            {o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE", { day: 'numeric', month: 'short', year: 'numeric' }) : "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn("text-[10px] font-bold px-3 py-0.5 rounded-full uppercase border tracking-wider", STATUS_STYLES[o.status] || "bg-zinc-50 text-zinc-600 border-zinc-200")}>
+                              {o.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-black text-zinc-900">
+                            {Number(o.total_amount).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {channelRevenueOrders.length > 0 && (
+                        <TableRow className="bg-zinc-100/50 hover:bg-zinc-100/50">
+                          <TableCell colSpan={4} className="px-6 font-black text-zinc-900 text-sm tracking-widest">
+                            TOTAL REVENUE — {channelLabel} {selectedWarehouseId !== "All" ? `| ${warehouseLabel}` : ""}
+                          </TableCell>
+                          <TableCell className="text-right font-black text-[#0052cc] text-base">Ksh {totalRevenue.toLocaleString()}</TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
-                <Table>
-                  <TableHeader className="bg-zinc-50">
-                    <TableRow>
-                      <TableHead className="px-6 font-bold text-zinc-900">Order Ref</TableHead>
-                      <TableHead className="font-bold text-zinc-900">Client</TableHead>
-                      <TableHead className="font-bold text-zinc-900">Date</TableHead>
-                      <TableHead className="font-bold text-zinc-900">Status</TableHead>
-                      <TableHead className="font-bold text-zinc-900 text-right">Amount (Ksh)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {channelRevenueOrders.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No paid transactions in this period.</TableCell></TableRow>
-                    ) : paginatedSalesOrders.map((o, i) => (
-                      <TableRow key={i} className="hover:bg-zinc-50/80 transition-colors">
-                        <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">
-                          {o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`}
-                        </TableCell>
-                        <TableCell className="font-bold text-zinc-700">{o.customer?.name || "—"}</TableCell>
-                        <TableCell className="text-zinc-500 text-sm font-medium">
-                          {o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE", { day: 'numeric', month: 'short', year: 'numeric' }) : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn("text-[10px] font-bold px-3 py-0.5 rounded-full uppercase border tracking-wider", STATUS_STYLES[o.status] || "bg-zinc-50 text-zinc-600 border-zinc-200")}>
-                            {o.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-black text-zinc-900">
-                          {Number(o.total_amount).toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {channelRevenueOrders.length > 0 && (
-                      <TableRow className="bg-zinc-100/50 hover:bg-zinc-100/50">
-                        <TableCell colSpan={4} className="px-6 font-black text-zinc-900 text-sm tracking-widest">
-                          TOTAL REVENUE — {channelLabel} {selectedWarehouseId !== "All" ? `| ${warehouseLabel}` : ""}
-                        </TableCell>
-                        <TableCell className="text-right font-black text-[#0052cc] text-base">Ksh {totalRevenue.toLocaleString()}</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
                 <PaginationControls
                   currentPage={salesPage}
                   setCurrentPage={setSalesPage}
-                  pageSize={SALES_PAGE_SIZE}
-                  setPageSize={() => { }}
+                  pageSize={salesPageSize}
+                  setPageSize={setSalesPageSize}
                   totalItems={channelRevenueOrders.length}
                   itemName="orders"
                 />
@@ -963,51 +982,53 @@ export default function AdminReportsPage() {
                 <SummaryCard label="Critical Out of Stock" value={String(filteredInventory.filter(i => i.quantity === 0).length)} sub="Requires immediate replenishment" />
               </div>
 
-              <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
-                <Table>
-                  <TableHeader className="bg-zinc-50">
-                    <TableRow>
-                      <TableHead className="px-6 font-bold text-zinc-900">SKU</TableHead>
-                      <TableHead className="font-bold text-zinc-900">Product</TableHead>
-                      <TableHead className="font-bold text-zinc-900">Location</TableHead>
-                      <TableHead className="font-bold text-zinc-900 text-right">Available Qty</TableHead>
-                      <TableHead className="font-bold text-zinc-900 text-center">System Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredInventory.length === 0 ? (
-                      <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No inventory data available.</TableCell></TableRow>
-                    ) : paginatedInventory.map((item, i) => {
-                      const qty = Number(item.quantity);
-                      const minSt = Number(item.min_stock) || 5;
-                      const status = qty === 0 ? "OUT OF STOCK" : qty <= minSt ? "LOW STOCK" : "IN STOCK";
-                      const statusCls = qty === 0
-                        ? "bg-red-900 text-white hover:bg-red-950 border-none font-bold uppercase tracking-wider"
-                        : qty <= minSt
-                          ? "bg-red-600 text-white hover:bg-red-700 animate-blink border-none font-bold uppercase tracking-wider"
-                          : "bg-emerald-500 text-white hover:bg-emerald-600 border-none font-bold uppercase tracking-wider";
-                      return (
-                        <TableRow key={i} className="hover:bg-zinc-50/80">
-                          <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">{item.product?.sku || "—"}</TableCell>
-                          <TableCell className="font-bold text-zinc-700">{item.product?.name || "—"}</TableCell>
-                          <TableCell className="text-zinc-500 text-sm font-medium">{item.warehouse?.name || "—"}</TableCell>
-                          <TableCell className="text-right font-black text-zinc-900">{qty}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge className={cn("text-[10px] font-bold px-3 py-0.5 rounded-full uppercase border tracking-wider", statusCls)}>
-                              {status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
+                  <Table>
+                    <TableHeader className="bg-zinc-50">
+                      <TableRow>
+                        <TableHead className="px-6 font-bold text-zinc-900">SKU</TableHead>
+                        <TableHead className="font-bold text-zinc-900">Product</TableHead>
+                        <TableHead className="font-bold text-zinc-900">Location</TableHead>
+                        <TableHead className="font-bold text-zinc-900 text-right">Available Qty</TableHead>
+                        <TableHead className="font-bold text-zinc-900 text-center">System Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredInventory.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No inventory data available.</TableCell></TableRow>
+                      ) : paginatedInventory.map((item, i) => {
+                        const qty = Number(item.quantity);
+                        const minSt = Number(item.min_stock) || 5;
+                        const status = qty === 0 ? "OUT OF STOCK" : qty <= minSt ? "LOW STOCK" : "IN STOCK";
+                        const statusCls = qty === 0
+                          ? "bg-red-900 text-white hover:bg-red-950 border-none font-bold uppercase tracking-wider"
+                          : qty <= minSt
+                            ? "bg-red-600 text-white hover:bg-red-700 animate-blink border-none font-bold uppercase tracking-wider"
+                            : "bg-emerald-500 text-white hover:bg-emerald-600 border-none font-bold uppercase tracking-wider";
+                        return (
+                          <TableRow key={i} className="hover:bg-zinc-50/80">
+                            <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">{item.product?.sku || "—"}</TableCell>
+                            <TableCell className="font-bold text-zinc-700">{item.product?.name || "—"}</TableCell>
+                            <TableCell className="text-zinc-500 text-sm font-medium">{item.warehouse?.name || "—"}</TableCell>
+                            <TableCell className="text-right font-black text-zinc-900">{qty}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={cn("text-[10px] font-bold px-3 py-0.5 rounded-full uppercase border tracking-wider", statusCls)}>
+                                {status}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
                 <PaginationControls
                   currentPage={inventoryPage}
                   setCurrentPage={setInventoryPage}
-                  pageSize={INVENTORY_PAGE_SIZE}
-                  setPageSize={() => { }}
-                  totalItems={inventory.length}
+                  pageSize={inventoryPageSize}
+                  setPageSize={setInventoryPageSize}
+                  totalItems={filteredInventory.length}
                   itemName="SKUs"
                 />
               </div>
@@ -1132,43 +1153,53 @@ export default function AdminReportsPage() {
               )}
 
               {selectedCustomerId ? (
-                <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
-                  <Table>
-                    <TableHeader className="bg-zinc-50">
-                      <TableRow>
-                        <TableHead className="px-6 font-bold text-zinc-900">Invoice Ref</TableHead>
-                        <TableHead className="font-bold text-zinc-900">Date Issued</TableHead>
-                        <TableHead className="font-bold text-zinc-900">Description</TableHead>
-                        <TableHead className="font-bold text-zinc-900 text-center">Payment Status</TableHead>
-                        <TableHead className="font-bold text-zinc-900 text-right">Amount (Ksh)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {customerOrders.length === 0 ? (
-                        <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No order history found for this account.</TableCell></TableRow>
-                      ) : customerOrders.map((o, i) => (
-                        <TableRow key={i} className="hover:bg-zinc-50/80">
-                          <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">{o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`}</TableCell>
-                          <TableCell className="text-zinc-500 text-sm font-medium">{o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "—"}</TableCell>
-                          <TableCell className="text-zinc-600 text-sm font-medium">Auto Parts Fulfillment — {o.items?.length || 0} items</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className={cn("text-[10px] font-bold px-3 py-0.5 rounded-full uppercase border tracking-wider", STATUS_STYLES[o.status] || "bg-zinc-50 text-zinc-600 border-zinc-200")}>
-                              {o.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right font-black text-zinc-900">{Number(o.total_amount).toLocaleString()}</TableCell>
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-zinc-200 overflow-x-auto custom-scrollbar bg-white shadow-sm">
+                    <Table>
+                      <TableHeader className="bg-zinc-50">
+                        <TableRow>
+                          <TableHead className="px-6 font-bold text-zinc-900">Invoice Ref</TableHead>
+                          <TableHead className="font-bold text-zinc-900">Date Issued</TableHead>
+                          <TableHead className="font-bold text-zinc-900">Description</TableHead>
+                          <TableHead className="font-bold text-zinc-900 text-center">Payment Status</TableHead>
+                          <TableHead className="font-bold text-zinc-900 text-right">Amount (Ksh)</TableHead>
                         </TableRow>
-                      ))}
-                      {customerOrders.length > 0 && (
-                        <TableRow className="bg-[#0052cc]/5">
-                          <TableCell colSpan={4} className="px-6 font-black text-[#0052cc] text-sm tracking-widest">TOTAL ACCOUNT VALUE</TableCell>
-                          <TableCell className="text-right font-black text-[#0052cc] text-base">
-                            Ksh {selectedCustomerLtv.toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {customerOrders.length === 0 ? (
+                          <TableRow><TableCell colSpan={5} className="h-32 text-center text-zinc-400 font-medium">No order history found for this account.</TableCell></TableRow>
+                        ) : paginatedCustomerOrders.map((o, i) => (
+                          <TableRow key={i} className="hover:bg-zinc-50/80">
+                            <TableCell className="px-6 font-bold text-zinc-800 font-mono text-xs">{o.tracking_number || `#ORD-${String(o.id).padStart(4, "0")}`}</TableCell>
+                            <TableCell className="text-zinc-500 text-sm font-medium">{o.created_at ? new Date(o.created_at).toLocaleDateString("en-KE") : "—"}</TableCell>
+                            <TableCell className="text-zinc-600 text-sm font-medium">Auto Parts Fulfillment — {o.items?.length || 0} items</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className={cn("text-[10px] font-bold px-3 py-0.5 rounded-full uppercase border tracking-wider", STATUS_STYLES[o.status] || "bg-zinc-50 text-zinc-600 border-zinc-200")}>
+                                {o.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-black text-zinc-900">{Number(o.total_amount).toLocaleString()}</TableCell>
+                          </TableRow>
+                        ))}
+                        {customerOrders.length > 0 && (
+                          <TableRow className="bg-[#0052cc]/5">
+                            <TableCell colSpan={4} className="px-6 font-black text-[#0052cc] text-sm tracking-widest">TOTAL ACCOUNT VALUE</TableCell>
+                            <TableCell className="text-right font-black text-[#0052cc] text-base">
+                              Ksh {selectedCustomerLtv.toLocaleString()}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <PaginationControls
+                    currentPage={statementPage}
+                    setCurrentPage={setStatementPage}
+                    pageSize={statementPageSize}
+                    setPageSize={setStatementPageSize}
+                    totalItems={customerOrders.length}
+                    itemName="orders"
+                  />
                 </div>
               ) : (
                 <div className="h-64 flex items-center justify-center border-2 border-dashed border-zinc-200 rounded-2xl bg-zinc-50/50">
@@ -1206,7 +1237,7 @@ export default function AdminReportsPage() {
                   <TableBody>
                     {channelRevenueOrders.length === 0 ? (
                       <TableRow><TableCell colSpan={6} className="h-32 text-center text-zinc-400 font-medium">No taxable transactions found.</TableCell></TableRow>
-                    ) : channelRevenueOrders.map((o: any, i: number) => {
+                    ) : paginatedVatOrders.map((o: any, i: number) => {
                       const gross = Number(o.total_amount || 0);
                       const vat = gross * 0.16;
                       const net = gross - vat;
@@ -1231,6 +1262,14 @@ export default function AdminReportsPage() {
                     )}
                   </TableBody>
                 </Table>
+                <PaginationControls
+                  currentPage={vatPage}
+                  setCurrentPage={setVatPage}
+                  pageSize={vatPageSize}
+                  setPageSize={setVatPageSize}
+                  totalItems={channelRevenueOrders.length}
+                  itemName="orders"
+                />
               </div>
 
               <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 text-xs font-semibold text-zinc-500">
